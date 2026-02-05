@@ -328,7 +328,8 @@ onUnmounted(() => {
 }
 
 .search-input-wrapper input:focus {
-  background: #f0f0f0;
+  background: #fff;
+  box-shadow: 0 0 0 1px #262626;
 }
 
 .search-input-wrapper input::placeholder {
@@ -340,11 +341,11 @@ onUnmounted(() => {
   right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  padding: 2px 6px;
-  font-size: 10px;
-  color: #bfbfbf;
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #737373;
+  background: #e8e8e8;
+  border: 1px solid #d0d0d0;
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
