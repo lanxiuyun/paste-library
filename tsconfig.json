@@ -1,5 +1,5 @@
 {
-  "compilerOptions": {
+"compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
@@ -13,6 +13,12 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "preserve",
+
+    /* Paths */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
 
     /* Linting */
     "strict": true,

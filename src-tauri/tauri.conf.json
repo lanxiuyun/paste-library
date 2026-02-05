@@ -5,16 +5,24 @@
   "identifier": "com.lanxiuyun.paste-library",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:1422",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
-  "app": {
+"app": {
     "windows": [
       {
         "title": "paste-library",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "decorations": false,
+        "transparent": false,
+        "center": true,
+        "resizable": true,
+        "minimizable": true,
+        "maximizable": true,
+        "closable": true,
+        "alwaysOnTop": false
       }
     ],
     "security": {
