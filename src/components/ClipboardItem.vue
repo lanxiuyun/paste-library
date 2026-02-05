@@ -1,34 +1,34 @@
 <template>
-  <div class="clipboard-card" @click="handleClick">
-    <div class="card-header">
-      <div class="header-left">
-        <span class="type-badge" :class="item.content_type">{{ typeLabel }}</span>
-        <span class="char-count">{{ charCount }}个字符</span>
-        <span class="time">{{ formattedTime }}</span>
+  <div 
+    class="clipboard-item" 
+    :class="{ 'is-hovered': isHovered }"
+    @click="handleClick"
+    @mouseenter="isHovered = true"
+    @mouseleave="isHovered = false"
+  >
+    <div class="item-row">
+      <!-- 类型标签 -->
+      <span class="type-badge" :class="item.content_type">
+        {{ typeLabel }}
+      </span>
+
+      <!-- 内容区域 -->
+      <div class="content-area">
+        <p class="content-text">{{ contentPreview }}</p>
+        <div class="meta-info">
+          <span class="meta-item">{{ charCount }}字符</span>
+          <span class="meta-separator">·</span>
+          <span class="meta-item">{{ formattedTime }}</span>
+          <span v-if="isFavorite" class="star-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+          </span>
+        </div>
       </div>
-      <div class="header-right">
-        <button 
-          class="icon-btn" 
-          :class="{ 'is-favorite': isFavorite }"
-          @click.stop="handleToggleFavorite"
-          title="收藏"
-        >
-          <svg v-if="isFavorite" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-          </svg>
-        </button>
-        <button class="icon-btn delete" @click.stop="handleDelete" title="删除">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div class="card-content">
-      <div class="content-text">{{ contentPreview }}</div>
+
+      <!-- 序号 -->
+      <span class="item-index">{{ index + 1 }}</span>
     </div>
   </div>
 </template>
@@ -39,6 +39,7 @@ import type { ClipboardItem } from '@/types';
 
 interface Props {
   item: ClipboardItem;
+  index: number;
 }
 
 const props = defineProps<Props>();
@@ -47,8 +48,10 @@ const emit = defineEmits<{
   click: [item: ClipboardItem];
   delete: [id: number];
   toggleFavorite: [id: number, isFavorite: boolean];
+  copy: [item: ClipboardItem];
 }>();
 
+const isHovered = ref(false);
 const isFavorite = ref(false);
 
 const typeLabel = computed(() => {
@@ -57,6 +60,10 @@ const typeLabel = computed(() => {
       return '纯文本';
     case 'html':
       return 'HTML';
+    case 'image':
+      return '图片';
+    case 'file':
+      return '文件';
     case 'rtf':
       return '富文本';
     default:
@@ -94,57 +101,39 @@ const formattedTime = computed(() => {
 const handleClick = () => {
   emit('click', props.item);
 };
-
-const handleDelete = () => {
-  emit('delete', props.item.id);
-};
-
-const handleToggleFavorite = () => {
-  isFavorite.value = !isFavorite.value;
-  emit('toggleFavorite', props.item.id, isFavorite.value);
-};
 </script>
 
 <style scoped>
-.clipboard-card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #f0f0f0;
+.clipboard-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease;
 }
 
-.clipboard-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: #d9d9d9;
+.clipboard-item:hover {
+  background-color: #f5f5f5;
 }
 
-.card-header {
+.item-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
+/* 类型标签 */
 .type-badge {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  font-size: 10px;
   font-weight: 500;
+  border-radius: 3px;
+  line-height: 1.4;
 }
 
 .type-badge.text {
-  background: #f6ffed;
-  color: #52c41a;
+  background: #fff2e8;
+  color: #fa8c16;
 }
 
 .type-badge.html {
@@ -153,74 +142,70 @@ const handleToggleFavorite = () => {
 }
 
 .type-badge.rtf {
-  background: #fff7e6;
-  color: #fa8c16;
+  background: #f6ffed;
+  color: #52c41a;
 }
 
-.char-count,
-.time {
-  font-size: 12px;
-  color: #999;
+.type-badge.image {
+  background: #f6ffed;
+  color: #52c41a;
 }
 
-.header-right {
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s;
+.type-badge.file {
+  background: #f9f0ff;
+  color: #722ed1;
 }
 
-.clipboard-card:hover .header-right {
-  opacity: 1;
-}
-
-.icon-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #999;
-  transition: all 0.2s;
-}
-
-.icon-btn:hover {
-  background: #f5f5f5;
-  color: #666;
-}
-
-.icon-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.icon-btn.is-favorite {
-  color: #faad14;
-  opacity: 1;
-}
-
-.icon-btn.delete:hover {
-  color: #ff4d4f;
-  background: #fff1f0;
-}
-
-.card-content {
-  padding-top: 4px;
+/* 内容区域 */
+.content-area {
+  flex: 1;
+  min-width: 0;
 }
 
 .content-text {
   font-size: 14px;
-  line-height: 1.6;
-  color: #333;
-  word-break: break-all;
-  white-space: pre-wrap;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  color: #262626;
+  line-height: 1.5;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.meta-item {
+  font-size: 11px;
+  color: #8c8c8c;
+}
+
+.meta-separator {
+  font-size: 11px;
+  color: #bfbfbf;
+}
+
+.star-icon {
+  display: flex;
+  align-items: center;
+  color: #faad14;
+}
+
+.star-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 序号 */
+.item-index {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: right;
+  font-size: 11px;
+  color: #bfbfbf;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 </style>

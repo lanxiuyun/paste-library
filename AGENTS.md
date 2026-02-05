@@ -117,15 +117,13 @@ pnpm tauri build
 
 ### Window UI Guidelines
 
-The app uses a **frameless window** with a custom drag handle:
+The app uses a **frameless window** with a minimal drag handle:
 
 ```vue
-<!-- DragHandle.vue - Top capsule for dragging window -->
+<!-- DragHandle.vue - Simple drag line at top -->
 <div class="drag-bar" data-tauri-drag-region>
   <div class="drag-capsule" data-tauri-drag-region>
-    <div class="drag-dots">
-      <span></span><span></span><span></span>
-    </div>
+    <div class="drag-line"></div>
   </div>
 </div>
 ```
@@ -134,7 +132,8 @@ The app uses a **frameless window** with a custom drag handle:
 - Use `data-tauri-drag-region` attribute for draggable areas
 - Use `-webkit-app-region: drag` / `app-region: drag` in CSS
 - Interactive elements (buttons, inputs) must have `app-region: no-drag`
-- Window controls (minimize/close) use `@tauri-apps/api/webviewWindow`
+- Top drag bar height: 36px with a simple line indicator
+- No window control buttons (minimize/close) in the drag area
 
 ### Formatting & Spacing
 

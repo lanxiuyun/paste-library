@@ -28,7 +28,7 @@ body {
 
 .app {
   height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fff;
   display: flex;
   flex-direction: column;
 }
@@ -36,6 +36,6 @@ body {
 .app-content {
   flex: 1;
   overflow: hidden;
-  padding-top: 40px;
+  padding-top: 36px;
 }
 </style>

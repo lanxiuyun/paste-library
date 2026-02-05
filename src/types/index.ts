@@ -1,7 +1,7 @@
 /**
  * 剪贴板内容类型
  */
-export type ClipboardContentType = 'text' | 'html' | 'rtf';
+export type ClipboardContentType = 'text' | 'html' | 'rtf' | 'image' | 'file';
 
 /**
  * 剪贴板历史记录项

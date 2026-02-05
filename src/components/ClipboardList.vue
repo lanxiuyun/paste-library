@@ -1,6 +1,6 @@
 <template>
   <div class="clipboard-list">
-    <!-- 顶部导航 -->
+    <!-- 标签栏 -->
     <div class="list-header">
       <div class="tabs">
         <button 
@@ -20,10 +20,11 @@
             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
           </svg>
         </button>
-        <button class="icon-btn" title="设置">
+        <button class="icon-btn" title="AI/设置">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 1v6m0 6v6m4.22-10.22l4.24-4.24M6.34 17.66l-4.24 4.24M23 12h-6m-6 0H1m20.24 4.24l-4.24-4.24M6.34 6.34L2.1 2.1"/>
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
           </svg>
         </button>
       </div>
@@ -45,19 +46,21 @@
 
       <template v-else>
         <ClipboardItem
-          v-for="item in filteredHistory"
+          v-for="(item, index) in filteredHistory"
           :key="item.id"
           :item="item"
+          :index="index"
           @click="handleItemClick"
           @delete="handleItemDelete"
           @toggle-favorite="handleToggleFavorite"
+          @copy="handleItemCopy"
         />
       </template>
 
       <div v-if="loading" class="loading-more">加载中...</div>
     </div>
 
-    <!-- 底部搜索框 -->
+    <!-- 底部搜索栏 -->
     <div class="search-bar">
       <div class="search-input-wrapper">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -65,24 +68,20 @@
           <path d="M21 21l-4.35-4.35"/>
         </svg>
         <input
+          ref="searchInputRef"
           v-model="searchQuery"
           type="text"
-          placeholder="搜索"
+          placeholder="搜索剪贴板..."
           @input="handleSearch"
         />
-        <button v-if="searchQuery" class="clear-btn" @click="clearSearch">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M15 9l-6 6M9 9l6 6"/>
-          </svg>
-        </button>
+        <kbd class="shortcut-key">Ctrl+F</kbd>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import ClipboardItem from './ClipboardItem.vue';
 import { useClipboard } from '@/composables/useClipboard';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
@@ -109,6 +108,7 @@ const loading = ref(false);
 const hasMore = ref(true);
 const offset = ref(0);
 const limit = 50;
+const searchInputRef = ref<HTMLInputElement | null>(null);
 
 const filteredHistory = computed(() => {
   let result = history.value;
@@ -134,12 +134,11 @@ const handleSearch = async () => {
   }
 };
 
-const clearSearch = async () => {
-  searchQuery.value = '';
-  await loadHistory();
+const handleItemClick = async (item: ClipboardItemType) => {
+  await restoreToClipboard(item);
 };
 
-const handleItemClick = async (item: ClipboardItemType) => {
+const handleItemCopy = async (item: ClipboardItemType) => {
   await restoreToClipboard(item);
 };
 
@@ -162,8 +161,21 @@ const handleScroll = async (event: Event) => {
   }
 };
 
+// Ctrl+F 快捷键聚焦搜索框
+const handleKeyDown = (e: KeyboardEvent) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    searchInputRef.value?.focus();
+  }
+};
+
 onMounted(() => {
   loadHistory(limit, 0);
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
@@ -172,7 +184,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #f5f5f5;
+  background-color: #fff;
 }
 
 /* 头部导航 */
@@ -180,9 +192,9 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 16px 12px;
+  padding: 8px 12px;
   background: #fff;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid #f0f0f0;
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -193,34 +205,34 @@ onMounted(() => {
 }
 
 .tab-btn {
-  padding: 6px 16px;
+  padding: 4px 10px;
   border: none;
   background: transparent;
-  color: #666;
-  font-size: 14px;
+  color: #595959;
+  font-size: 13px;
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .tab-btn:hover {
-  color: #1890ff;
-  background: #f0f0f0;
+  color: #262626;
+  background: #f5f5f5;
 }
 
 .tab-btn.active {
   color: #fff;
-  background: #1890ff;
+  background: #262626;
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 4px;
 }
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -228,25 +240,25 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: #8c8c8c;
   transition: all 0.2s;
 }
 
 .icon-btn:hover {
-  background: #f0f0f0;
-  color: #1890ff;
+  background: #f5f5f5;
+  color: #262626;
 }
 
 .icon-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 /* 列表内容 */
 .list-container {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  background: #fff;
 }
 
 .empty-state {
@@ -254,14 +266,14 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 20px;
-  color: #999;
+  padding: 60px 20px;
+  color: #bfbfbf;
 }
 
 .empty-icon {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 16px;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
   color: #d9d9d9;
 }
 
@@ -271,21 +283,21 @@ onMounted(() => {
 }
 
 .empty-text {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .loading-more {
   text-align: center;
-  padding: 16px;
-  color: #999;
-  font-size: 14px;
+  padding: 12px;
+  color: #8c8c8c;
+  font-size: 12px;
 }
 
 /* 底部搜索栏 */
 .search-bar {
-  padding: 12px 16px;
+  padding: 10px 12px;
+  border-top: 1px solid #f0f0f0;
   background: #fff;
-  border-top: 1px solid #e8e8e8;
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -298,56 +310,43 @@ onMounted(() => {
 
 .search-icon {
   position: absolute;
-  left: 12px;
-  width: 18px;
-  height: 18px;
-  color: #999;
+  left: 10px;
+  width: 16px;
+  height: 16px;
+  color: #bfbfbf;
 }
 
 .search-input-wrapper input {
   width: 100%;
-  padding: 10px 36px 10px 38px;
-  border: 1px solid #d9d9d9;
+  padding: 8px 60px 8px 32px;
+  border: none;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
   transition: all 0.2s;
-  background: #fafafa;
+  background: #f5f5f5;
 }
 
 .search-input-wrapper input:focus {
-  border-color: #1890ff;
-  background: #fff;
+  background: #f0f0f0;
 }
 
 .search-input-wrapper input::placeholder {
-  color: #999;
+  color: #8c8c8c;
 }
 
-.clear-btn {
+.shortcut-key {
   position: absolute;
   right: 8px;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #999;
-  transition: all 0.2s;
-}
-
-.clear-btn:hover {
-  background: #f0f0f0;
-  color: #666;
-}
-
-.clear-btn svg {
-  width: 16px;
-  height: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  font-size: 10px;
+  color: #bfbfbf;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 /* 滚动条样式 */
@@ -360,11 +359,11 @@ onMounted(() => {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
+  background: #c0c0c0;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #bFBFBF;
+  background: #a0a0a0;
 }
 </style>

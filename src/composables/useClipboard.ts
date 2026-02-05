@@ -115,6 +115,10 @@ export function useClipboard() {
     }
   };
 
+  const clearAllItems = async (): Promise<void> => {
+    await clearHistory(0, undefined);
+  };
+
   const restoreToClipboard = async (item: ClipboardItem): Promise<void> => {
     try {
       if (item.content_type === 'html') {
@@ -186,6 +190,7 @@ export function useClipboard() {
     searchHistory,
     deleteItem,
     clearHistory,
+    clearAllItems,
     restoreToClipboard,
     formatRelativeTime,
     getContentPreview,
