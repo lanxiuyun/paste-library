@@ -4,12 +4,13 @@ import {
   startListening,
   stopListening,
   onClipboardChange,
-  readText,
-  readHTML,
   writeText,
   writeHTML,
+  writeImage,
+  writeFiles,
+  type ReadClipboard,
 } from 'tauri-plugin-clipboard-x-api';
-import type { ClipboardItem, GetHistoryRequest, SearchRequest, ClearHistoryRequest } from '@/types';
+import type { ClipboardItem, ClipboardContentType, ClipboardMetadata, GetHistoryRequest, SearchRequest, ClearHistoryRequest } from '@/types';
 
 const history = ref<ClipboardItem[]>([]);
 const isListening = ref(false);
@@ -49,8 +50,8 @@ export function useClipboard() {
     let unlisten: (() => void) | null = null;
 
     const initListener = async () => {
-      unlisten = await onClipboardChange(async () => {
-        await handleClipboardChange();
+      unlisten = await onClipboardChange(async (result) => {
+        await handleClipboardChange(result);
       });
     };
 
@@ -63,25 +64,74 @@ export function useClipboard() {
     };
   };
 
-  const handleClipboardChange = async (): Promise<void> => {
+  const handleClipboardChange = async (result: ReadClipboard): Promise<void> => {
     try {
-      const text = await readText();
-      let html: string | undefined;
-      
-      try {
-        html = await readHTML();
-      } catch {
+      // 优先级: files > image > html > rtf > text
+      if (result.files) {
+        // 文件类型
+        const paths = result.files.value;
+        const contentType: ClipboardContentType = paths.length === 1 
+          ? (await isDirectory(paths[0]) ? 'folder' : 'file')
+          : 'files';
+        
+        const metadata: ClipboardMetadata = paths.length === 1
+          ? { file_name: getFileName(paths[0]), file_size: result.files.count }
+          : { item_count: paths.length };
+
+        await invoke('add_clipboard_item_extended', {
+          contentType,
+          content: paths.join('\n'),
+          filePaths: paths,
+          metadata,
+        });
+      } else if (result.image) {
+        // 图片类型
+        const metadata: ClipboardMetadata = {
+          width: result.image.width,
+          height: result.image.height,
+          format: 'png',
+        };
+
+        await invoke('add_clipboard_item_extended', {
+          contentType: 'image',
+          content: result.image.value,
+          thumbnailPath: result.image.value,
+          metadata,
+        });
+      } else if (result.html) {
+        // HTML 类型
+        await invoke('add_clipboard_item', {
+          text: result.text?.value || '',
+          html: result.html.value,
+        });
+      } else if (result.text) {
+        // 纯文本类型
+        await invoke('add_clipboard_item', {
+          text: result.text.value,
+          html: null,
+        });
       }
 
-      await invoke('add_clipboard_item', { 
-        text,
-        html: html || null 
-      });
-      
       await loadHistory();
     } catch (error) {
       console.error('Failed to handle clipboard change:', error);
     }
+  };
+
+  // 辅助函数：检查路径是否为目录
+  const isDirectory = async (path: string): Promise<boolean> => {
+    try {
+      // 简单判断：如果路径没有扩展名，可能是目录
+      const lastPart = path.split(/[/\\]/).pop() || '';
+      return !lastPart.includes('.');
+    } catch {
+      return false;
+    }
+  };
+
+  // 辅助函数：获取文件名
+  const getFileName = (path: string): string => {
+    return path.split(/[/\\]/).pop() || path;
   };
 
   const searchHistory = async (query: string, limit = 100): Promise<void> => {
@@ -121,10 +171,26 @@ export function useClipboard() {
 
   const restoreToClipboard = async (item: ClipboardItem): Promise<void> => {
     try {
-      if (item.content_type === 'html') {
-        await writeHTML(item.content, '');
-      } else {
-        await writeText(item.content);
+      switch (item.content_type) {
+        case 'html':
+          await writeHTML(item.content, '');
+          break;
+        case 'image':
+          // 图片类型：使用缩略图路径或内容路径
+          if (item.thumbnail_path) {
+            await writeImage(item.thumbnail_path);
+          }
+          break;
+        case 'file':
+        case 'folder':
+        case 'files':
+          // 文件类型：使用文件路径列表
+          if (item.file_paths && item.file_paths.length > 0) {
+            await writeFiles(item.file_paths);
+          }
+          break;
+        default:
+          await writeText(item.content);
       }
     } catch (error) {
       console.error('Failed to restore to clipboard:', error);
