@@ -633,11 +633,11 @@ const importData = () => {
   font-size: 16px;
   font-weight: 600;
   color: #262626;
-  margin: 0 0 20px 0;
+  margin: 0 0 12px 0;
 }
 
 .section-title:not(:first-child) {
-  margin-top: 32px;
+  margin-top: 12px;
 }
 
 .setting-group {
