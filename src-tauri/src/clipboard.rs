@@ -55,7 +55,7 @@ impl ClipboardManager {
             metadata: None,
             file_paths: None,
             thumbnail_path: None,
-            is_favorite: false,
+            tags: None,
         };
 
         let id = self.database.add_clipboard_item(&item).map_err(|e| {
@@ -112,7 +112,7 @@ impl ClipboardManager {
             metadata,
             file_paths,
             thumbnail_path,
-            is_favorite: false,
+            tags: None,
         };
 
         let id = self.database.add_clipboard_item(&item).map_err(|e| {
@@ -168,9 +168,15 @@ impl ClipboardManager {
             .map_err(|e| e.to_string())
     }
 
-    pub fn toggle_favorite(&self, id: i64, is_favorite: bool) -> Result<(), String> {
+    pub fn update_tags(&self, id: i64, tags: Option<Vec<String>>) -> Result<(), String> {
         self.database
-            .update_favorite(id, is_favorite)
+            .update_tags(id, &tags)
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn get_all_tags(&self) -> Result<Vec<(String, i64)>, String> {
+        self.database
+            .get_all_tags()
             .map_err(|e| e.to_string())
     }
 }

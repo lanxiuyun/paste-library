@@ -39,6 +39,14 @@ pub struct ClipboardMetadata {
     pub item_count: Option<u32>,
 }
 
+/// 标签定义
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
 /// 剪贴板历史记录项
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipboardItem {
@@ -61,9 +69,9 @@ pub struct ClipboardItem {
     /// 缩略图路径 (用于图片类型)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thumbnail_path: Option<String>,
-    /// 是否收藏
-    #[serde(default)]
-    pub is_favorite: bool,
+    /// 标签列表
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 /// 创建剪贴板项的请求

@@ -50,12 +50,11 @@
           :key="item.id"
           :item="item"
           :index="index"
+          :is-selected="selectedIndex === index"
           @click="handleItemClick"
           @dblclick="handleItemDoubleClick"
           @contextmenu="handleItemContextMenu"
-          @delete="handleItemDelete"
-          @toggle-favorite="handleToggleFavorite"
-          @copy="handleItemCopy"
+          @quick-action="handleQuickAction"
         />
       </template>
 
@@ -87,6 +86,21 @@
       :item="contextMenuItem"
       @action="handleContextMenuAction"
     />
+
+    <!-- 粘贴队列面板 -->
+    <PasteQueuePanel
+      ref="pasteQueueRef"
+      @paste="handleQueuePaste"
+    />
+
+    <!-- 抽屉编辑器 -->
+    <DrawerEditor
+      v-model:visible="drawerVisible"
+      :item="drawerItem"
+      @copy="handleDrawerCopy"
+      @paste="handleDrawerPaste"
+      @saveAsNew="handleSaveAsNew"
+    />
   </div>
 </template>
 
@@ -94,7 +108,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import ClipboardItem from './ClipboardItem.vue';
 import ContextMenu from './ContextMenu.vue';
+import PasteQueuePanel from './PasteQueuePanel.vue';
+import DrawerEditor from './DrawerEditor.vue';
 import { useClipboard } from '@/composables/useClipboard';
+import { usePasteQueue } from '@/composables/usePasteQueue';
 import { invoke } from '@tauri-apps/api/core';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 
@@ -105,6 +122,13 @@ const {
   deleteItem,
   restoreToClipboard,
 } = useClipboard();
+
+const { addToQueue } = usePasteQueue();
+const pasteQueueRef = ref<InstanceType<typeof PasteQueuePanel> | null>(null);
+
+// Drawer editor state
+const drawerVisible = ref(false);
+const drawerItem = ref<ClipboardItemType | null>(null);
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -127,14 +151,16 @@ const contextMenuVisible = ref(false);
 const contextMenuPosition = ref({ x: 0, y: 0 });
 const contextMenuItem = ref<ClipboardItemType | null>(null);
 
+const selectedIndex = ref(-1);
+
 const filteredHistory = computed(() => {
   let result = history.value;
 
   // 按标签过滤
   if (activeTab.value !== 'all') {
     if (activeTab.value === 'favorite') {
-      // 过滤收藏的项目
-      result = result.filter(item => item.is_favorite);
+      // 过滤带"收藏"标签的项目
+      result = result.filter(item => item.tags?.includes('收藏'));
     } else {
       result = result.filter(item => item.content_type === activeTab.value);
     }
@@ -152,8 +178,9 @@ const handleSearch = async () => {
 };
 
 const handleItemClick = async (item: ClipboardItemType) => {
-  // 单击：复制到剪贴板
-  await restoreToClipboard(item);
+  // 单击：打开抽屉编辑器
+  drawerItem.value = item;
+  drawerVisible.value = true;
 };
 
 const handleItemDoubleClick = async (item: ClipboardItemType) => {
@@ -168,6 +195,66 @@ const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType) => {
   contextMenuVisible.value = true;
 };
 
+const handleQuickAction = async (action: string, item: ClipboardItemType) => {
+  switch (action) {
+    case 'copy':
+      await restoreToClipboard(item);
+      break;
+    case 'delete':
+      await deleteItem(item.id);
+      break;
+    case 'tag':
+      // 打开标签管理弹窗
+      showTagManager(item);
+      break;
+    case 'queue':
+      // 添加到粘贴队列
+      addToQueue(item);
+      break;
+  }
+};
+
+const showTagManager = (item: ClipboardItemType) => {
+  // TODO: 实现标签管理弹窗
+  console.log('Tag manager for item:', item.id);
+};
+
+const handleQueuePaste = async (content: string) => {
+  // 将合并后的内容写入剪贴板并粘贴
+  try {
+    const { writeText } = await import('tauri-plugin-clipboard-x-api');
+    await writeText(content);
+    // TODO: 模拟粘贴操作
+    console.log('Queue pasted:', content.substring(0, 100) + '...');
+  } catch (error) {
+    console.error('Failed to paste queue:', error);
+  }
+};
+
+// Drawer handlers
+const handleDrawerCopy = async (item: ClipboardItemType) => {
+  await restoreToClipboard(item);
+};
+
+const handleDrawerPaste = async (item: ClipboardItemType) => {
+  await restoreToClipboard(item);
+  // TODO: 模拟粘贴操作
+  console.log('Drawer paste:', item.content.substring(0, 100) + '...');
+};
+
+const handleSaveAsNew = async (content: string, type: string) => {
+  try {
+    if (type === 'html') {
+      await invoke('add_clipboard_item', { text: content.replace(/<[^>]*>/g, ''), html: content });
+    } else {
+      await invoke('add_clipboard_item', { text: content, html: null });
+    }
+    await loadHistory();
+  } catch (error) {
+    console.error('Failed to save as new:', error);
+  }
+};
+
 const handleContextMenuAction = async (action: string, item: ClipboardItemType) => {
   switch (action) {
     case 'copy':
@@ -176,6 +263,9 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
     case 'paste':
       await restoreToClipboard(item);
       // TODO: 实现模拟粘贴功能
+      break;
+    case 'queue':
+      addToQueue(item);
       break;
     case 'copyPlain':
       // 复制为纯文本
@@ -186,7 +276,7 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
       });
       break;
     case 'favorite':
-      handleToggleFavorite(item.id, !item.is_favorite);
+      handleToggleFavorite(item.id, !item.tags?.includes('收藏'));
       break;
     case 'delete':
       await deleteItem(item.id);
@@ -210,17 +300,29 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
   }
 };
 
-const handleItemCopy = async (item: ClipboardItemType) => {
-  await restoreToClipboard(item);
-};
-
-const handleItemDelete = async (id: number) => {
-  await deleteItem(id);
-};
-
 const handleToggleFavorite = async (id: number, isFavorite: boolean) => {
   try {
-    await invoke('toggle_favorite', { id, isFavorite });
+    // 获取当前项目
+    const item = history.value.find(i => i.id === id);
+    if (!item) return;
+
+    // 更新标签列表
+    const currentTags = item.tags || [];
+    let newTags: string[];
+
+    if (isFavorite) {
+      // 添加"收藏"标签
+      if (!currentTags.includes('收藏')) {
+        newTags = [...currentTags, '收藏'];
+      } else {
+        newTags = currentTags;
+      }
+    } else {
+      // 移除"收藏"标签
+      newTags = currentTags.filter(t => t !== '收藏');
+    }
+
+    await invoke('update_tags', { id, tags: newTags });
     await loadHistory();
   } catch (error) {
     console.error('Failed to toggle favorite:', error);
@@ -238,21 +340,81 @@ const handleScroll = async (event: Event) => {
   }
 };
 
-// Ctrl+F 快捷键聚焦搜索框
+// 键盘导航处理
 const handleKeyDown = (e: KeyboardEvent) => {
+  // Ctrl+F 聚焦搜索框
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
     e.preventDefault();
     searchInputRef.value?.focus();
+    return;
+  }
+
+  // Esc 关闭窗口
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    invoke('hide_clipboard_window');
+    return;
+  }
+
+  // 上下导航
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    const direction = e.key === 'ArrowUp' ? -1 : 1;
+    const newIndex = selectedIndex.value + direction;
+
+    if (newIndex >= 0 && newIndex < filteredHistory.value.length) {
+      selectedIndex.value = newIndex;
+    }
+    return;
+  }
+
+  // Enter 粘贴选中项
+  if (e.key === 'Enter' && selectedIndex.value >= 0) {
+    e.preventDefault();
+    const item = filteredHistory.value[selectedIndex.value];
+    if (item) {
+      restoreToClipboard(item);
+      // TODO: 模拟粘贴
+    }
+    return;
+  }
+
+  // 数字键 1-9 快速粘贴
+  if (e.key >= '1' && e.key <= '9') {
+    const index = parseInt(e.key) - 1;
+    if (index < filteredHistory.value.length) {
+      e.preventDefault();
+      const item = filteredHistory.value[index];
+      if (item) {
+        restoreToClipboard(item);
+        // TODO: 模拟粘贴
+      }
+    }
+    return;
   }
 };
 
 onMounted(() => {
   loadHistory(limit, 0);
   window.addEventListener('keydown', handleKeyDown);
+  // 初始化选中第一项
+  if (filteredHistory.value.length > 0) {
+    selectedIndex.value = 0;
+  }
 });
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
+});
+
+// 监听过滤变化，重置选中状态
+import { watch } from 'vue';
+watch(filteredHistory, () => {
+  if (selectedIndex.value >= filteredHistory.value.length) {
+    selectedIndex.value = filteredHistory.value.length > 0 ? 0 : -1;
+  } else if (selectedIndex.value < 0 && filteredHistory.value.length > 0) {
+    selectedIndex.value = 0;
+  }
 });
 </script>
 

@@ -78,6 +78,11 @@ const menuItems: MenuItem[] = [
   },
   { key: 'divider1', type: 'divider', label: '' },
   {
+    key: 'queue',
+    label: '添加到队列',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+  },
+  {
     key: 'copyPlain',
     label: '复制为纯文本',
     visibleFor: ['text', 'html', 'rtf'],
@@ -169,13 +174,6 @@ const close = () => {
 
 const handleAction = (action: string) => {
   if (props.item) {
-    // 处理收藏按钮的标签切换
-    if (action === 'favorite') {
-      const favoriteItem = menuItems.find(m => m.key === 'favorite');
-      if (favoriteItem && props.item.is_favorite) {
-        favoriteItem.label = '取消收藏';
-      }
-    }
     emit('action', action, props.item);
   }
   close();
@@ -185,7 +183,7 @@ const handleAction = (action: string) => {
 watch(() => props.item, (newItem) => {
   const favoriteItem = menuItems.find(m => m.key === 'favorite');
   if (favoriteItem && newItem) {
-    favoriteItem.label = newItem.is_favorite ? '取消收藏' : '收藏';
+    favoriteItem.label = newItem.tags?.includes('收藏') ? '取消收藏' : '收藏';
   }
 }, { immediate: true });
 </script>

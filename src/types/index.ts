@@ -30,6 +30,15 @@ export interface ClipboardMetadata {
 }
 
 /**
+ * 标签定义
+ */
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
+/**
  * 剪贴板历史记录项
  */
 export interface ClipboardItem {
@@ -42,7 +51,7 @@ export interface ClipboardItem {
   metadata?: ClipboardMetadata;
   file_paths?: string[];
   thumbnail_path?: string;
-  is_favorite?: boolean;
+  tags?: string[];
 }
 
 /**

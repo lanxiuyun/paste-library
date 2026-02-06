@@ -40,7 +40,7 @@ impl Database {
                 metadata TEXT,
                 file_paths TEXT,
                 thumbnail_path TEXT,
-                is_favorite INTEGER DEFAULT 0
+                tags TEXT
             )",
             [],
         )?;
@@ -67,11 +67,18 @@ impl Database {
                 [],
             )?;
         }
-        if !columns.contains(&"is_favorite".to_string()) {
+        if !columns.contains(&"tags".to_string()) {
+            conn.execute("ALTER TABLE clipboard_history ADD COLUMN tags TEXT", [])?;
+        }
+
+        // 数据迁移：将 is_favorite 转换为标签（如果存在旧字段）
+        if columns.contains(&"is_favorite".to_string()) {
             conn.execute(
-                "ALTER TABLE clipboard_history ADD COLUMN is_favorite INTEGER DEFAULT 0",
+                "UPDATE clipboard_history SET tags = '[\"收藏\"]' WHERE is_favorite = 1 AND tags IS NULL",
                 [],
             )?;
+            // 删除旧列（SQLite 不支持直接 DROP COLUMN，需要重建表）
+            // 这里简化处理，保留旧列但不使用
         }
 
         // 设置表
@@ -133,9 +140,14 @@ impl Database {
             .as_ref()
             .map(|p| serde_json::to_string(p).ok())
             .flatten();
+        let tags_json = item
+            .tags
+            .as_ref()
+            .map(|t| serde_json::to_string(t).ok())
+            .flatten();
 
         conn.execute(
-            "INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, is_favorite)
+            "INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(content_hash) DO UPDATE SET
                 created_at = excluded.created_at",
@@ -155,7 +167,7 @@ impl Database {
                 metadata_json,
                 file_paths_json,
                 item.thumbnail_path,
-                item.is_favorite as i32
+                tags_json
             ],
         )?;
 
@@ -167,7 +179,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, is_favorite
+            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags
              FROM clipboard_history
              ORDER BY created_at DESC
              LIMIT ?1 OFFSET ?2",
@@ -198,7 +210,9 @@ impl Database {
                 let file_paths: Option<Vec<String>> = row
                     .get::<_, Option<String>>(6)?
                     .and_then(|s| serde_json::from_str(&s).ok());
-                let is_favorite: bool = row.get::<_, i32>(8).unwrap_or(0) != 0;
+                let tags: Option<Vec<String>> = row
+                    .get::<_, Option<String>>(8)?
+                    .and_then(|s| serde_json::from_str(&s).ok());
 
                 Ok(ClipboardItem {
                     id: row.get(0)?,
@@ -209,7 +223,7 @@ impl Database {
                     metadata,
                     file_paths,
                     thumbnail_path: row.get(7)?,
-                    is_favorite,
+                    tags,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -224,9 +238,9 @@ impl Database {
         let search_pattern = format!("%{}%", query);
 
         let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, is_favorite
+            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags
              FROM clipboard_history
-             WHERE content LIKE ?1
+             WHERE content LIKE ?1 OR tags LIKE ?1
              ORDER BY created_at DESC
              LIMIT ?2",
         )?;
@@ -256,7 +270,9 @@ impl Database {
                 let file_paths: Option<Vec<String>> = row
                     .get::<_, Option<String>>(6)?
                     .and_then(|s| serde_json::from_str(&s).ok());
-                let is_favorite: bool = row.get::<_, i32>(8).unwrap_or(0) != 0;
+                let tags: Option<Vec<String>> = row
+                    .get::<_, Option<String>>(8)?
+                    .and_then(|s| serde_json::from_str(&s).ok());
 
                 Ok(ClipboardItem {
                     id: row.get(0)?,
@@ -267,7 +283,7 @@ impl Database {
                     metadata,
                     file_paths,
                     thumbnail_path: row.get(7)?,
-                    is_favorite,
+                    tags,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -282,14 +298,45 @@ impl Database {
         Ok(())
     }
 
-    /// 更新收藏状态
-    pub fn update_favorite(&self, id: i64, is_favorite: bool) -> Result<()> {
+    /// 更新标签
+    pub fn update_tags(&self, id: i64, tags: &Option<Vec<String>>) -> Result<()> {
         let conn = self.conn.lock().unwrap();
+        let tags_json = tags
+            .as_ref()
+            .map(|t| serde_json::to_string(t).ok())
+            .flatten();
         conn.execute(
-            "UPDATE clipboard_history SET is_favorite = ?1 WHERE id = ?2",
-            params![is_favorite as i32, id],
+            "UPDATE clipboard_history SET tags = ?1 WHERE id = ?2",
+            params![tags_json, id],
         )?;
         Ok(())
+    }
+
+    /// 获取所有标签
+    pub fn get_all_tags(&self) -> Result<Vec<(String, i64)>> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare("SELECT tags FROM clipboard_history WHERE tags IS NOT NULL")?;
+
+        let rows: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let mut tag_counts: std::collections::HashMap<String, i64> =
+            std::collections::HashMap::new();
+        for tags_json in rows {
+            if let Ok(tags) = serde_json::from_str::<Vec<String>>(&tags_json) {
+                for tag in tags {
+                    *tag_counts.entry(tag).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let mut result: Vec<(String, i64)> = tag_counts.into_iter().collect();
+        result.sort_by(|a, b| b.1.cmp(&a.1)); // 按使用次数降序
+
+        Ok(result)
     }
 
     /// 清空历史 (支持按条数或日期)

@@ -211,9 +211,12 @@ src/
   │   ├── ClipboardList.vue      # Main list with tabs and search
   │   ├── ContextMenu.vue        # Right-click context menu
   │   ├── DragHandle.vue         # Window drag capsule (for clipboard window)
-  │   └── SettingsPanel.vue      # Settings panel with left navigation
+  │   ├── SettingsPanel.vue      # Settings panel with left navigation
+  │   ├── PasteQueuePanel.vue    # Paste queue panel for batch operations
+  │   └── DrawerEditor.vue       # Drawer-based editor for text/image preview
   ├── composables/               # Reusable logic (hooks)
   │   ├── useClipboard.ts        # Clipboard monitoring logic (text/image/files)
+  │   ├── usePasteQueue.ts       # Paste queue state management
   │   ├── useSettings.ts         # Settings management
   │   └── useWindow.ts           # Window management (toggle/show/hide)
   ├── types/                     # TypeScript type definitions
@@ -287,6 +290,34 @@ WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into())
 }
 ```
 
+### Image Asset Protocol
+
+For loading local images in Tauri v2, configure CSP and asset protocol:
+
+```json
+{
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost; media-src 'self' asset: http://asset.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPLOCALDATA/**", "$APPDATA/**", "**"]
+      }
+    }
+  }
+}
+```
+
+Then use `convertFileSrc` to load local images:
+
+```typescript
+import { convertFileSrc } from '@tauri-apps/api/core';
+const imageSrc = computed(() => {
+  if (!item.thumbnail_path) return '';
+  return convertFileSrc(item.thumbnail_path);
+});
+```
+
 ### Commands
 
 - Commands in `src-tauri/src/lib.rs` prefixed with `#[tauri::command]`
@@ -332,16 +363,26 @@ WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into())
   - Right-click menu (Open settings, Show clipboard, Quit)
 - Copy/delete clipboard items
 - Data persistence with comprehensive settings
+- **Variable height Item design** (text 3 lines, adaptive image height)
+- **Tag system** replaces favorite (data model + UI)
+- **Hover quick action buttons** (queue/copy/tag/delete)
+- **Keyboard navigation** (↑/↓, Enter, 1-9, Esc)
+- **Paste queue** (shopping cart mode, batch paste)
+- **Drawer editor** (text editing, image preview)
+- Local image loading via `convertFileSrc`
 
 ### In Progress ⏳
 - Data export/backup functionality (backend)
 - Settings panel enhancements
+- Cross-application drag and drop
+- Fuzzy search (pinyin, initial letters, fault tolerance)
 
 ### Planned 📋
 - Cross-device sync architecture
 - Dark theme (currently light only)
 - Advanced search filters (by date range)
 - Multi-language support
+- ItemList virtual scrolling
 
 ---
 
@@ -449,14 +490,25 @@ src-tauri/src/        # Rust后端
 3. ~~左键/双击/右键交互重构~~
 4. ~~右键上下文菜单（ContextMenu组件）~~
 5. ~~系统托盘集成~~
+6. ~~可变高度 Item 设计（文本3行、图片自适应）~~
+7. ~~标签系统替代收藏~~
+8. ~~Hover 快捷操作按钮~~
+9. ~~键盘导航系统~~
+10. ~~粘贴队列（购物车模式）~~
+11. ~~抽屉式编辑器~~
 
 **🟡 P1 - 增强体验（当前优先级）**
-6. 设置面板完善（历史记录删除按钮、数据备份功能）
-7. 存储路径显示
+12. 数据备份导入导出
+13. 存储路径显示
+14. 设置面板完善（历史记录删除按钮）
+15. 跨应用拖拽
+16. 模糊搜索（拼音、首字母、容错）
 
 **🟢 P2 - 优化完善**
-8. 多语言/主题切换
-9. 性能优化
+17. 多语言/主题切换
+18. 性能优化
+19. ItemList虚拟滚动
+20. 缩略图懒加载
 
 ### 💡 快速开发提示
 

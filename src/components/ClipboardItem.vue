@@ -1,73 +1,123 @@
 <template>
   <div 
     class="clipboard-item" 
-    :class="{ 'is-hovered': isHovered }"
+    :class="{ 'is-hovered': isHovered, 'is-selected': isSelected }"
     @click="handleClick"
     @dblclick="handleDoubleClick"
     @contextmenu.prevent="handleContextMenu"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
   >
-    <div class="item-row">
-      <!-- 类型标签 -->
-      <span class="type-badge" :class="item.content_type">
-        {{ typeLabel }}
-      </span>
+    <div class="item-row" :class="{ 'has-tags': item.tags && item.tags.length > 0 }">
+      <!-- 内容包装器 -->
+      <div class="content-wrapper">
+        <span class="type-badge" :class="item.content_type">
+          {{ typeLabel }}
+        </span>
 
-      <!-- 内容区域 -->
-      <div class="content-area">
-        <!-- 图片预览 -->
-        <div v-if="item.content_type === 'image'" class="image-preview">
-          <img 
-            v-if="item.thumbnail_path" 
-            :src="'asset://localhost/' + item.thumbnail_path" 
-            :alt="'图片 ' + (item.metadata?.width || 0) + 'x' + (item.metadata?.height || 0)"
-          />
-          <span class="image-size">
-            {{ item.metadata?.width || '?' }}×{{ item.metadata?.height || '?' }}
-          </span>
+        <div class="content-area">
+          <!-- 图片预览 -->
+          <div v-if="item.content_type === 'image'" class="image-preview">
+            <img 
+              v-if="item.thumbnail_path" 
+              :src="imageSrc" 
+              :alt="'图片 ' + (item.metadata?.width || 0) + 'x' + (item.metadata?.height || 0)"
+            />
+          </div>
+          
+          <!-- 文件预览 -->
+          <div v-else-if="item.content_type === 'file' || item.content_type === 'folder'" class="file-preview">
+            <span class="file-icon">{{ item.content_type === 'folder' ? '📁' : '📄' }}</span>
+            <span class="file-name">{{ item.metadata?.file_name || item.metadata?.folder_name || getFileName(item.content) }}</span>
+          </div>
+          
+          <!-- 多文件预览 -->
+          <div v-else-if="item.content_type === 'files'" class="files-preview">
+            <span class="file-icon">📚</span>
+            <span class="files-count">{{ item.metadata?.item_count || item.file_paths?.length || 0 }} 个项目</span>
+          </div>
+          
+          <!-- 文本预览 -->
+          <p v-else class="content-text">{{ contentPreview }}</p>
         </div>
-        
-        <!-- 文件预览 -->
-        <div v-else-if="item.content_type === 'file' || item.content_type === 'folder'" class="file-preview">
-          <span class="file-icon">{{ item.content_type === 'folder' ? '📁' : '📄' }}</span>
-          <span class="file-name">{{ item.metadata?.file_name || item.metadata?.folder_name || getFileName(item.content) }}</span>
-        </div>
-        
-        <!-- 多文件预览 -->
-        <div v-else-if="item.content_type === 'files'" class="files-preview">
-          <span class="file-icon">📚</span>
-          <span class="files-count">{{ item.metadata?.item_count || item.file_paths?.length || 0 }} 个项目</span>
-        </div>
-        
-        <!-- 文本预览 -->
-        <p v-else class="content-text">{{ contentPreview }}</p>
-        
-        <div class="meta-info">
-          <span class="meta-item">{{ metaText }}</span>
-          <span class="meta-separator">·</span>
-          <span class="meta-item">{{ formattedTime }}</span>
-          <span v-if="item.is_favorite" class="star-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-            </svg>
-          </span>
-        </div>
+
+        <!-- Hover 快捷按钮 - 绝对定位，不影响布局 -->
+        <transition name="fade">
+          <div v-if="isHovered" class="quick-actions" @click.stop>
+            <button 
+              class="action-btn" 
+              title="添加到队列" 
+              @click="handleQuickAction('queue')"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+            </button>
+            <button 
+              class="action-btn" 
+              title="复制" 
+              @click="handleQuickAction('copy')"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+            <button 
+              class="action-btn" 
+              title="标签" 
+              @click="handleQuickAction('tag')"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                <line x1="7" y1="7" x2="7.01" y2="7"/>
+              </svg>
+            </button>
+            <button 
+              class="action-btn danger" 
+              title="删除" 
+              @click="handleQuickAction('delete')"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </div>
+        </transition>
       </div>
 
-      <!-- 序号 -->
-      <span class="item-index">{{ index + 1 }}</span>
+      <!-- 序号/快捷数字 -->
+      <span v-if="index < 9" class="item-index">{{ index + 1 }}</span>
+      <span v-else class="item-index subdued">{{ index + 1 }}</span>
+    </div>
+
+    <!-- 标签区域 -->
+    <div v-if="item.tags && item.tags.length > 0" class="tags-row">
+      <span 
+        v-for="tag in item.tags.slice(0, 3)" 
+        :key="tag"
+        class="tag-item"
+        :style="{ backgroundColor: getTagColor(tag) + '20', color: getTagColor(tag) }"
+      >
+        {{ tag }}
+      </span>
+      <span v-if="item.tags.length > 3" class="tag-more">+{{ item.tags.length - 3 }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import type { ClipboardItem } from '@/types';
 
 interface Props {
   item: ClipboardItem;
   index: number;
+  isSelected?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -77,8 +127,9 @@ const emit = defineEmits<{
   dblclick: [item: ClipboardItem];
   contextmenu: [event: MouseEvent, item: ClipboardItem];
   delete: [id: number];
-  toggleFavorite: [id: number, isFavorite: boolean];
   copy: [item: ClipboardItem];
+  tag: [item: ClipboardItem];
+  quickAction: [action: string, item: ClipboardItem];
 }>();
 
 const isHovered = ref(false);
@@ -87,6 +138,21 @@ const isHovered = ref(false);
 let clickTimer: ReturnType<typeof setTimeout> | null = null;
 let clickCount = 0;
 const DOUBLE_CLICK_DELAY = 250;
+
+// 预设标签颜色
+const tagColors: Record<string, string> = {
+  '收藏': '#faad14',
+  '工作': '#1890ff',
+  '个人': '#52c41a',
+  '待办': '#ff4d4f',
+  '灵感': '#722ed1',
+  '重要': '#ff4d4f',
+  '稍后': '#8c8c8c',
+};
+
+const getTagColor = (tag: string): string => {
+  return tagColors[tag] || '#595959';
+};
 
 const typeLabel = computed(() => {
   switch (props.item.content_type) {
@@ -116,53 +182,16 @@ const contentPreview = computed(() => {
   return text || '(空内容)';
 });
 
-// 元信息文本
-const metaText = computed(() => {
-  const type = props.item.content_type;
-  if (type === 'image') {
-    const w = props.item.metadata?.width || 0;
-    const h = props.item.metadata?.height || 0;
-    return `${w}×${h}`;
-  }
-  if (type === 'file' || type === 'folder') {
-    const size = props.item.metadata?.file_size;
-    return size ? formatFileSize(size) : '文件';
-  }
-  if (type === 'files') {
-    const count = props.item.metadata?.item_count || props.item.file_paths?.length || 0;
-    return `${count} 个项目`;
-  }
-  return `${props.item.content.length}字符`;
+// 处理图片路径 - 使用 convertFileSrc 转换
+const imageSrc = computed(() => {
+  if (!props.item.thumbnail_path) return '';
+  return convertFileSrc(props.item.thumbnail_path);
 });
-
-// 格式化文件大小
-const formatFileSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
-};
 
 // 从路径获取文件名
 const getFileName = (path: string): string => {
   return path.split(/[/\\]/).pop() || path;
 };
-
-const formattedTime = computed(() => {
-  const date = new Date(props.item.created_at);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return '刚刚';
-  if (diffMin < 60) return `${diffMin}分钟前`;
-  if (diffHour < 24) return `${diffHour}小时前`;
-  if (diffDay < 7) return `${diffDay}天前`;
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-});
 
 const handleClick = () => {
   clickCount++;
@@ -190,18 +219,28 @@ const handleDoubleClick = () => {
 const handleContextMenu = (event: MouseEvent) => {
   emit('contextmenu', event, props.item);
 };
+
+const handleQuickAction = (action: string) => {
+  emit('quickAction', action, props.item);
+};
 </script>
 
 <style scoped>
 .clipboard-item {
-  padding: 10px 12px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light, #e8e8e8);
   cursor: pointer;
   transition: background-color 0.15s ease;
+  background: var(--bg-card, #ffffff);
 }
 
 .clipboard-item:hover {
-  background-color: #f5f5f5;
+  background-color: var(--bg-hover, #f5f5f5);
+}
+
+.clipboard-item.is-selected {
+  background-color: var(--primary-light, #e6f7ff);
+  box-shadow: inset 3px 0 0 0 var(--primary, #1890ff);
 }
 
 .item-row {
@@ -210,14 +249,30 @@ const handleContextMenu = (event: MouseEvent) => {
   gap: 8px;
 }
 
+.item-row.has-tags {
+  margin-bottom: 8px;
+}
+
+/* 内容包装器 */
+.content-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  position: relative;
+  padding-right: 80px; /* 为按钮预留空间 */
+}
+
 /* 类型标签 */
 .type-badge {
   flex-shrink: 0;
-  padding: 2px 6px;
-  font-size: 10px;
+  padding: 3px 8px;
+  font-size: 11px;
   font-weight: 500;
-  border-radius: 3px;
+  border-radius: 4px;
   line-height: 1.4;
+  margin-top: 2px;
 }
 
 .type-badge.text {
@@ -259,35 +314,40 @@ const handleContextMenu = (event: MouseEvent) => {
 .content-area {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
+/* 文本预览 - 最多3行 */
 .content-text {
   font-size: 14px;
-  color: #262626;
-  line-height: 1.5;
+  color: var(--text-primary, #262626);
+  line-height: 1.6;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  margin: 0;
 }
 
 /* 图片预览 */
 .image-preview {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-start;
 }
 
 .image-preview img {
-  max-width: 48px;
-  max-height: 36px;
-  border-radius: 4px;
+  max-height: 100px;
+  max-width: 120px;
+  width: auto;
+  height: auto;
+  border-radius: 6px;
   object-fit: cover;
-  background: #f5f5f5;
-}
-
-.image-size {
-  font-size: 13px;
-  color: #595959;
+  background: var(--bg-hover, #f5f5f5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* 文件预览 */
@@ -295,16 +355,17 @@ const handleContextMenu = (event: MouseEvent) => {
 .files-preview {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .file-icon {
-  font-size: 16px;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .file-name {
   font-size: 14px;
-  color: #262626;
+  color: var(--text-primary, #262626);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -312,33 +373,50 @@ const handleContextMenu = (event: MouseEvent) => {
 
 .files-count {
   font-size: 14px;
-  color: #595959;
+  color: var(--text-secondary, #595959);
 }
 
-.meta-info {
+/* Hover 快捷按钮 - 绝对定位，不影响布局 */
+.quick-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 2px;
+  gap: 2px;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
 }
 
-.meta-item {
-  font-size: 11px;
+.action-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
   color: #8c8c8c;
 }
 
-.meta-separator {
-  font-size: 11px;
-  color: #bfbfbf;
+.action-btn:hover {
+  background: #f5f5f5;
+  color: var(--primary, #262626);
 }
 
-.star-icon {
-  display: flex;
-  align-items: center;
-  color: #faad14;
+.action-btn.danger:hover {
+  background: var(--danger-bg, #fff2f0);
+  color: var(--danger, #ff4d4f);
 }
 
-.star-icon svg {
+.action-btn svg {
   width: 12px;
   height: 12px;
 }
@@ -346,10 +424,50 @@ const handleContextMenu = (event: MouseEvent) => {
 /* 序号 */
 .item-index {
   flex-shrink: 0;
-  width: 20px;
+  width: 24px;
   text-align: right;
-  font-size: 11px;
-  color: #bfbfbf;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #595959);
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  line-height: 24px;
+}
+
+.item-index.subdued {
+  color: var(--text-disabled, #bfbfbf);
+  font-weight: 400;
+}
+
+/* 标签区域 */
+.tags-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: calc(10px + 8px + 8px); /* 类型标签宽度 + gap */
+  flex-wrap: wrap;
+}
+
+.tag-item {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.tag-more {
+  font-size: 11px;
+  color: var(--text-desc, #8c8c8c);
+}
+
+/* 过渡动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

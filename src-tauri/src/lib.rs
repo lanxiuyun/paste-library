@@ -190,13 +190,21 @@ fn show_in_folder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn toggle_favorite(
+fn update_tags(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     id: i64,
-    is_favorite: bool,
+    tags: Option<Vec<String>>,
 ) -> Result<(), String> {
     let state = state.blocking_lock();
-    state.clipboard_manager.toggle_favorite(id, is_favorite)
+    state.clipboard_manager.update_tags(id, tags)
+}
+
+#[tauri::command]
+fn get_all_tags(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<Vec<(String, i64)>, String> {
+    let state = state.blocking_lock();
+    state.clipboard_manager.get_all_tags()
 }
 
 #[tauri::command]
@@ -297,7 +305,8 @@ pub fn run() {
             hide_clipboard_window,
             open_file,
             show_in_folder,
-            toggle_favorite,
+            update_tags,
+            get_all_tags,
             validate_shortcut,
         ])
         .run(tauri::generate_context!())
