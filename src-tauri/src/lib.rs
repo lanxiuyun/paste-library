@@ -3,6 +3,7 @@ mod models;
 mod storage;
 mod window_manager;
 mod shortcut_manager;
+mod tray_manager;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -274,6 +275,11 @@ pub fn run() {
                         let _ = app_handle.emit("window-blur", ());
                     }
                 });
+            }
+
+            // 初始化系统托盘
+            if let Err(e) = tray_manager::create_tray(app.handle()) {
+                eprintln!("系统托盘初始化失败: {}", e);
             }
 
             Ok(())
