@@ -324,9 +324,17 @@
             <div class="setting-info">
               <div class="setting-title">唤醒快捷键</div>
               <div class="setting-desc">按下此快捷键可快速打开或关闭剪贴板窗口</div>
+              <div class="setting-note">点击下方按钮开始录制，然后按下想要的快捷键组合</div>
+              <div v-if="shortcutError" class="error-message">{{ shortcutError }}</div>
             </div>
             <div class="setting-control">
-              <kbd class="hotkey-display">{{ form.hotkey }}</kbd>
+              <button
+                class="hotkey-record-btn"
+                :class="{ 'recording': isRecordingHotkey, 'has-value': form.hotkey && !isRecordingHotkey }"
+                @click="toggleHotkeyRecording"
+              >
+                {{ isRecordingHotkey ? '请按下快捷键...' : (form.hotkey || '点击录制') }}
+              </button>
             </div>
           </div>
 
@@ -422,9 +430,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, onMounted, reactive, onUnmounted } from 'vue';
 import { useSettings } from '@/composables/useSettings';
 import { useWindow } from '@/composables/useWindow';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AppSettings } from '@/types';
 
 const { settings, loadSettings, saveSettings } = useSettings();
@@ -460,6 +470,7 @@ const form = reactive<AppSettings>({
   auto_favorite: false,
   confirm_delete: true,
   auto_sort: false,
+  left_click_action: 'copy',
   hotkey: 'Alt+V',
   auto_start: false,
   blacklist_apps: [],
@@ -467,11 +478,77 @@ const form = reactive<AppSettings>({
 
 const blacklistText = ref('');
 const originalSettings = ref<AppSettings | null>(null);
+const shortcutError = ref('');
+const isRecordingHotkey = ref(false);
+let unlistenShortcutError: UnlistenFn | null = null;
+
+// 录制快捷键
+const toggleHotkeyRecording = () => {
+  if (isRecordingHotkey.value) {
+    // 停止录制
+    isRecordingHotkey.value = false;
+    window.removeEventListener('keydown', handleHotkeyRecord);
+  } else {
+    // 开始录制
+    isRecordingHotkey.value = true;
+    window.addEventListener('keydown', handleHotkeyRecord, { capture: true });
+  }
+};
+
+const handleHotkeyRecord = (e: KeyboardEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const modifiers: string[] = [];
+  if (e.ctrlKey) modifiers.push('Ctrl');
+  if (e.altKey) modifiers.push('Alt');
+  if (e.shiftKey) modifiers.push('Shift');
+  if (e.metaKey) modifiers.push('Win');
+
+  // 获取按键名称
+  let key = e.key;
+
+  // 忽略单独的修饰键
+  if (key === 'Control' || key === 'Alt' || key === 'Shift' || key === 'Meta') {
+    return;
+  }
+
+  // 标准化按键名称
+  if (key === ' ') key = 'Space';
+  if (key.length === 1) key = key.toUpperCase();
+
+  // 组合快捷键
+  const hotkeyParts = [...modifiers, key];
+  const hotkeyString = hotkeyParts.join('+');
+
+  // 验证并设置
+  form.hotkey = hotkeyString;
+  validateHotkey();
+
+  // 停止录制
+  isRecordingHotkey.value = false;
+  window.removeEventListener('keydown', handleHotkeyRecord, { capture: true });
+};
 
 onMounted(async () => {
   await loadSettings();
   syncFromSettings();
   originalSettings.value = { ...settings.value };
+
+  // 监听快捷键注册失败事件
+  unlistenShortcutError = await listen<string>('shortcut-registration-failed', (event) => {
+    shortcutError.value = `快捷键 "${event.payload}" 已被其他程序占用，请使用备用快捷键 Ctrl+Shift+V，或修改快捷键后重启应用`;
+  });
+});
+
+onUnmounted(() => {
+  if (unlistenShortcutError) {
+    unlistenShortcutError();
+  }
+  // 清理录制监听器
+  if (isRecordingHotkey.value) {
+    window.removeEventListener('keydown', handleHotkeyRecord, { capture: true });
+  }
 });
 
 const syncFromSettings = () => {
@@ -508,6 +585,8 @@ const hasChanges = computed(() => {
     current.auto_favorite !== original.auto_favorite ||
     current.confirm_delete !== original.confirm_delete ||
     current.auto_sort !== original.auto_sort ||
+    current.hotkey !== original.hotkey ||
+    current.left_click_action !== original.left_click_action ||
     current.auto_start !== original.auto_start ||
     JSON.stringify(current.blacklist_apps) !== JSON.stringify(original.blacklist_apps)
   );
@@ -549,6 +628,19 @@ const exportData = () => {
 
 const importData = () => {
   console.log('Import data');
+};
+
+const hotkeyError = ref('');
+
+const validateHotkey = async () => {
+  try {
+    await invoke('validate_shortcut', { hotkey: form.hotkey });
+    hotkeyError.value = '';
+  } catch (error) {
+    hotkeyError.value = '快捷键格式无效';
+    // 恢复到默认值
+    form.hotkey = 'Alt+V';
+  }
 };
 </script>
 
@@ -690,14 +782,80 @@ const importData = () => {
   gap: 12px;
 }
 
-.hotkey-display {
-  padding: 6px 12px;
-  background: #f5f5f5;
+.hotkey-record-btn {
+  min-width: 120px;
+  padding: 8px 16px;
+  border: 2px dashed #d9d9d9;
+  border-radius: 4px;
+  background: #fafafa;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: #8c8c8c;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.hotkey-record-btn:hover {
+  border-color: #262626;
+  color: #262626;
+}
+
+.hotkey-record-btn.recording {
+  border-color: #fa8c16;
+  border-style: solid;
+  background: #fff7e6;
+  color: #fa8c16;
+  animation: pulse 1s infinite;
+}
+
+.hotkey-record-btn.has-value {
+  border-style: solid;
+  border-color: #52c41a;
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.hotkey-input {
+  width: 120px;
+  padding: 6px 10px;
   border: 1px solid #d9d9d9;
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 13px;
   color: #262626;
+  text-align: center;
+}
+
+.hotkey-input:focus {
+  border-color: #262626;
+  outline: none;
+}
+
+.setting-note {
+  font-size: 11px;
+  color: #faad14;
+  margin-top: 4px;
+}
+
+.error-message {
+  font-size: 11px;
+  color: #ff4d4f;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 4px;
+}
+
+.hotkey-input.has-error {
+  border-color: #ff4d4f;
+  background: #fff2f0;
 }
 
 .number-input {
