@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::models::{
-    AppSettings, ClipboardContentType, ClipboardItem, ClearHistoryRequest, GetHistoryRequest,
+    AppSettings, ClipboardContentType, ClipboardItem, ClipboardMetadata, ClearHistoryRequest, GetHistoryRequest,
     SearchRequest,
 };
 use crate::storage::Database;
@@ -52,6 +52,67 @@ impl ClipboardManager {
             content,
             created_at: chrono::Utc::now(),
             content_hash,
+            metadata: None,
+            file_paths: None,
+            thumbnail_path: None,
+            is_favorite: false,
+        };
+
+        let id = self.database.add_clipboard_item(&item).map_err(|e| {
+            if e.to_string().contains("UNIQUE constraint failed") {
+                return "DUPLICATE".to_string();
+            }
+            e.to_string()
+        })?;
+
+        let mut item_with_id = item;
+        item_with_id.id = id;
+
+        Ok(Some(item_with_id))
+    }
+
+    pub async fn handle_clipboard_change_extended(
+        &self,
+        content_type: ClipboardContentType,
+        content: String,
+        file_paths: Option<Vec<String>>,
+        thumbnail_path: Option<String>,
+        metadata: Option<ClipboardMetadata>,
+    ) -> Result<Option<ClipboardItem>, String> {
+        let settings = self.settings.lock().await;
+
+        let count = self.database.get_count().map_err(|e| e.to_string())?;
+        if count >= settings.max_history_count {
+            let cleanup_request = ClearHistoryRequest {
+                keep_count: Some(settings.max_history_count - 1),
+                keep_days: None,
+            };
+            self.database
+                .clear_history(&cleanup_request)
+                .map_err(|e| e.to_string())?;
+        }
+        drop(settings);
+
+        // 生成内容哈希
+        let mut hasher = Sha256::new();
+        hasher.update(&content);
+        if let Some(ref paths) = file_paths {
+            for path in paths {
+                hasher.update(path.as_bytes());
+            }
+        }
+        let content_hash = format!("{:x}", hasher.finalize());
+
+        let item = ClipboardItem {
+            id: 0,
+            content_type,
+            content,
+            created_at: chrono::Utc::now(),
+            content_hash,
+            metadata,
+            file_paths,
+            thumbnail_path,
+            is_favorite: false,
         };
 
         let id = self.database.add_clipboard_item(&item).map_err(|e| {
@@ -104,6 +165,12 @@ impl ClipboardManager {
 
         self.database
             .save_settings(new_settings)
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn toggle_favorite(&self, id: i64, is_favorite: bool) -> Result<(), String> {
+        self.database
+            .update_favorite(id, is_favorite)
             .map_err(|e| e.to_string())
     }
 }
