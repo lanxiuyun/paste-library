@@ -183,6 +183,48 @@ const handleClick = () => {
 />
 ```
 
+### 快捷键录制实现
+
+```vue
+<script setup>
+const isRecordingHotkey = ref(false);
+
+const toggleHotkeyRecording = () => {
+  if (isRecordingHotkey.value) {
+    isRecordingHotkey.value = false;
+    window.removeEventListener('keydown', handleHotkeyRecord);
+  } else {
+    isRecordingHotkey.value = true;
+    window.addEventListener('keydown', handleHotkeyRecord, { capture: true });
+  }
+};
+
+const handleHotkeyRecord = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const modifiers = [];
+  if (e.ctrlKey) modifiers.push('Ctrl');
+  if (e.altKey) modifiers.push('Alt');
+  if (e.shiftKey) modifiers.push('Shift');
+  if (e.metaKey) modifiers.push('Win');
+
+  let key = e.key;
+  // 忽略单独的修饰键
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return;
+  
+  if (key === ' ') key = 'Space';
+  if (key.length === 1) key = key.toUpperCase();
+
+  const hotkey = [...modifiers, key].join('+');
+  form.hotkey = hotkey;
+  
+  isRecordingHotkey.value = false;
+  window.removeEventListener('keydown', handleHotkeyRecord, { capture: true });
+};
+</script>
+```
+
 ---
 
 ## 数据流设计
@@ -208,28 +250,28 @@ const handleClick = () => {
 ## Tauri 命令列表
 
 ### 剪贴板操作
-- `add_clipboard_item()` - 添加记录
-- `get_clipboard_history()` - 获取历史
-- `search_clipboard_history()` - 搜索
-- `delete_clipboard_item()` - 删除单条
-- `clear_clipboard_history()` - 清空历史
-- `copy_to_clipboard(item_id)` - 复制到剪贴板
-- `simulate_paste()` - 模拟粘贴
+- `add_clipboard_item()` - 添加文本/HTML记录 ✅
+- `add_clipboard_item_extended()` - 添加图片/文件记录 ✅
+- `get_clipboard_history()` - 获取历史 ✅
+- `search_clipboard_history()` - 搜索 ✅
+- `delete_clipboard_item()` - 删除单条 ✅
+- `clear_clipboard_history()` - 清空历史 ✅
+- `toggle_favorite()` - 切换收藏状态 ✅
 
 ### 设置操作
-- `get_settings()` - 获取设置
-- `save_settings()` - 保存设置
-- `get_storage_paths()` - 获取存储路径
+- `get_settings()` - 获取设置 ✅
+- `save_settings()` - 保存设置 ✅
+- `get_storage_paths()` - 获取存储路径 📋
 
 ### 数据备份
-- `export_data(path)` - 导出数据
-- `import_data(path)` - 导入数据
-- `delete_all_history()` - 删除所有历史
-
-### 图片操作
-- `get_image(item_id)` - 获取图片数据
-- `get_thumbnail(path)` - 获取缩略图
+- `export_data(path)` - 导出数据 📋
+- `import_data(path)` - 导入数据 📋
+- `delete_all_history()` - 删除所有历史 📋
 
 ### 文件操作
-- `open_file(path)` - 打开文件
-- `show_in_folder(path)` - 在文件夹中显示
+- `open_file(path)` - 打开文件 ✅
+- `show_in_folder(path)` - 在文件夹中显示 ✅
+
+### 窗口操作
+- `toggle_clipboard_window()` - 切换剪贴板窗口 ✅
+- `hide_clipboard_window()` - 隐藏剪贴板窗口 ✅

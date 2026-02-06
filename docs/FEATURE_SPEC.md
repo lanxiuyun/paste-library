@@ -49,7 +49,11 @@
 
 ### 4. 快捷键设置
 
-- 打开剪贴板窗口: string (显示)
+- 打开剪贴板窗口: 按键录制按钮 (实时捕获组合键)
+  - 支持: Ctrl, Alt, Shift, Win 修饰键
+  - 支持: 字母键 A-Z, 数字键 0-9, F键 F1-F12
+  - 支持: 特殊键 Space, Enter, Escape, Tab, Backspace, Delete, 方向键
+  - 修改后需重启应用生效
 - 打开偏好设置窗口: string (可配置)
 - 快速粘贴: boolean + modifier
 - 粘贴为纯文本: string

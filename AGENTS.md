@@ -208,10 +208,11 @@ src/
   ├── components/                # Reusable Vue components
   │   ├── ClipboardItem.vue      # Card component for single clipboard item
   │   ├── ClipboardList.vue      # Main list with tabs and search
+  │   ├── ContextMenu.vue        # Right-click context menu
   │   ├── DragHandle.vue         # Window drag capsule (for clipboard window)
   │   └── SettingsPanel.vue      # Settings panel with left navigation
   ├── composables/               # Reusable logic (hooks)
-  │   ├── useClipboard.ts        # Clipboard monitoring logic
+  │   ├── useClipboard.ts        # Clipboard monitoring logic (text/image/files)
   │   ├── useSettings.ts         # Settings management
   │   └── useWindow.ts           # Window management (toggle/show/hide)
   ├── types/                     # TypeScript type definitions
@@ -225,7 +226,7 @@ src-tauri/
   │   ├── models.rs              # Data structures (ClipboardItem, AppSettings, etc.)
   │   ├── storage.rs             # SQLite database operations
   │   └── window_manager.rs      # Window management (create/hide/show clipboard window)
-  ├── tauri.conf.json            # Tauri config (settings: decorations=true, clipboard: decorations=false)
+  ├── tauri.conf.json            # Tauri config
   ├── capabilities/              # Permission definitions
   └── Cargo.toml                 # Rust dependencies
 ```
@@ -301,33 +302,40 @@ WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into())
 ## Project Features
 
 ### Implemented ✅
-- Real-time clipboard monitoring (text + HTML)
+- Real-time clipboard monitoring (text + HTML + image + files)
 - SQLite persistence with automatic deduplication (SHA256 hash)
 - Card-based UI with tabs (All/Text/Image/File/Favorite)
 - Search functionality (fuzzy search)
-- **Global hotkey (Alt+V)** to show/hide clipboard window
-- **Settings panel** with left sidebar navigation:
-  - 剪贴板: 窗口设置、音效设置、搜索设置、内容设置
-  - 历史记录: 最大记录数、自动清理
-  - 通用设置: 开机自启、应用黑名单
-  - 快捷键: 唤醒快捷键、窗口尺寸
-  - 数据备份: 导出/导入（UI ready）
-  - 关于: 应用信息、打开剪贴板按钮
-- **Window management**:
-  - Settings: Normal window with title bar
-  - Clipboard: Frameless, skip taskbar, always on top, auto-hide on blur
+- **Global hotkey** (configurable via key recording) to show/hide clipboard window
+- **Settings panel** with left sidebar navigation
+- **Window management** (frameless clipboard, normal settings)
+- **Image/File clipboard support**:
+  - Image thumbnails with dimensions display
+  - File/folder icons with names
+  - Multi-file count display
+- **Context menu** (right-click):
+  - Copy/Paste/Copy as plain text
+  - Open file / Show in folder
+  - Favorite/Unfavorite
+  - Delete
+- **Interaction enhancements**:
+  - Single click: copy to clipboard
+  - Double click: copy and paste
+  - Right click: context menu
+- **Favorite system** with database persistence
 - Copy/delete clipboard items
 - Data persistence with comprehensive settings
 
 ### In Progress ⏳
-- System tray integration
 - Data export/backup functionality (backend)
+- Settings panel enhancements
 
 ### Planned 📋
-- Image clipboard support (with OCR)
+- System tray integration
 - Cross-device sync architecture
 - Dark theme (currently light only)
 - Advanced search filters (by date range)
+- Multi-language support
 
 ---
 
@@ -375,7 +383,7 @@ WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into())
 - 应用黑名单 (textarea, one per line)
 
 **快捷键设置**:
-- 唤醒快捷键 (display only: Alt+V)
+- 唤醒快捷键 (按键录制, 如: Alt+V, Win+Shift+C)
 - 窗口尺寸 (width × height)
 
 ---
@@ -390,4 +398,91 @@ WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into())
 - **Clipboard window**: Frameless, skip taskbar, always on top (decorations: false)
 - **Greenfield project**: Modern best practices take priority over legacy patterns
 - **Desktop-first UX**: Consider Windows/macOS/Linux platform differences in UI
-- **Global shortcut**: Alt+V is hardcoded in Rust, display-only in settings UI
+- **Global shortcut**: Configurable via key recording in settings (restart required to apply changes)
+
+## Project Documentation
+
+### 📁 文档目录结构
+
+```
+docs/
+├── FEATURE_SPEC.md          # 功能规格说明 - 详细功能定义
+├── TECH_DESIGN.md           # 技术设计方案 - 类型定义和架构
+├── UI_DESIGN.md            # UI设计规范 - 颜色和组件规范
+└── IMPLEMENTATION_PLAN.md  # 实施计划 - 开发任务清单
+
+DEVELOPMENT_PLAN.md         # 主开发计划 - 项目概览和进度
+```
+
+### 📖 如何开始新任务
+
+**步骤1**: 阅读主开发计划
+```
+请阅读 @DEVELOPMENT_PLAN.md 了解当前进度和待开发功能清单
+```
+
+**步骤2**: 根据任务类型查阅详细文档
+- **实现具体功能** → 阅读 `docs/FEATURE_SPEC.md` + `docs/TECH_DESIGN.md`
+- **UI开发/样式调整** → 阅读 `docs/UI_DESIGN.md`
+- **了解开发顺序** → 阅读 `docs/IMPLEMENTATION_PLAN.md`
+
+**步骤3**: 查看现有代码结构
+```bash
+# 了解当前实现
+src/components/       # Vue组件
+src/composables/      # 逻辑hooks
+src/types/index.ts    # TypeScript类型
+src-tauri/src/        # Rust后端
+```
+
+### 🎯 当前开发优先级
+
+**✅ 已完成 - 核心功能（P0）**
+1. ~~图片类型监听与显示（ClipboardItem显示缩略图）~~
+2. ~~文件/文件夹类型监听与显示~~
+3. ~~左键/双击/右键交互重构~~
+4. ~~右键上下文菜单（ContextMenu组件）~~
+
+**🟡 P1 - 增强体验（当前优先级）**
+5. 设置面板完善（历史记录删除按钮、数据备份功能）
+6. 存储路径显示
+
+**🟢 P2 - 优化完善**
+7. 多语言/主题切换
+8. 系统托盘集成
+9. 性能优化
+
+### 💡 快速开发提示
+
+**实现图片支持时参考:**
+- 技术方案: `docs/TECH_DESIGN.md` → 图片处理方案
+- UI规范: `docs/UI_DESIGN.md` → 类型标签颜色
+- 类型定义: `src/types/index.ts` → ClipboardItem
+
+**实现交互增强时参考:**
+- 技术方案: `docs/TECH_DESIGN.md` → 交互实现方案
+- 功能规格: `docs/FEATURE_SPEC.md` → 交互规格
+
+**实现设置面板时参考:**
+- UI规范: `docs/UI_DESIGN.md` → 设置面板布局
+- 功能规格: `docs/FEATURE_SPEC.md` → 设置面板功能规格
+
+### ⚠️ 重要约束
+
+1. **从不使用 `any` 类型** - 项目启用 strict mode
+2. **不提交代码** - 用户会自己运行和测试
+3. **遵循现有代码风格** - 特别是 Vue Composition API 模式
+4. **Rust 后端命令** - 所有新功能都需要对应的 Tauri 命令
+5. **类型安全** - 更新类型定义后再实现功能
+
+### 🔄 开发工作流程
+
+```
+1. 阅读相关文档了解需求
+2. 更新 TypeScript 类型定义 (src/types/index.ts)
+3. 更新 Rust 模型 (src-tauri/src/models.rs)
+4. 实现 Rust 后端命令
+5. 实现 Vue 前端组件
+6. 运行类型检查: pnpm run build
+7. 确认无 TypeScript 错误
+```

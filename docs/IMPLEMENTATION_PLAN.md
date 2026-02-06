@@ -2,64 +2,68 @@
 
 ## 开发任务清单
 
-### Phase 1: 类型定义更新
+### Phase 1: 类型定义更新 ✅ COMPLETE
 **文件**: `src/types/index.ts`, `src-tauri/src/models.rs`
 
-- [ ] 更新 `AppSettings` 接口
-  - [ ] 添加新字段到 TypeScript 类型
-  - [ ] 更新 Rust Settings 结构体
-  - [ ] 添加新的类型别名
+- [x] 更新 `AppSettings` 接口
+  - [x] 添加新字段到 TypeScript 类型
+  - [x] 更新 Rust Settings 结构体
+  - [x] 添加 `left_click_action` 字段
 
-### Phase 2: 图片支持
-**文件**: `src-tauri/src/image_handler.rs`, `src/components/ImageItem.vue`
+- [x] 更新 `ClipboardItem` 类型
+  - [x] 添加 `metadata`, `file_paths`, `thumbnail_path`, `is_favorite` 字段
+  - [x] 添加 `ClipboardMetadata` 接口
+  - [x] 添加 `folder`, `files` 类型到 `ClipboardContentType`
 
-- [ ] Rust 后端
-  - [ ] 集成 image crate
-  - [ ] 实现剪贴板图片监听
-  - [ ] 实现缩略图生成
-  - [ ] 添加 get_image 命令
+### Phase 2: 图片支持 ✅ COMPLETE
+**文件**: `src/composables/useClipboard.ts`, `src/components/ClipboardItem.vue`
+
+- [x] 前端监听
+  - [x] 使用 `onClipboardChange` 回调监听图片
+  - [x] 调用 `add_clipboard_item_extended` 命令
   
-- [ ] 前端组件
-  - [ ] 创建 ImageItem 组件
-  - [ ] 实现缩略图加载
-  - [ ] 添加图片预览功能
+- [x] 前端显示
+  - [x] ClipboardItem 显示图片缩略图
+  - [x] 显示图片尺寸信息
 
-### Phase 3: 文件/文件夹支持
-**文件**: `src-tauri/src/file_handler.rs`, `src/components/FileItem.vue`
+### Phase 3: 文件/文件夹支持 ✅ COMPLETE
+**文件**: `src/composables/useClipboard.ts`, `src/components/ClipboardItem.vue`
 
-- [ ] Rust 后端
-  - [ ] 实现文件路径监听
-  - [ ] 添加 get_file_icon 命令
-  - [ ] 实现文件类型判断
+- [x] 前端监听
+  - [x] 监听文件/文件夹复制事件
+  - [x] 区分 file/folder/files 类型
   
-- [ ] 前端组件
-  - [ ] 创建 FileItem 组件
-  - [ ] 创建 FolderItem 组件
-  - [ ] 创建 FilesItem 组件
+- [x] 前端显示
+  - [x] 显示文件图标和文件名
+  - [x] 显示文件夹图标
+  - [x] 显示多文件计数
 
-### Phase 4: 数据库迁移
+### Phase 4: 数据库迁移 ✅ COMPLETE
 **文件**: `src-tauri/src/storage.rs`
 
-- [ ] 添加 metadata 字段
-- [ ] 添加 file_paths 字段
-- [ ] 添加 thumbnail_path 字段
-- [ ] 实现数据迁移
+- [x] 添加 metadata 字段
+- [x] 添加 file_paths 字段
+- [x] 添加 thumbnail_path 字段
+- [x] 添加 is_favorite 字段
+- [x] 实现自动数据迁移 (ALTER TABLE)
 
-### Phase 5: 交互增强
+### Phase 5: 交互增强 ✅ COMPLETE
 **文件**: `src/components/ClipboardItem.vue`, `src/components/ContextMenu.vue`
 
-- [ ] 左键/双击事件处理
-  - [ ] 区分单击和双击
-  - [ ] 实现单击/双击逻辑
+- [x] 左键/双击事件处理
+  - [x] 区分单击和双击 (250ms 延迟)
+  - [x] 单击复制到剪贴板
+  - [x] 双击复制并粘贴
   
-- [ ] 右键上下文菜单
-  - [ ] 创建 ContextMenu 组件
-  - [ ] 实现菜单项动态显示
-  - [ ] 实现菜单功能
+- [x] 右键上下文菜单
+  - [x] 创建 ContextMenu 组件
+  - [x] 实现菜单项动态显示 (根据内容类型)
+  - [x] 实现菜单功能 (复制/粘贴/收藏/删除等)
 
-### Phase 6: 设置面板更新
+### Phase 6: 设置面板更新 ⏳ PARTIAL
 **文件**: `src/components/SettingsPanel.vue`
 
+- [x] 添加 left_click_action 设置字段
 - [ ] 历史记录页面
   - [ ] 改为带单位输入框
   - [ ] 添加删除按钮
@@ -68,49 +72,50 @@
   - [ ] 添加外观设置分组
   - [ ] 添加应用更新分组
   
-- [ ] 快捷键页面
-  - [ ] 添加快捷键配置
+- [x] 快捷键页面
+  - [x] 添加快捷键配置 (按键录制功能)
   - [ ] 添加快速粘贴设置
   
 - [ ] 数据备份页面
   - [ ] 添加存储路径显示
   - [ ] 重构导入导出
 
-### Phase 7: Rust 后端命令
+### Phase 7: Rust 后端命令 ✅ COMPLETE
 **文件**: `src-tauri/src/lib.rs`
 
-- [ ] 添加 storage 相关命令
-- [ ] 添加 backup 相关命令
-- [ ] 添加 clipboard 操作命令
+- [x] `add_clipboard_item_extended` - 添加扩展类型记录
+- [x] `open_file` - 打开文件 (跨平台)
+- [x] `show_in_folder` - 在文件夹中显示 (跨平台)
+- [x] `toggle_favorite` - 切换收藏状态
 
-### Phase 8: 功能实现
+### Phase 8: 功能实现 ⏳ PARTIAL
 **文件**: 各 composables
 
-- [ ] 历史记录管理
+- [x] 收藏功能
+- [x] 左键行为配置
 - [ ] 存储路径功能
 - [ ] 数据导入导出
-- [ ] 左键行为配置
 
 ---
 
 ## 优先级排序
 
-### 🔴 P0 - 核心功能
-1. 图片类型支持
-2. 文件/文件夹类型支持
-3. 其他原生剪贴板类型支持
-3. 左键/双击/右键交互
-4. 上下文菜单
+### 🔴 P0 - 核心功能 ✅ COMPLETE
+1. ✅ 图片类型支持
+2. ✅ 文件/文件夹类型支持
+3. ✅ 左键/双击/右键交互
+4. ✅ 上下文菜单
+5. ✅ 收藏功能
 
-### 🟡 P1 - 增强体验
-5. 设置面板完善
-6. 数据备份功能
-7. 存储路径显示
+### 🟡 P1 - 增强体验 ⏳ IN PROGRESS
+5. ⏳ 设置面板完善
+6. 📋 数据备份功能
+7. 📋 存储路径显示
 
-### 🟢 P2 - 优化完善
-8. 多语言/主题
-9. 性能优化
-10. 系统托盘
+### 🟢 P2 - 优化完善 📋 PLANNED
+8. 📋 多语言/主题
+9. 📋 性能优化
+10. 📋 系统托盘
 
 ---
 
@@ -129,9 +134,10 @@
 ## 测试清单
 
 ### 功能测试
-- [ ] 各类型内容正确显示
-- [ ] 左键/双击/右键交互正常
-- [ ] 上下文菜单功能完整
+- [x] 各类型内容正确显示
+- [x] 左键/双击/右键交互正常
+- [x] 上下文菜单功能完整
+- [x] 快捷键录制功能正常
 - [ ] 设置正确持久化
 
 ### 性能测试
