@@ -9,20 +9,22 @@
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
-"app": {
+  "app": {
     "windows": [
       {
-        "title": "paste-library",
-        "width": 800,
-        "height": 600,
-        "decorations": false,
+        "label": "main",
+        "title": "Paste Library - 设置",
+        "width": 600,
+        "height": 700,
+        "decorations": true,
         "transparent": false,
         "center": true,
         "resizable": true,
         "minimizable": true,
-        "maximizable": true,
+        "maximizable": false,
         "closable": true,
-        "alwaysOnTop": false
+        "alwaysOnTop": false,
+        "visible": true
       }
     ],
     "security": {

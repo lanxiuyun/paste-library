@@ -7,8 +7,10 @@
 - **Frontend**: Vue 3 (Composition API with `<script setup>`), TypeScript, Vite
 - **Backend**: Tauri v2 with Rust
 - **Database**: SQLite (via rusqlite)
-- **Plugins**: tauri-plugin-clipboard-x (clipboard monitoring)
-- **Status**: In development — core features implemented
+- **Plugins**: 
+  - tauri-plugin-clipboard-x (clipboard monitoring)
+  - tauri-plugin-global-shortcut (global hotkey Alt+V)
+- **Status**: In development — core features implemented, settings panel complete
 
 ---
 
@@ -117,23 +119,23 @@ pnpm tauri build
 
 ### Window UI Guidelines
 
-The app uses a **frameless window** with a minimal drag handle:
+**Settings Window** (Main window):
+- Normal window with system title bar (`decorations: true`)
+- Size: 600x700, resizable
+- Left sidebar navigation + right content area
 
-```vue
-<!-- DragHandle.vue - Simple drag line at top -->
-<div class="drag-bar" data-tauri-drag-region>
-  <div class="drag-capsule" data-tauri-drag-region>
-    <div class="drag-line"></div>
-  </div>
-</div>
-```
+**Clipboard Window** (Popup window):
+- Frameless window (`decorations: false`)
+- Size: 800x600, resizable
+- Uses `skip_taskbar(true)` to hide from taskbar
+- Uses `always_on_top(true)` for floating behavior
+- Auto-hide on blur
 
 **Key points**:
 - Use `data-tauri-drag-region` attribute for draggable areas
 - Use `-webkit-app-region: drag` / `app-region: drag` in CSS
 - Interactive elements (buttons, inputs) must have `app-region: no-drag`
 - Top drag bar height: 36px with a simple line indicator
-- No window control buttons (minimize/close) in the drag area
 
 ### Formatting & Spacing
 
@@ -163,6 +165,7 @@ The app uses a **frameless window** with a minimal drag handle:
 
 - Use Vue reactivity (`ref`, `computed`, `watch`) for component-level state
 - For shared state across components → Consider composables or Tauri backend
+- Use `reactive()` for form data in settings panel
 - Avoid global state until project needs it
 - Reactive refs for form data, UI state; computed for derived values
 
@@ -174,6 +177,7 @@ The app uses a **frameless window** with a minimal drag handle:
 - Avoid inline styles unless truly dynamic
 - Media queries for responsive design (already present for dark mode)
 - **Card-based design**: Rounded corners (8px), subtle shadows, clean typography
+- **Settings panel**: Left sidebar (220px) + right content area with grouped settings
 
 ### Comments & Documentation
 
@@ -197,48 +201,63 @@ The app uses a **frameless window** with a minimal drag handle:
 
 ```
 src/
-  ├── main.ts                # App entry point
-  ├── App.vue                # Root component (contains DragHandle)
-  ├── assets/                # Static images/SVGs
-  ├── components/            # Reusable Vue components
-  │   ├── ClipboardItem.vue  # Card component for single clipboard item
-  │   ├── ClipboardList.vue  # Main list with tabs and search
-  │   └── DragHandle.vue     # Window drag capsule + controls
-  ├── composables/           # Reusable logic (hooks)
-  │   ├── useClipboard.ts    # Clipboard monitoring logic
-  │   └── useSettings.ts     # Settings management
-  ├── types/                 # TypeScript type definitions
-  │   └── index.ts           # Shared types (ClipboardItem, etc.)
-  └── styles/                # Global CSS (if needed)
+  ├── main.ts                    # App entry point
+  ├── App.vue                    # Root component (Settings window)
+  ├── ClipboardView.vue          # Clipboard window entry
+  ├── assets/                    # Static images/SVGs
+  ├── components/                # Reusable Vue components
+  │   ├── ClipboardItem.vue      # Card component for single clipboard item
+  │   ├── ClipboardList.vue      # Main list with tabs and search
+  │   ├── DragHandle.vue         # Window drag capsule (for clipboard window)
+  │   └── SettingsPanel.vue      # Settings panel with left navigation
+  ├── composables/               # Reusable logic (hooks)
+  │   ├── useClipboard.ts        # Clipboard monitoring logic
+  │   ├── useSettings.ts         # Settings management
+  │   └── useWindow.ts           # Window management (toggle/show/hide)
+  ├── types/                     # TypeScript type definitions
+  │   └── index.ts               # Shared types (ClipboardItem, AppSettings, etc.)
+  └── styles/                    # Global CSS (if needed)
 
 src-tauri/
-  ├── src/                   # Rust backend
-  │   ├── lib.rs             # Main entry + Tauri commands
-  │   ├── clipboard.rs       # Clipboard manager logic
-  │   ├── models.rs          # Data structures (ClipboardItem, etc.)
-  │   └── storage.rs         # SQLite database operations
-  ├── tauri.conf.json        # Tauri config (frameless window)
-  ├── capabilities/          # Permission definitions
-  └── Cargo.toml             # Rust dependencies
+  ├── src/                       # Rust backend
+  │   ├── lib.rs                 # Main entry + Tauri commands + global shortcut
+  │   ├── clipboard.rs           # Clipboard manager logic
+  │   ├── models.rs              # Data structures (ClipboardItem, AppSettings, etc.)
+  │   ├── storage.rs             # SQLite database operations
+  │   └── window_manager.rs      # Window management (create/hide/show clipboard window)
+  ├── tauri.conf.json            # Tauri config (settings: decorations=true, clipboard: decorations=false)
+  ├── capabilities/              # Permission definitions
+  └── Cargo.toml                 # Rust dependencies
 ```
 
 ---
 
 ## Tauri-Specific Guidelines
 
-### Frameless Window Configuration
+### Window Configuration
 
+**Settings Window (Main)**:
 ```json
 {
-  "app": {
-    "windows": [{
-      "decorations": false,
-      "transparent": false,
-      "center": true,
-      "resizable": true
-    }]
-  }
+  "label": "main",
+  "title": "Paste Library - 设置",
+  "width": 600,
+  "height": 700,
+  "decorations": true,
+  "center": true,
+  "resizable": true
 }
+```
+
+**Clipboard Window (Popup)**:
+```rust
+WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into()))
+    .title("剪贴板历史")
+    .inner_size(width, height)
+    .decorations(false)
+    .skip_taskbar(true)
+    .always_on_top(true)
+    .build()
 ```
 
 ### Required Permissions
@@ -249,7 +268,16 @@ src-tauri/
     "core:default",
     "clipboard-x:default",
     "core:window:allow-minimize",
-    "core:window:allow-hide"
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-is-visible",
+    "core:window:allow-set-focus",
+    "core:window:allow-create",
+    "core:window:allow-is-focused",
+    "global-shortcut:allow-is-registered",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all"
   ]
 }
 ```
@@ -261,30 +289,94 @@ src-tauri/
 - Always handle Tauri errors in try-catch (they're `string` payloads)
 - Use `tokio::sync::Mutex` instead of `std::sync::Mutex` for async commands
 
+### Global Shortcut
+
+- Registered in `lib.rs` setup with `tauri-plugin-global-shortcut`
+- Default hotkey: `Alt+V`
+- Toggles clipboard window visibility
+- Window auto-hides on blur via `on_window_event`
+
 ---
 
 ## Project Features
 
 ### Implemented ✅
 - Real-time clipboard monitoring (text + HTML)
-- SQLite persistence with automatic deduplication
+- SQLite persistence with automatic deduplication (SHA256 hash)
 - Card-based UI with tabs (All/Text/Image/File/Favorite)
-- Search functionality
-- Frameless window with drag handle
-- Window controls (minimize/close)
+- Search functionality (fuzzy search)
+- **Global hotkey (Alt+V)** to show/hide clipboard window
+- **Settings panel** with left sidebar navigation:
+  - 剪贴板: 窗口设置、音效设置、搜索设置、内容设置
+  - 历史记录: 最大记录数、自动清理
+  - 通用设置: 开机自启、应用黑名单
+  - 快捷键: 唤醒快捷键、窗口尺寸
+  - 数据备份: 导出/导入（UI ready）
+  - 关于: 应用信息、打开剪贴板按钮
+- **Window management**:
+  - Settings: Normal window with title bar
+  - Clipboard: Frameless, skip taskbar, always on top, auto-hide on blur
 - Copy/delete clipboard items
+- Data persistence with comprehensive settings
 
 ### In Progress ⏳
-- Global hotkey (Alt+V) to show/hide window
 - System tray integration
-- Settings panel
-- Data export/backup
+- Data export/backup functionality (backend)
 
 ### Planned 📋
-- Image clipboard support
+- Image clipboard support (with OCR)
 - Cross-device sync architecture
 - Dark theme (currently light only)
-- Advanced search filters
+- Advanced search filters (by date range)
+
+---
+
+## Settings Panel Structure
+
+### Navigation Items
+1. **剪贴板** - Window settings, sound effects, search settings, content settings
+2. **历史记录** - Max history count, auto cleanup
+3. **通用设置** - Auto start, blacklist apps
+4. **快捷键** - Hotkey display, window size
+5. **数据备份** - Export/import data
+6. **关于** - App info, open clipboard button
+
+### Settings Categories
+
+**窗口设置**:
+- 窗口位置 (remember/center/cursor)
+- 激活时回到顶部
+- 激活时切换至全部分组
+
+**音效设置**:
+- 复制音效 (+ preview button)
+
+**搜索设置**:
+- 搜索框位置 (top/bottom)
+- 默认聚焦
+- 自动清除
+
+**内容设置**:
+- 自动粘贴 (off/single/double)
+- 图片OCR
+- 复制为纯文本
+- 粘贴为纯文本
+- 操作按钮 (customize)
+- 自动收藏
+- 删除确认
+- 自动排序
+
+**历史记录设置**:
+- 最大历史记录数 (100-10000)
+- 自动清理 (0/7/30/90 days)
+
+**通用设置**:
+- 开机自启
+- 应用黑名单 (textarea, one per line)
+
+**快捷键设置**:
+- 唤醒快捷键 (display only: Alt+V)
+- 窗口尺寸 (width × height)
 
 ---
 
@@ -294,6 +386,8 @@ src-tauri/
 - **Never run tauri dev**: I will run by my self
 - **No test framework yet**: Run type checks with `pnpm run build` (includes `vue-tsc`)
 - **Type strictness is critical**: The project has `strict: true` and `noUnusedLocals`; zero tolerance for `any` types
-- **Frameless window**: Always test dragging behavior after UI changes
+- **Settings panel**: Normal window with title bar (decorations: true)
+- **Clipboard window**: Frameless, skip taskbar, always on top (decorations: false)
 - **Greenfield project**: Modern best practices take priority over legacy patterns
 - **Desktop-first UX**: Consider Windows/macOS/Linux platform differences in UI
+- **Global shortcut**: Alt+V is hardcoded in Rust, display-only in settings UI

@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import SettingsPanel from '@/components/SettingsPanel.vue';
+import ClipboardList from '@/components/ClipboardList.vue';
+import DragHandle from '@/components/DragHandle.vue';
 </script>
 
 <template>
-  <div class="app">
-    <SettingsPanel />
+  <div class="clipboard-window">
+    <DragHandle />
+    <div class="clipboard-content">
+      <ClipboardList />
+    </div>
   </div>
 </template>
 
@@ -22,10 +26,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.app {
+.clipboard-window {
   height: 100vh;
   background-color: #fff;
   display: flex;
   flex-direction: column;
+}
+
+.clipboard-content {
+  flex: 1;
+  overflow: hidden;
+  padding-top: 36px;
 }
 </style>

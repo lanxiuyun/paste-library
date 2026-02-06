@@ -49,17 +49,36 @@ impl Database {
         )?;
 
         // 初始化默认设置
-        conn.execute(
-            "INSERT OR IGNORE INTO settings (key, value) VALUES 
-                ('max_history_count', '5000'),
-                ('hotkey', 'Alt+V'),
-                ('auto_start', 'false'),
-                ('auto_cleanup_days', '30'),
-                ('window_width', '800'),
-                ('window_height', '600'),
-                ('blacklist_apps', '[]')",
-            [],
-        )?;
+        let defaults = vec![
+            ("max_history_count", "5000"),
+            ("auto_cleanup_days", "30"),
+            ("window_position", "remember"),
+            ("window_width", "800"),
+            ("window_height", "600"),
+            ("scroll_to_top_on_activate", "false"),
+            ("switch_to_all_on_activate", "true"),
+            ("copy_sound", "false"),
+            ("search_position", "bottom"),
+            ("auto_focus_search", "true"),
+            ("clear_search_on_activate", "false"),
+            ("auto_paste", "double"),
+            ("image_ocr", "false"),
+            ("copy_as_plain_text", "false"),
+            ("paste_as_plain_text", "true"),
+            ("auto_favorite", "false"),
+            ("confirm_delete", "true"),
+            ("auto_sort", "false"),
+            ("hotkey", "Alt+V"),
+            ("auto_start", "false"),
+            ("blacklist_apps", "[]"),
+        ];
+
+        for (key, value) in defaults {
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?1, ?2)",
+                params![key, value],
+            )?;
+        }
 
         Ok(())
     }
@@ -236,17 +255,12 @@ impl Database {
                         settings.max_history_count = v;
                     }
                 }
-                "hotkey" => settings.hotkey = value,
-                "auto_start" => {
-                    if let Ok(v) = value.parse() {
-                        settings.auto_start = v;
-                    }
-                }
                 "auto_cleanup_days" => {
                     if let Ok(v) = value.parse() {
                         settings.auto_cleanup_days = v;
                     }
                 }
+                "window_position" => settings.window_position = value,
                 "window_width" => {
                     if let Ok(v) = value.parse() {
                         settings.window_width = v;
@@ -255,6 +269,69 @@ impl Database {
                 "window_height" => {
                     if let Ok(v) = value.parse() {
                         settings.window_height = v;
+                    }
+                }
+                "scroll_to_top_on_activate" => {
+                    if let Ok(v) = value.parse() {
+                        settings.scroll_to_top_on_activate = v;
+                    }
+                }
+                "switch_to_all_on_activate" => {
+                    if let Ok(v) = value.parse() {
+                        settings.switch_to_all_on_activate = v;
+                    }
+                }
+                "copy_sound" => {
+                    if let Ok(v) = value.parse() {
+                        settings.copy_sound = v;
+                    }
+                }
+                "search_position" => settings.search_position = value,
+                "auto_focus_search" => {
+                    if let Ok(v) = value.parse() {
+                        settings.auto_focus_search = v;
+                    }
+                }
+                "clear_search_on_activate" => {
+                    if let Ok(v) = value.parse() {
+                        settings.clear_search_on_activate = v;
+                    }
+                }
+                "auto_paste" => settings.auto_paste = value,
+                "image_ocr" => {
+                    if let Ok(v) = value.parse() {
+                        settings.image_ocr = v;
+                    }
+                }
+                "copy_as_plain_text" => {
+                    if let Ok(v) = value.parse() {
+                        settings.copy_as_plain_text = v;
+                    }
+                }
+                "paste_as_plain_text" => {
+                    if let Ok(v) = value.parse() {
+                        settings.paste_as_plain_text = v;
+                    }
+                }
+                "auto_favorite" => {
+                    if let Ok(v) = value.parse() {
+                        settings.auto_favorite = v;
+                    }
+                }
+                "confirm_delete" => {
+                    if let Ok(v) = value.parse() {
+                        settings.confirm_delete = v;
+                    }
+                }
+                "auto_sort" => {
+                    if let Ok(v) = value.parse() {
+                        settings.auto_sort = v;
+                    }
+                }
+                "hotkey" => settings.hotkey = value,
+                "auto_start" => {
+                    if let Ok(v) = value.parse() {
+                        settings.auto_start = v;
                     }
                 }
                 "blacklist_apps" => {
@@ -273,25 +350,54 @@ impl Database {
     pub fn save_settings(&self, settings: &AppSettings) -> Result<()> {
         let conn = self.conn.lock().unwrap();
 
-        conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES 
-                ('max_history_count', ?1),
-                ('hotkey', ?2),
-                ('auto_start', ?3),
-                ('auto_cleanup_days', ?4),
-                ('window_width', ?5),
-                ('window_height', ?6),
-                ('blacklist_apps', ?7)",
-            params![
-                settings.max_history_count.to_string(),
-                settings.hotkey,
-                settings.auto_start.to_string(),
-                settings.auto_cleanup_days.to_string(),
-                settings.window_width.to_string(),
-                settings.window_height.to_string(),
+        let settings_to_save = vec![
+            ("max_history_count", settings.max_history_count.to_string()),
+            ("auto_cleanup_days", settings.auto_cleanup_days.to_string()),
+            ("window_position", settings.window_position.clone()),
+            ("window_width", settings.window_width.to_string()),
+            ("window_height", settings.window_height.to_string()),
+            (
+                "scroll_to_top_on_activate",
+                settings.scroll_to_top_on_activate.to_string(),
+            ),
+            (
+                "switch_to_all_on_activate",
+                settings.switch_to_all_on_activate.to_string(),
+            ),
+            ("copy_sound", settings.copy_sound.to_string()),
+            ("search_position", settings.search_position.clone()),
+            ("auto_focus_search", settings.auto_focus_search.to_string()),
+            (
+                "clear_search_on_activate",
+                settings.clear_search_on_activate.to_string(),
+            ),
+            ("auto_paste", settings.auto_paste.clone()),
+            ("image_ocr", settings.image_ocr.to_string()),
+            (
+                "copy_as_plain_text",
+                settings.copy_as_plain_text.to_string(),
+            ),
+            (
+                "paste_as_plain_text",
+                settings.paste_as_plain_text.to_string(),
+            ),
+            ("auto_favorite", settings.auto_favorite.to_string()),
+            ("confirm_delete", settings.confirm_delete.to_string()),
+            ("auto_sort", settings.auto_sort.to_string()),
+            ("hotkey", settings.hotkey.clone()),
+            ("auto_start", settings.auto_start.to_string()),
+            (
+                "blacklist_apps",
                 serde_json::to_string(&settings.blacklist_apps).unwrap_or_default(),
-            ],
-        )?;
+            ),
+        ];
+
+        for (key, value) in settings_to_save {
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+                params![key, value],
+            )?;
+        }
 
         Ok(())
     }

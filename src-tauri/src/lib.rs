@@ -1,6 +1,7 @@
 mod clipboard;
 mod models;
 mod storage;
+mod window_manager;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,15 +13,19 @@ use models::{
 };
 use storage::Database;
 use tauri::Manager;
+use tauri::Emitter;
+use window_manager::WindowManager;
 
 pub struct AppState {
     clipboard_manager: ClipboardManager,
+    window_manager: WindowManager,
 }
 
 impl AppState {
     pub fn new(database: Arc<Database>, settings: Arc<Mutex<AppSettings>>) -> Self {
         Self {
-            clipboard_manager: ClipboardManager::new(database, settings),
+            clipboard_manager: ClipboardManager::new(database.clone(), settings.clone()),
+            window_manager: WindowManager::new(settings),
         }
     }
 }
@@ -86,6 +91,24 @@ async fn save_settings(
     state.clipboard_manager.save_settings(&settings).await
 }
 
+#[tauri::command]
+async fn toggle_clipboard_window(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
+) -> Result<bool, String> {
+    let state = state.lock().await;
+    state.window_manager.toggle_clipboard_window(&app).await
+}
+
+#[tauri::command]
+async fn hide_clipboard_window(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let state = state.lock().await;
+    state.window_manager.hide_clipboard_window(&app).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -106,8 +129,45 @@ pub fn run() {
                 .unwrap_or_else(|_| AppSettings::default());
             let settings = Arc::new(Mutex::new(settings));
 
-            let app_state = Arc::new(Mutex::new(AppState::new(database, settings)));
-            app.manage(app_state);
+            let app_state = Arc::new(Mutex::new(AppState::new(database, settings.clone())));
+            app.manage(app_state.clone());
+
+            // 设置全局快捷键
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
+                
+                let _settings_for_shortcut = settings.clone();
+                let _ = app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .with_shortcuts(["alt+v"])?
+                        .with_handler(move |app, shortcut, event| {
+                            if event.state == ShortcutState::Pressed {
+                                if shortcut.matches(Modifiers::ALT, Code::KeyV) {
+                                    let app_handle = app.clone();
+                                    let state = app_state.clone();
+                                    tauri::async_runtime::spawn(async move {
+                                        let state = state.lock().await;
+                                        let _ = state.window_manager.toggle_clipboard_window(&app_handle).await;
+                                    });
+                                }
+                            }
+                        })
+                        .build(),
+                );
+            }
+
+            // 获取主窗口并设置失焦监听
+            if let Some(main_window) = app.get_webview_window("main") {
+                let app_handle = app.handle().clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        // 窗口失去焦点时隐藏
+                        let app_handle = app_handle.clone();
+                        let _ = app_handle.emit("window-blur", ());
+                    }
+                });
+            }
 
             Ok(())
         })
@@ -119,6 +179,8 @@ pub fn run() {
             clear_clipboard_history,
             get_settings,
             save_settings,
+            toggle_clipboard_window,
+            hide_clipboard_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

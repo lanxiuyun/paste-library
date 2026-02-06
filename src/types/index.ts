@@ -50,11 +50,36 @@ export interface ClearHistoryRequest {
  * 应用设置
  */
 export interface AppSettings {
+  // 历史记录设置
   max_history_count: number;
-  hotkey: string;
-  auto_start: boolean;
   auto_cleanup_days: number;
+
+  // 窗口设置
+  window_position: string;
   window_width: number;
   window_height: number;
+  scroll_to_top_on_activate: boolean;
+  switch_to_all_on_activate: boolean;
+
+  // 音效设置
+  copy_sound: boolean;
+
+  // 搜索设置
+  search_position: string;
+  auto_focus_search: boolean;
+  clear_search_on_activate: boolean;
+
+  // 内容设置
+  auto_paste: string;
+  image_ocr: boolean;
+  copy_as_plain_text: boolean;
+  paste_as_plain_text: boolean;
+  auto_favorite: boolean;
+  confirm_delete: boolean;
+  auto_sort: boolean;
+
+  // 通用设置
+  hotkey: string;
+  auto_start: boolean;
   blacklist_apps: string[];
 }
