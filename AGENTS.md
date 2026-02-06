@@ -7,9 +7,10 @@
 - **Frontend**: Vue 3 (Composition API with `<script setup>`), TypeScript, Vite
 - **Backend**: Tauri v2 with Rust
 - **Database**: SQLite (via rusqlite)
-- **Plugins**: 
+- **Plugins**:
   - tauri-plugin-clipboard-x (clipboard monitoring)
   - tauri-plugin-global-shortcut (global hotkey Alt+V)
+  - tauri-plugin-tray (system tray integration)
 - **Status**: In development — core features implemented, settings panel complete
 
 ---
@@ -225,7 +226,8 @@ src-tauri/
   │   ├── clipboard.rs           # Clipboard manager logic
   │   ├── models.rs              # Data structures (ClipboardItem, AppSettings, etc.)
   │   ├── storage.rs             # SQLite database operations
-  │   └── window_manager.rs      # Window management (create/hide/show clipboard window)
+  │   ├── window_manager.rs      # Window management (create/hide/show clipboard window)
+  │   └── tray_manager.rs        # System tray integration
   ├── tauri.conf.json            # Tauri config
   ├── capabilities/              # Permission definitions
   └── Cargo.toml                 # Rust dependencies
@@ -278,7 +280,9 @@ WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into())
     "global-shortcut:allow-is-registered",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
-    "global-shortcut:allow-unregister-all"
+    "global-shortcut:allow-unregister-all",
+    "core:tray:default",
+    "core:menu:default"
   ]
 }
 ```
@@ -323,6 +327,9 @@ WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into())
   - Double click: copy and paste
   - Right click: context menu
 - **Favorite system** with database persistence
+- **System tray integration**:
+  - Double-click tray icon to open settings
+  - Right-click menu (Open settings, Show clipboard, Quit)
 - Copy/delete clipboard items
 - Data persistence with comprehensive settings
 
@@ -331,7 +338,6 @@ WebviewWindowBuilder::new(app, "clipboard", WebviewUrl::App("/clipboard".into())
 - Settings panel enhancements
 
 ### Planned 📋
-- System tray integration
 - Cross-device sync architecture
 - Dark theme (currently light only)
 - Advanced search filters (by date range)
@@ -442,14 +448,14 @@ src-tauri/src/        # Rust后端
 2. ~~文件/文件夹类型监听与显示~~
 3. ~~左键/双击/右键交互重构~~
 4. ~~右键上下文菜单（ContextMenu组件）~~
+5. ~~系统托盘集成~~
 
 **🟡 P1 - 增强体验（当前优先级）**
-5. 设置面板完善（历史记录删除按钮、数据备份功能）
-6. 存储路径显示
+6. 设置面板完善（历史记录删除按钮、数据备份功能）
+7. 存储路径显示
 
 **🟢 P2 - 优化完善**
-7. 多语言/主题切换
-8. 系统托盘集成
+8. 多语言/主题切换
 9. 性能优化
 
 ### 💡 快速开发提示
