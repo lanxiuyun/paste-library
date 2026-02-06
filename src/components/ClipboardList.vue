@@ -51,6 +51,8 @@
           :item="item"
           :index="index"
           @click="handleItemClick"
+          @dblclick="handleItemDoubleClick"
+          @contextmenu="handleItemContextMenu"
           @delete="handleItemDelete"
           @toggle-favorite="handleToggleFavorite"
           @copy="handleItemCopy"
@@ -77,13 +79,23 @@
         <kbd class="shortcut-key">Ctrl+F</kbd>
       </div>
     </div>
+
+    <!-- 右键上下文菜单 -->
+    <ContextMenu
+      v-model:visible="contextMenuVisible"
+      :position="contextMenuPosition"
+      :item="contextMenuItem"
+      @action="handleContextMenuAction"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import ClipboardItem from './ClipboardItem.vue';
+import ContextMenu from './ContextMenu.vue';
 import { useClipboard } from '@/composables/useClipboard';
+import { invoke } from '@tauri-apps/api/core';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 
 const {
@@ -110,14 +122,19 @@ const offset = ref(0);
 const limit = 50;
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
+// 右键菜单状态
+const contextMenuVisible = ref(false);
+const contextMenuPosition = ref({ x: 0, y: 0 });
+const contextMenuItem = ref<ClipboardItemType | null>(null);
+
 const filteredHistory = computed(() => {
   let result = history.value;
 
   // 按标签过滤
   if (activeTab.value !== 'all') {
     if (activeTab.value === 'favorite') {
-      // 收藏功能暂时未实现，返回空数组
-      result = [];
+      // 过滤收藏的项目
+      result = result.filter(item => item.is_favorite);
     } else {
       result = result.filter(item => item.content_type === activeTab.value);
     }
@@ -135,7 +152,62 @@ const handleSearch = async () => {
 };
 
 const handleItemClick = async (item: ClipboardItemType) => {
+  // 单击：复制到剪贴板
   await restoreToClipboard(item);
+};
+
+const handleItemDoubleClick = async (item: ClipboardItemType) => {
+  // 双击：复制并粘贴
+  await restoreToClipboard(item);
+  // TODO: 实现模拟粘贴功能
+};
+
+const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType) => {
+  contextMenuPosition.value = { x: event.clientX, y: event.clientY };
+  contextMenuItem.value = item;
+  contextMenuVisible.value = true;
+};
+
+const handleContextMenuAction = async (action: string, item: ClipboardItemType) => {
+  switch (action) {
+    case 'copy':
+      await restoreToClipboard(item);
+      break;
+    case 'paste':
+      await restoreToClipboard(item);
+      // TODO: 实现模拟粘贴功能
+      break;
+    case 'copyPlain':
+      // 复制为纯文本
+      await restoreToClipboard({
+        ...item,
+        content_type: 'text',
+        content: item.content.replace(/<[^>]*>/g, ''),
+      });
+      break;
+    case 'favorite':
+      handleToggleFavorite(item.id, !item.is_favorite);
+      break;
+    case 'delete':
+      await deleteItem(item.id);
+      break;
+    case 'openFile':
+      // 打开文件
+      if (item.file_paths && item.file_paths.length > 0) {
+        await invoke('open_file', { path: item.file_paths[0] });
+      } else if (item.thumbnail_path) {
+        await invoke('open_file', { path: item.thumbnail_path });
+      }
+      break;
+    case 'showInFolder':
+      // 在文件夹中显示
+      if (item.file_paths && item.file_paths.length > 0) {
+        await invoke('show_in_folder', { path: item.file_paths[0] });
+      } else if (item.thumbnail_path) {
+        await invoke('show_in_folder', { path: item.thumbnail_path });
+      }
+      break;
+  }
 };
 
 const handleItemCopy = async (item: ClipboardItemType) => {
@@ -146,8 +218,13 @@ const handleItemDelete = async (id: number) => {
   await deleteItem(id);
 };
 
-const handleToggleFavorite = (id: number, isFavorite: boolean) => {
-  console.log('Toggle favorite:', id, isFavorite);
+const handleToggleFavorite = async (id: number, isFavorite: boolean) => {
+  try {
+    await invoke('toggle_favorite', { id, isFavorite });
+    await loadHistory();
+  } catch (error) {
+    console.error('Failed to toggle favorite:', error);
+  }
 };
 
 const handleScroll = async (event: Event) => {
