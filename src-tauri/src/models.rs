@@ -11,6 +11,32 @@ pub enum ClipboardContentType {
     Html,
     /// 富文本 (RTF)
     Rtf,
+    /// 图片
+    Image,
+    /// 单个文件
+    File,
+    /// 单个文件夹
+    Folder,
+    /// 多个文件/文件夹
+    Files,
+}
+
+/// 剪贴板元数据
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ClipboardMetadata {
+    // 图片相关
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub format: Option<String>,
+
+    // 文件相关
+    pub file_name: Option<String>,
+    pub file_size: Option<u64>,
+    pub mime_type: Option<String>,
+
+    // 文件夹相关
+    pub folder_name: Option<String>,
+    pub item_count: Option<u32>,
 }
 
 /// 剪贴板历史记录项
@@ -26,6 +52,18 @@ pub struct ClipboardItem {
     pub created_at: DateTime<Utc>,
     /// 内容哈希 (用于去重)
     pub content_hash: String,
+    /// 元数据 (图片尺寸、文件信息等)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<ClipboardMetadata>,
+    /// 文件路径列表 (用于文件/文件夹类型)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_paths: Option<Vec<String>>,
+    /// 缩略图路径 (用于图片类型)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_path: Option<String>,
+    /// 是否收藏
+    #[serde(default)]
+    pub is_favorite: bool,
 }
 
 /// 创建剪贴板项的请求
@@ -106,6 +144,8 @@ pub struct AppSettings {
     pub confirm_delete: bool,
     /// 自动排序 (复制已存在内容时置顶)
     pub auto_sort: bool,
+    /// 左键点击行为 (copy/paste)
+    pub left_click_action: String,
 
     // 通用设置
     /// 唤醒快捷键 (默认 "Alt+V")
@@ -146,6 +186,7 @@ impl Default for AppSettings {
             auto_favorite: false,
             confirm_delete: true,
             auto_sort: false,
+            left_click_action: "copy".to_string(),
 
             // 通用
             hotkey: "Alt+V".to_string(),

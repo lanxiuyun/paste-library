@@ -2,7 +2,9 @@ use rusqlite::{params, Connection, Result};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::models::{AppSettings, ClearHistoryRequest, ClipboardContentType, ClipboardItem};
+use crate::models::{
+    AppSettings, ClearHistoryRequest, ClipboardContentType, ClipboardItem, ClipboardMetadata,
+};
 
 /// 数据库管理器
 pub struct Database {
@@ -34,10 +36,43 @@ impl Database {
                 content_type TEXT NOT NULL,
                 content TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                content_hash TEXT NOT NULL UNIQUE
+                content_hash TEXT NOT NULL UNIQUE,
+                metadata TEXT,
+                file_paths TEXT,
+                thumbnail_path TEXT,
+                is_favorite INTEGER DEFAULT 0
             )",
             [],
         )?;
+
+        // 数据库迁移：为旧表添加新字段
+        let columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(clipboard_history)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if !columns.contains(&"metadata".to_string()) {
+            conn.execute("ALTER TABLE clipboard_history ADD COLUMN metadata TEXT", [])?;
+        }
+        if !columns.contains(&"file_paths".to_string()) {
+            conn.execute(
+                "ALTER TABLE clipboard_history ADD COLUMN file_paths TEXT",
+                [],
+            )?;
+        }
+        if !columns.contains(&"thumbnail_path".to_string()) {
+            conn.execute(
+                "ALTER TABLE clipboard_history ADD COLUMN thumbnail_path TEXT",
+                [],
+            )?;
+        }
+        if !columns.contains(&"is_favorite".to_string()) {
+            conn.execute(
+                "ALTER TABLE clipboard_history ADD COLUMN is_favorite INTEGER DEFAULT 0",
+                [],
+            )?;
+        }
 
         // 设置表
         conn.execute(
@@ -68,6 +103,7 @@ impl Database {
             ("auto_favorite", "false"),
             ("confirm_delete", "true"),
             ("auto_sort", "false"),
+            ("left_click_action", "copy"),
             ("hotkey", "Alt+V"),
             ("auto_start", "false"),
             ("blacklist_apps", "[]"),
@@ -87,9 +123,20 @@ impl Database {
     pub fn add_clipboard_item(&self, item: &ClipboardItem) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
 
+        let metadata_json = item
+            .metadata
+            .as_ref()
+            .map(|m| serde_json::to_string(m).ok())
+            .flatten();
+        let file_paths_json = item
+            .file_paths
+            .as_ref()
+            .map(|p| serde_json::to_string(p).ok())
+            .flatten();
+
         conn.execute(
-            "INSERT INTO clipboard_history (content_type, content, created_at, content_hash)
-             VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, is_favorite)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(content_hash) DO UPDATE SET
                 created_at = excluded.created_at",
             params![
@@ -97,10 +144,18 @@ impl Database {
                     ClipboardContentType::Text => "text",
                     ClipboardContentType::Html => "html",
                     ClipboardContentType::Rtf => "rtf",
+                    ClipboardContentType::Image => "image",
+                    ClipboardContentType::File => "file",
+                    ClipboardContentType::Folder => "folder",
+                    ClipboardContentType::Files => "files",
                 },
                 item.content,
                 item.created_at.to_rfc3339(),
-                item.content_hash
+                item.content_hash,
+                metadata_json,
+                file_paths_json,
+                item.thumbnail_path,
+                item.is_favorite as i32
             ],
         )?;
 
@@ -112,7 +167,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, created_at, content_hash
+            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, is_favorite
              FROM clipboard_history
              ORDER BY created_at DESC
              LIMIT ?1 OFFSET ?2",
@@ -125,6 +180,10 @@ impl Database {
                     "text" => ClipboardContentType::Text,
                     "html" => ClipboardContentType::Html,
                     "rtf" => ClipboardContentType::Rtf,
+                    "image" => ClipboardContentType::Image,
+                    "file" => ClipboardContentType::File,
+                    "folder" => ClipboardContentType::Folder,
+                    "files" => ClipboardContentType::Files,
                     _ => ClipboardContentType::Text,
                 };
 
@@ -133,12 +192,24 @@ impl Database {
                     .parse::<chrono::DateTime<chrono::Utc>>()
                     .unwrap_or_else(|_| chrono::Utc::now());
 
+                let metadata: Option<ClipboardMetadata> = row
+                    .get::<_, Option<String>>(5)?
+                    .and_then(|s| serde_json::from_str(&s).ok());
+                let file_paths: Option<Vec<String>> = row
+                    .get::<_, Option<String>>(6)?
+                    .and_then(|s| serde_json::from_str(&s).ok());
+                let is_favorite: bool = row.get::<_, i32>(8).unwrap_or(0) != 0;
+
                 Ok(ClipboardItem {
                     id: row.get(0)?,
                     content_type,
                     content: row.get(2)?,
                     created_at,
                     content_hash: row.get(4)?,
+                    metadata,
+                    file_paths,
+                    thumbnail_path: row.get(7)?,
+                    is_favorite,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -153,7 +224,7 @@ impl Database {
         let search_pattern = format!("%{}%", query);
 
         let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, created_at, content_hash
+            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, is_favorite
              FROM clipboard_history
              WHERE content LIKE ?1
              ORDER BY created_at DESC
@@ -167,6 +238,10 @@ impl Database {
                     "text" => ClipboardContentType::Text,
                     "html" => ClipboardContentType::Html,
                     "rtf" => ClipboardContentType::Rtf,
+                    "image" => ClipboardContentType::Image,
+                    "file" => ClipboardContentType::File,
+                    "folder" => ClipboardContentType::Folder,
+                    "files" => ClipboardContentType::Files,
                     _ => ClipboardContentType::Text,
                 };
 
@@ -175,12 +250,24 @@ impl Database {
                     .parse::<chrono::DateTime<chrono::Utc>>()
                     .unwrap_or_else(|_| chrono::Utc::now());
 
+                let metadata: Option<ClipboardMetadata> = row
+                    .get::<_, Option<String>>(5)?
+                    .and_then(|s| serde_json::from_str(&s).ok());
+                let file_paths: Option<Vec<String>> = row
+                    .get::<_, Option<String>>(6)?
+                    .and_then(|s| serde_json::from_str(&s).ok());
+                let is_favorite: bool = row.get::<_, i32>(8).unwrap_or(0) != 0;
+
                 Ok(ClipboardItem {
                     id: row.get(0)?,
                     content_type,
                     content: row.get(2)?,
                     created_at,
                     content_hash: row.get(4)?,
+                    metadata,
+                    file_paths,
+                    thumbnail_path: row.get(7)?,
+                    is_favorite,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -192,6 +279,16 @@ impl Database {
     pub fn delete_item(&self, id: i64) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM clipboard_history WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    /// 更新收藏状态
+    pub fn update_favorite(&self, id: i64, is_favorite: bool) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE clipboard_history SET is_favorite = ?1 WHERE id = ?2",
+            params![is_favorite as i32, id],
+        )?;
         Ok(())
     }
 
@@ -328,6 +425,7 @@ impl Database {
                         settings.auto_sort = v;
                     }
                 }
+                "left_click_action" => settings.left_click_action = value,
                 "hotkey" => settings.hotkey = value,
                 "auto_start" => {
                     if let Ok(v) = value.parse() {
@@ -384,6 +482,7 @@ impl Database {
             ("auto_favorite", settings.auto_favorite.to_string()),
             ("confirm_delete", settings.confirm_delete.to_string()),
             ("auto_sort", settings.auto_sort.to_string()),
+            ("left_click_action", settings.left_click_action.clone()),
             ("hotkey", settings.hotkey.clone()),
             ("auto_start", settings.auto_start.to_string()),
             (

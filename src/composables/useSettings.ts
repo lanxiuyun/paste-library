@@ -30,6 +30,7 @@ const settings = ref<AppSettings>({
   auto_favorite: false,
   confirm_delete: true,
   auto_sort: false,
+  left_click_action: 'copy',
 
   // 通用设置
   hotkey: 'Alt+V',
