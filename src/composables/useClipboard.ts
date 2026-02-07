@@ -14,6 +14,7 @@ import type { ClipboardItem, ClipboardContentType, ClipboardMetadata, GetHistory
 
 const history = ref<ClipboardItem[]>([]);
 const isListening = ref(false);
+const lastCopyTime = ref<number>(Date.now());
 
 export function useClipboard() {
   const loadHistory = async (limit = 100, offset = 0): Promise<void> => {
@@ -112,6 +113,9 @@ export function useClipboard() {
         });
       }
 
+      // 记录上次复制时间
+      lastCopyTime.value = Date.now();
+      
       await loadHistory();
     } catch (error) {
       console.error('Failed to handle clipboard change:', error);
@@ -250,6 +254,7 @@ export function useClipboard() {
   return {
     history,
     isListening,
+    lastCopyTime,
     loadHistory,
     startClipboardListening,
     stopClipboardListening,
