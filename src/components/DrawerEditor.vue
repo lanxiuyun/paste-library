@@ -1,0 +1,563 @@
+<template>
+  <Teleport to="body">
+    <Transition name="drawer">
+      <div v-if="visible" class="drawer-overlay" @click="handleOverlayClick">
+        <div class="drawer-panel" @click.stop>
+          <!-- Header -->
+          <div class="drawer-header">
+            <div class="header-info">
+              <span class="type-badge" :class="item?.content_type">
+                {{ typeLabel }}
+              </span>
+              <span class="created-time">{{ formattedTime }}</span>
+            </div>
+            <div class="header-actions">
+              <button class="action-btn" title="复制" @click="handleCopy">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+              <button class="action-btn" title="粘贴" @click="handlePaste">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                  <rect x="8" y="2" width="8" height="4" rx="1"/>
+                </svg>
+              </button>
+              <button class="action-btn" title="保存为新项" @click="handleSaveAsNew">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+              </button>
+              <button class="action-btn close-btn" title="关闭" @click="close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div class="drawer-content">
+            <!-- Text Editor -->
+            <template v-if="isTextContent">
+              <div class="editor-toolbar">
+                <button 
+                  class="toolbar-btn" 
+                  :class="{ active: !isPreview }"
+                  @click="isPreview = false"
+                >
+                  编辑
+                </button>
+                <button 
+                  class="toolbar-btn" 
+                  :class="{ active: isPreview }"
+                  @click="isPreview = true"
+                >
+                  预览
+                </button>
+              </div>
+              
+              <textarea
+                v-if="!isPreview"
+                v-model="editedContent"
+                class="text-editor"
+                placeholder="输入内容..."
+              />
+              <div v-else class="text-preview" v-html="previewContent" />
+            </template>
+
+            <!-- Image Preview -->
+            <template v-else-if="item?.content_type === 'image'">
+              <div class="image-viewer">
+                <img 
+                  v-if="item.thumbnail_path"
+                  :src="drawerImageSrc"
+                  :alt="'图片 ' + (item.metadata?.width || 0) + 'x' + (item.metadata?.height || 0)"
+                  class="preview-image"
+                />
+                <div class="image-info">
+                  <div class="info-item">
+                    <span class="label">尺寸:</span>
+                    <span class="value">{{ item.metadata?.width || '?' }} × {{ item.metadata?.height || '?' }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="label">格式:</span>
+                    <span class="value">{{ item.metadata?.format || 'PNG' }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- File Info -->
+            <template v-else-if="item?.content_type === 'file' || item?.content_type === 'folder'">
+              <div class="file-viewer">
+                <div class="file-icon-large">
+                  {{ item.content_type === 'folder' ? '📁' : '📄' }}
+                </div>
+                <div class="file-details">
+                  <div class="info-item">
+                    <span class="label">名称:</span>
+                    <span class="value">{{ item.metadata?.file_name || item.metadata?.folder_name || '-' }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="label">大小:</span>
+                    <span class="value">{{ formatFileSize(item.metadata?.file_size || 0) }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="label">路径:</span>
+                    <span class="value path">{{ item.content }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Stats Footer -->
+          <div class="drawer-footer">
+            <div class="stats">
+              <span class="stat-item">
+                <span class="stat-label">字符:</span>
+                <span class="stat-value">{{ charCount }}</span>
+              </span>
+              <span class="stat-item">
+                <span class="stat-label">单词:</span>
+                <span class="stat-value">{{ wordCount }}</span>
+              </span>
+              <span class="stat-item">
+                <span class="stat-label">行数:</span>
+                <span class="stat-value">{{ lineCount }}</span>
+              </span>
+              <span class="stat-item">
+                <span class="stat-label">大小:</span>
+                <span class="stat-value">{{ byteSize }}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import type { ClipboardItem } from '@/types';
+
+interface Props {
+  visible: boolean;
+  item: ClipboardItem | null;
+}
+
+const props = defineProps<Props>();
+
+const emit = defineEmits<{
+  'update:visible': [value: boolean];
+  copy: [item: ClipboardItem];
+  paste: [item: ClipboardItem];
+  saveAsNew: [content: string, type: string];
+}>();
+
+const editedContent = ref('');
+const isPreview = ref(false);
+
+const isTextContent = computed(() => {
+  return props.item?.content_type === 'text' || props.item?.content_type === 'html' || props.item?.content_type === 'rtf';
+});
+
+const typeLabel = computed(() => {
+  if (!props.item) return '';
+  switch (props.item.content_type) {
+    case 'text': return '文本';
+    case 'html': return 'HTML';
+    case 'rtf': return 'RTF';
+    case 'image': return '图片';
+    case 'file': return '文件';
+    case 'folder': return '文件夹';
+    case 'files': return '多文件';
+    default: return '文本';
+  }
+});
+
+const formattedTime = computed(() => {
+  if (!props.item) return '';
+  const date = new Date(props.item.created_at);
+  return date.toLocaleString('zh-CN');
+});
+
+const previewContent = computed(() => {
+  if (!props.item) return '';
+  if (props.item.content_type === 'html') {
+    return props.item.content;
+  }
+  return editedContent.value.replace(/\n/g, '<br>');
+});
+
+const charCount = computed(() => {
+  return editedContent.value.length;
+});
+
+const wordCount = computed(() => {
+  return editedContent.value.trim().split(/\s+/).filter(w => w.length > 0).length;
+});
+
+const lineCount = computed(() => {
+  return editedContent.value.split('\n').length;
+});
+
+const byteSize = computed(() => {
+  const bytes = new Blob([editedContent.value]).size;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+});
+
+// 处理图片路径 - 使用 convertFileSrc 转换
+const drawerImageSrc = computed(() => {
+  if (!props.item?.thumbnail_path) return '';
+  return convertFileSrc(props.item.thumbnail_path);
+});
+
+watch(() => props.item, (newItem) => {
+  if (newItem) {
+    editedContent.value = newItem.content;
+    isPreview.value = false;
+  }
+}, { immediate: true });
+
+const close = () => {
+  emit('update:visible', false);
+};
+
+const handleOverlayClick = () => {
+  close();
+};
+
+const handleCopy = () => {
+  if (props.item) {
+    emit('copy', { ...props.item, content: editedContent.value });
+  }
+};
+
+const handlePaste = () => {
+  if (props.item) {
+    emit('paste', { ...props.item, content: editedContent.value });
+  }
+};
+
+const handleSaveAsNew = () => {
+  if (props.item) {
+    emit('saveAsNew', editedContent.value, props.item.content_type);
+  }
+};
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '-';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+};
+</script>
+
+<style scoped>
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer-panel {
+  width: 500px;
+  max-width: 90vw;
+  height: 100%;
+  background: #fff;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.type-badge {
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+}
+
+.type-badge.text {
+  background: #fff2e8;
+  color: #fa8c16;
+}
+
+.type-badge.html {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.type-badge.image {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.type-badge.file,
+.type-badge.folder {
+  background: #f9f0ff;
+  color: #722ed1;
+}
+
+.created-time {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #595959;
+  transition: all 0.15s ease;
+}
+
+.action-btn:hover {
+  background: #f5f5f5;
+  color: #262626;
+}
+
+.action-btn.close-btn:hover {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.editor-toolbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.toolbar-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #595959;
+}
+
+.toolbar-btn:hover {
+  border-color: #262626;
+  color: #262626;
+}
+
+.toolbar-btn.active {
+  background: #262626;
+  border-color: #262626;
+  color: #fff;
+}
+
+.text-editor {
+  width: 100%;
+  height: calc(100% - 60px);
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+}
+
+.text-editor:focus {
+  border-color: #262626;
+}
+
+.text-preview {
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  background: #fafafa;
+  min-height: 200px;
+  overflow-wrap: break-word;
+}
+
+.image-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.image-info {
+  display: flex;
+  gap: 24px;
+  padding: 12px 16px;
+  background: #f5f5f5;
+  border-radius: 6px;
+}
+
+.file-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+.file-icon-large {
+  font-size: 64px;
+}
+
+.file-details {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.info-item .label {
+  color: #8c8c8c;
+  flex-shrink: 0;
+}
+
+.info-item .value {
+  color: #262626;
+  word-break: break-all;
+}
+
+.info-item .value.path {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.drawer-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #e8e8e8;
+  background: #fafafa;
+}
+
+.stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat-item {
+  display: flex;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.stat-label {
+  color: #8c8c8c;
+}
+
+.stat-value {
+  color: #262626;
+  font-weight: 500;
+}
+
+/* Transition animations */
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: all 0.3s ease;
+}
+
+.drawer-enter-from,
+.drawer-leave-to {
+  opacity: 0;
+}
+
+.drawer-enter-from .drawer-panel,
+.drawer-leave-to .drawer-panel {
+  transform: translateX(100%);
+}
+
+.drawer-enter-active .drawer-panel,
+.drawer-leave-active .drawer-panel {
+  transition: transform 0.3s ease;
+}
+
+/* Scrollbar */
+.drawer-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.drawer-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.drawer-content::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 3px;
+}
+
+.drawer-content::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+</style>
