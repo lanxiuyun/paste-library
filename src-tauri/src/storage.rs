@@ -95,25 +95,19 @@ impl Database {
             ("max_history_count", "5000"),
             ("auto_cleanup_days", "30"),
             ("window_position", "remember"),
-            ("window_width", "800"),
-            ("window_height", "600"),
-            ("scroll_to_top_on_activate", "false"),
-            ("switch_to_all_on_activate", "true"),
+            ("smart_activate", "true"),
             ("copy_sound", "false"),
             ("search_position", "bottom"),
             ("auto_focus_search", "true"),
-            ("clear_search_on_activate", "false"),
             ("auto_paste", "double"),
             ("image_ocr", "false"),
             ("copy_as_plain_text", "false"),
             ("paste_as_plain_text", "true"),
-            ("auto_favorite", "false"),
             ("confirm_delete", "true"),
             ("auto_sort", "false"),
             ("left_click_action", "copy"),
             ("hotkey", "Alt+V"),
             ("auto_start", "false"),
-            ("blacklist_apps", "[]"),
         ];
 
         for (key, value) in defaults {
@@ -414,24 +408,9 @@ impl Database {
                     }
                 }
                 "window_position" => settings.window_position = value,
-                "window_width" => {
+                "smart_activate" => {
                     if let Ok(v) = value.parse() {
-                        settings.window_width = v;
-                    }
-                }
-                "window_height" => {
-                    if let Ok(v) = value.parse() {
-                        settings.window_height = v;
-                    }
-                }
-                "scroll_to_top_on_activate" => {
-                    if let Ok(v) = value.parse() {
-                        settings.scroll_to_top_on_activate = v;
-                    }
-                }
-                "switch_to_all_on_activate" => {
-                    if let Ok(v) = value.parse() {
-                        settings.switch_to_all_on_activate = v;
+                        settings.smart_activate = v;
                     }
                 }
                 "copy_sound" => {
@@ -443,11 +422,6 @@ impl Database {
                 "auto_focus_search" => {
                     if let Ok(v) = value.parse() {
                         settings.auto_focus_search = v;
-                    }
-                }
-                "clear_search_on_activate" => {
-                    if let Ok(v) = value.parse() {
-                        settings.clear_search_on_activate = v;
                     }
                 }
                 "auto_paste" => settings.auto_paste = value,
@@ -464,11 +438,6 @@ impl Database {
                 "paste_as_plain_text" => {
                     if let Ok(v) = value.parse() {
                         settings.paste_as_plain_text = v;
-                    }
-                }
-                "auto_favorite" => {
-                    if let Ok(v) = value.parse() {
-                        settings.auto_favorite = v;
                     }
                 }
                 "confirm_delete" => {
@@ -488,10 +457,15 @@ impl Database {
                         settings.auto_start = v;
                     }
                 }
-                "blacklist_apps" => {
-                    if let Ok(v) = serde_json::from_str(&value) {
-                        settings.blacklist_apps = v;
-                    }
+                // 忽略已移除的设置字段（保持向后兼容）
+                "window_width"
+                | "window_height"
+                | "scroll_to_top_on_activate"
+                | "switch_to_all_on_activate"
+                | "clear_search_on_activate"
+                | "auto_favorite"
+                | "blacklist_apps" => {
+                    // 这些字段已移除，忽略即可
                 }
                 _ => {}
             }
@@ -508,23 +482,10 @@ impl Database {
             ("max_history_count", settings.max_history_count.to_string()),
             ("auto_cleanup_days", settings.auto_cleanup_days.to_string()),
             ("window_position", settings.window_position.clone()),
-            ("window_width", settings.window_width.to_string()),
-            ("window_height", settings.window_height.to_string()),
-            (
-                "scroll_to_top_on_activate",
-                settings.scroll_to_top_on_activate.to_string(),
-            ),
-            (
-                "switch_to_all_on_activate",
-                settings.switch_to_all_on_activate.to_string(),
-            ),
+            ("smart_activate", settings.smart_activate.to_string()),
             ("copy_sound", settings.copy_sound.to_string()),
             ("search_position", settings.search_position.clone()),
             ("auto_focus_search", settings.auto_focus_search.to_string()),
-            (
-                "clear_search_on_activate",
-                settings.clear_search_on_activate.to_string(),
-            ),
             ("auto_paste", settings.auto_paste.clone()),
             ("image_ocr", settings.image_ocr.to_string()),
             (
@@ -535,16 +496,11 @@ impl Database {
                 "paste_as_plain_text",
                 settings.paste_as_plain_text.to_string(),
             ),
-            ("auto_favorite", settings.auto_favorite.to_string()),
             ("confirm_delete", settings.confirm_delete.to_string()),
             ("auto_sort", settings.auto_sort.to_string()),
             ("left_click_action", settings.left_click_action.clone()),
             ("hotkey", settings.hotkey.clone()),
             ("auto_start", settings.auto_start.to_string()),
-            (
-                "blacklist_apps",
-                serde_json::to_string(&settings.blacklist_apps).unwrap_or_default(),
-            ),
         ];
 
         for (key, value) in settings_to_save {

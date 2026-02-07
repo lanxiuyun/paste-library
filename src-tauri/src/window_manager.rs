@@ -55,9 +55,10 @@ impl WindowManager {
 
     async fn create_clipboard_window(&self, app: &tauri::AppHandle) -> Result<bool, String> {
         let label = "clipboard";
-        let settings = self.settings.lock().await;
-        let width = settings.window_width;
-        let height = settings.window_height;
+        
+        // 使用固定尺寸（已从设置中移除窗口尺寸配置）
+        let width = 800.0;
+        let height = 600.0;
 
         let window = tauri::webview::WebviewWindowBuilder::new(
             app,
