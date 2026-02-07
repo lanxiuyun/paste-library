@@ -11,7 +11,7 @@
   - tauri-plugin-clipboard-x (clipboard monitoring)
   - tauri-plugin-global-shortcut (global hotkey Alt+V)
   - tauri-plugin-tray (system tray integration)
-- **Status**: In development — core features implemented, settings panel complete
+- **Status**: In development — P0/P1 features complete (~95%), P2 optimization pending
 
 ---
 
@@ -229,6 +229,7 @@ src-tauri/
   │   ├── clipboard.rs           # Clipboard manager logic
   │   ├── models.rs              # Data structures (ClipboardItem, AppSettings, etc.)
   │   ├── storage.rs             # SQLite database operations
+  │   ├── fuzzy_search.rs        # Fuzzy search with pinyin support
   │   ├── window_manager.rs      # Window management (create/hide/show clipboard window)
   │   └── tray_manager.rs        # System tray integration
   ├── tauri.conf.json            # Tauri config
@@ -340,7 +341,7 @@ const imageSrc = computed(() => {
 - Real-time clipboard monitoring (text + HTML + image + files)
 - SQLite persistence with automatic deduplication (SHA256 hash)
 - Card-based UI with tabs (All/Text/Image/File/Favorite)
-- Search functionality (fuzzy search)
+- **Search functionality** (fuzzy search with pinyin, initials, fault tolerance)
 - **Global hotkey** (configurable via key recording) to show/hide clipboard window
 - **Settings panel** with left sidebar navigation
 - **Window management** (frameless clipboard, normal settings)
@@ -354,28 +355,29 @@ const imageSrc = computed(() => {
   - Favorite/Unfavorite
   - Delete
 - **Interaction enhancements**:
-  - Single click: copy to clipboard
+  - Single click: copy to clipboard (configurable: copy/paste)
   - Double click: copy and paste
   - Right click: context menu
+  - Hover detail button: open drawer editor
+- **Cross-application drag and drop** (drag items to other apps)
 - **Favorite system** with database persistence
 - **System tray integration**:
   - Double-click tray icon to open settings
   - Right-click menu (Open settings, Show clipboard, Quit)
+- **Data backup** (export/import JSON)
+- **Storage path display** (data/log directories with copy/open)
 - Copy/delete clipboard items
 - Data persistence with comprehensive settings
 - **Variable height Item design** (text 3 lines, adaptive image height)
 - **Tag system** replaces favorite (data model + UI)
-- **Hover quick action buttons** (queue/copy/tag/delete)
+- **Hover quick action buttons** (detail/queue/copy/tag/delete)
 - **Keyboard navigation** (↑/↓, Enter, 1-9, Esc)
 - **Paste queue** (shopping cart mode, batch paste)
 - **Drawer editor** (text editing, image preview)
 - Local image loading via `convertFileSrc`
 
 ### In Progress ⏳
-- Data export/backup functionality (backend)
-- Settings panel enhancements
-- Cross-application drag and drop
-- Fuzzy search (pinyin, initial letters, fault tolerance)
+- ItemList virtual scrolling (performance optimization)
 
 ### Planned 📋
 - Cross-device sync architecture
@@ -393,7 +395,7 @@ const imageSrc = computed(() => {
 2. **历史记录** - Max history count, auto cleanup
 3. **通用设置** - Auto start, blacklist apps
 4. **快捷键** - Hotkey display, window size
-5. **数据备份** - Export/import data
+5. **数据备份** - Export/import data, storage path display
 6. **关于** - App info, open clipboard button
 
 ### Settings Categories
@@ -497,12 +499,12 @@ src-tauri/src/        # Rust后端
 10. ~~粘贴队列（购物车模式）~~
 11. ~~抽屉式编辑器~~
 
-**🟡 P1 - 增强体验（当前优先级）**
-12. 数据备份导入导出
-13. 存储路径显示
-14. 设置面板完善（历史记录删除按钮）
-15. 跨应用拖拽
-16. 模糊搜索（拼音、首字母、容错）
+**🟡 P1 - 增强体验 ✅ 已完成**
+12. ~~数据备份导入导出~~
+13. ~~存储路径显示~~
+14. ~~设置面板完善（历史记录删除按钮）~~
+15. ~~跨应用拖拽~~
+16. ~~模糊搜索（拼音、首字母、容错）~~
 
 **🟢 P2 - 优化完善**
 17. 多语言/主题切换
