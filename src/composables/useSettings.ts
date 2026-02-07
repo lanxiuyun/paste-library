@@ -9,10 +9,9 @@ const settings = ref<AppSettings>({
 
   // 窗口设置
   window_position: 'remember',
-  window_width: 800,
-  window_height: 600,
-  scroll_to_top_on_activate: false,
-  switch_to_all_on_activate: true,
+
+  // 智能激活设置 (新增)
+  smart_activate: true,
 
   // 音效设置
   copy_sound: false,
@@ -20,14 +19,12 @@ const settings = ref<AppSettings>({
   // 搜索设置
   search_position: 'bottom',
   auto_focus_search: true,
-  clear_search_on_activate: false,
 
   // 内容设置
   auto_paste: 'double',
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,
-  auto_favorite: false,
   confirm_delete: true,
   auto_sort: false,
   left_click_action: 'copy',
@@ -35,7 +32,6 @@ const settings = ref<AppSettings>({
   // 通用设置
   hotkey: 'Alt+V',
   auto_start: false,
-  blacklist_apps: [],
 });
 
 export function useSettings() {

@@ -31,7 +31,7 @@
     </div>
 
     <!-- 列表内容 -->
-    <div class="list-container" @scroll="handleScroll">
+    <div ref="listContainerRef" class="list-container" @scroll="handleScroll">
       <div v-if="filteredHistory.length === 0" class="empty-state">
         <div class="empty-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -114,10 +114,12 @@ import { useClipboard } from '@/composables/useClipboard';
 import { usePasteQueue } from '@/composables/usePasteQueue';
 import { useSettings } from '@/composables/useSettings';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 
 const {
   history,
+  lastCopyTime,
   loadHistory,
   searchHistory,
   deleteItem,
@@ -154,6 +156,29 @@ const contextMenuPosition = ref({ x: 0, y: 0 });
 const contextMenuItem = ref<ClipboardItemType | null>(null);
 
 const selectedIndex = ref(-1);
+const listContainerRef = ref<HTMLElement | null>(null);
+
+// 智能激活逻辑
+const handleSmartActivate = () => {
+  // 检查智能激活是否开启
+  if (!settings.value.smart_activate) return;
+  
+  const timeDiff = Date.now() - lastCopyTime.value;
+  
+  // 如果距离上次复制 < 5秒，执行智能激活
+  if (timeDiff < 5000) {
+    // 1. 滚动到顶部
+    if (listContainerRef.value) {
+      listContainerRef.value.scrollTop = 0;
+    }
+    
+    // 2. 切换到"全部"标签
+    activeTab.value = 'all';
+    
+    // 3. 聚焦搜索框
+    searchInputRef.value?.focus();
+  }
+};
 
 const filteredHistory = computed(() => {
   let result = history.value;
@@ -407,17 +432,31 @@ const handleKeyDown = (e: KeyboardEvent) => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   loadHistory(limit, 0);
   window.addEventListener('keydown', handleKeyDown);
   // 初始化选中第一项
   if (filteredHistory.value.length > 0) {
     selectedIndex.value = 0;
   }
+  
+  // 使用 Tauri 窗口监听 focus 事件（智能激活）
+  const appWindow = getCurrentWindow();
+  const unlistenFocus = await appWindow.listen('tauri://focus', () => {
+    // 窗口获得焦点时执行智能激活
+    handleSmartActivate();
+  });
+  
+  // 保存清理函数
+  (window as any).__unlistenFocus = unlistenFocus;
 });
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
+  // 清理 Tauri 事件监听
+  if ((window as any).__unlistenFocus) {
+    (window as any).__unlistenFocus();
+  }
 });
 
 // 监听过滤变化，重置选中状态

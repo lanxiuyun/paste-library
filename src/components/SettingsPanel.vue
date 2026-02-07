@@ -47,24 +47,12 @@
 
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-title">激活时回到顶部</div>
-              <div class="setting-desc">激活窗口时，滚动至顶部并选中首条</div>
+              <div class="setting-title">智能激活</div>
+              <div class="setting-desc">5秒内复制过内容时，激活窗口自动回到顶部、切换至全部、聚焦搜索框</div>
             </div>
             <div class="setting-control">
               <label class="switch">
-                <input type="checkbox" v-model="form.scroll_to_top_on_activate" />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">激活时切换至全部分组</div>
-            </div>
-            <div class="setting-control">
-              <label class="switch">
-                <input type="checkbox" v-model="form.switch_to_all_on_activate" />
+                <input type="checkbox" v-model="form.smart_activate" />
                 <span class="slider"></span>
               </label>
             </div>
@@ -121,18 +109,6 @@
             </div>
           </div>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">自动清除</div>
-              <div class="setting-desc">激活窗口时，清除搜索框内容</div>
-            </div>
-            <div class="setting-control">
-              <label class="switch">
-                <input type="checkbox" v-model="form.clear_search_on_activate" />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
         </div>
 
         <h2 class="section-title">内容设置</h2>
@@ -185,29 +161,6 @@
             <div class="setting-control">
               <label class="switch">
                 <input type="checkbox" v-model="form.paste_as_plain_text" />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">操作按钮</div>
-              <div class="setting-desc">自定义操作剪贴板内容的图标按钮</div>
-            </div>
-            <div class="setting-control">
-              <button class="btn-secondary">自定义</button>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">自动收藏</div>
-              <div class="setting-desc">新增或编辑备注后自动收藏</div>
-            </div>
-            <div class="setting-control">
-              <label class="switch">
-                <input type="checkbox" v-model="form.auto_favorite" />
                 <span class="slider"></span>
               </label>
             </div>
@@ -310,20 +263,6 @@
             </div>
           </div>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">应用黑名单</div>
-              <div class="setting-desc">来自这些应用的剪贴板内容将被忽略（每行一个应用名）</div>
-            </div>
-          </div>
-          <div class="setting-item full-width">
-            <textarea 
-              v-model="blacklistText"
-              class="textarea-input"
-              rows="4"
-              placeholder="例如：&#10;Password Manager&#10;1Password&#10;KeePass"
-            />
-          </div>
         </div>
       </div>
 
@@ -350,29 +289,6 @@
             </div>
           </div>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">窗口尺寸</div>
-              <div class="setting-desc">剪贴板窗口的默认大小</div>
-            </div>
-            <div class="setting-control size-control">
-              <input 
-                type="number" 
-                v-model.number="form.window_width"
-                min="400"
-                max="1200"
-                class="number-input small"
-              />
-              <span class="size-separator">×</span>
-              <input 
-                type="number" 
-                v-model.number="form.window_height"
-                min="300"
-                max="900"
-                class="number-input small"
-              />
-            </div>
-          </div>
         </div>
       </div>
 
@@ -519,28 +435,21 @@ const form = reactive<AppSettings>({
   max_history_count: 5000,
   auto_cleanup_days: 30,
   window_position: 'remember',
-  window_width: 800,
-  window_height: 600,
-  scroll_to_top_on_activate: false,
-  switch_to_all_on_activate: true,
+  smart_activate: true,
   copy_sound: false,
   search_position: 'bottom',
   auto_focus_search: true,
-  clear_search_on_activate: false,
   auto_paste: 'double',
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,
-  auto_favorite: false,
   confirm_delete: true,
   auto_sort: false,
   left_click_action: 'copy',
   hotkey: 'Alt+V',
   auto_start: false,
-  blacklist_apps: [],
 });
 
-const blacklistText = ref('');
 const originalSettings = ref<AppSettings | null>(null);
 const shortcutError = ref('');
 const isRecordingHotkey = ref(false);
@@ -629,12 +538,10 @@ onUnmounted(() => {
 
 const syncFromSettings = () => {
   Object.assign(form, settings.value);
-  blacklistText.value = settings.value.blacklist_apps.join('\n');
 };
 
 const currentSettings = computed((): AppSettings => ({
   ...form,
-  blacklist_apps: blacklistText.value.split('\n').filter(s => s.trim()),
 }));
 
 const hasChanges = computed(() => {
@@ -646,25 +553,19 @@ const hasChanges = computed(() => {
     current.max_history_count !== original.max_history_count ||
     current.auto_cleanup_days !== original.auto_cleanup_days ||
     current.window_position !== original.window_position ||
-    current.window_width !== original.window_width ||
-    current.window_height !== original.window_height ||
-    current.scroll_to_top_on_activate !== original.scroll_to_top_on_activate ||
-    current.switch_to_all_on_activate !== original.switch_to_all_on_activate ||
+    current.smart_activate !== original.smart_activate ||
     current.copy_sound !== original.copy_sound ||
     current.search_position !== original.search_position ||
     current.auto_focus_search !== original.auto_focus_search ||
-    current.clear_search_on_activate !== original.clear_search_on_activate ||
     current.auto_paste !== original.auto_paste ||
     current.image_ocr !== original.image_ocr ||
     current.copy_as_plain_text !== original.copy_as_plain_text ||
     current.paste_as_plain_text !== original.paste_as_plain_text ||
-    current.auto_favorite !== original.auto_favorite ||
     current.confirm_delete !== original.confirm_delete ||
     current.auto_sort !== original.auto_sort ||
     current.hotkey !== original.hotkey ||
     current.left_click_action !== original.left_click_action ||
-    current.auto_start !== original.auto_start ||
-    JSON.stringify(current.blacklist_apps) !== JSON.stringify(original.blacklist_apps)
+    current.auto_start !== original.auto_start
   );
 });
 
@@ -678,23 +579,17 @@ const resetSettings = () => {
     form.max_history_count = 5000;
     form.auto_cleanup_days = 30;
     form.window_position = 'remember';
-    form.window_width = 800;
-    form.window_height = 600;
-    form.scroll_to_top_on_activate = false;
-    form.switch_to_all_on_activate = true;
+    form.smart_activate = true;
     form.copy_sound = false;
     form.search_position = 'bottom';
     form.auto_focus_search = true;
-    form.clear_search_on_activate = false;
     form.auto_paste = 'double';
     form.image_ocr = false;
     form.copy_as_plain_text = false;
     form.paste_as_plain_text = true;
-    form.auto_favorite = false;
     form.confirm_delete = true;
     form.auto_sort = false;
     form.auto_start = false;
-    blacklistText.value = '';
   }
 };
 
