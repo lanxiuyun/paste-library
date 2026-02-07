@@ -96,10 +96,10 @@ export interface AppSettings {
 
   // 窗口设置
   window_position: 'remember' | 'center' | 'cursor';
-  window_width: number;
-  window_height: number;
-  scroll_to_top_on_activate: boolean;
-  switch_to_all_on_activate: boolean;
+
+  // 智能激活设置 (新增)
+  // 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
+  smart_activate: boolean;
 
   // 音效设置
   copy_sound: boolean;
@@ -107,14 +107,12 @@ export interface AppSettings {
   // 搜索设置
   search_position: 'top' | 'bottom';
   auto_focus_search: boolean;
-  clear_search_on_activate: boolean;
 
   // 内容设置
   auto_paste: 'off' | 'single' | 'double';
   image_ocr: boolean;
   copy_as_plain_text: boolean;
   paste_as_plain_text: boolean;
-  auto_favorite: boolean;
   confirm_delete: boolean;
   auto_sort: boolean;
   left_click_action: 'copy' | 'paste';
@@ -122,5 +120,4 @@ export interface AppSettings {
   // 通用设置
   hotkey: string;
   auto_start: boolean;
-  blacklist_apps: string[];
 }
