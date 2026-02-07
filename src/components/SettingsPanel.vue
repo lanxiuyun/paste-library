@@ -277,6 +277,18 @@
               </select>
             </div>
           </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">删除历史记录</div>
+              <div class="setting-desc">永久删除所有剪贴板历史记录（此操作不可撤销）</div>
+            </div>
+            <div class="setting-control">
+              <button class="btn-danger" @click="clearAllHistory">
+                删除全部
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -393,6 +405,56 @@
             </div>
           </div>
         </div>
+
+        <h2 class="section-title">存储路径</h2>
+        
+        <div class="setting-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">数据存储路径</div>
+              <div class="setting-desc">剪贴板历史和设置数据存储位置</div>
+            </div>
+          </div>
+          <div class="setting-item full-width">
+            <div class="path-display">
+              <span class="path-text">{{ storagePaths.data_dir }}</span>
+              <button class="icon-btn" title="复制路径" @click="copyToClipboard(storagePaths.data_dir)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                </svg>
+              </button>
+              <button class="icon-btn" title="打开文件夹" @click="openFolder(storagePaths.data_dir)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">日志存储路径</div>
+              <div class="setting-desc">应用日志文件存储位置</div>
+            </div>
+          </div>
+          <div class="setting-item full-width">
+            <div class="path-display">
+              <span class="path-text">{{ storagePaths.log_dir }}</span>
+              <button class="icon-btn" title="复制路径" @click="copyToClipboard(storagePaths.log_dir)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                </svg>
+              </button>
+              <button class="icon-btn" title="打开文件夹" @click="openFolder(storagePaths.log_dir)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 关于 -->
@@ -433,12 +495,14 @@
 import { ref, computed, onMounted, reactive, onUnmounted } from 'vue';
 import { useSettings } from '@/composables/useSettings';
 import { useWindow } from '@/composables/useWindow';
+import { useClipboard } from '@/composables/useClipboard';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AppSettings } from '@/types';
 
 const { settings, loadSettings, saveSettings } = useSettings();
 const { openClipboardWindow } = useWindow();
+const { loadHistory } = useClipboard();
 
 const activeMenu = ref('clipboard');
 
@@ -480,6 +544,10 @@ const blacklistText = ref('');
 const originalSettings = ref<AppSettings | null>(null);
 const shortcutError = ref('');
 const isRecordingHotkey = ref(false);
+const storagePaths = ref<Record<string, string>>({
+  data_dir: '',
+  log_dir: '',
+});
 let unlistenShortcutError: UnlistenFn | null = null;
 
 // 录制快捷键
@@ -534,6 +602,14 @@ onMounted(async () => {
   await loadSettings();
   syncFromSettings();
   originalSettings.value = { ...settings.value };
+
+  // 加载存储路径
+  try {
+    const paths = await invoke<Record<string, string>>('get_storage_paths');
+    storagePaths.value = paths;
+  } catch (error) {
+    console.error('Failed to load storage paths:', error);
+  }
 
   // 监听快捷键注册失败事件
   unlistenShortcutError = await listen<string>('shortcut-registration-failed', (event) => {
@@ -622,12 +698,91 @@ const resetSettings = () => {
   }
 };
 
-const exportData = () => {
-  console.log('Export data');
+const exportData = async () => {
+  try {
+    const jsonData = await invoke<string>('export_clipboard_data');
+    
+    // 创建 Blob 并下载
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clipboard-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    alert('导出成功！');
+  } catch (error) {
+    console.error('导出失败:', error);
+    alert('导出失败，请重试');
+  }
 };
 
-const importData = () => {
-  console.log('Import data');
+const importData = async () => {
+  try {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const jsonData = event.target?.result as string;
+          const count = await invoke<number>('import_clipboard_data', { jsonData });
+          alert(`导入成功！共导入 ${count} 条记录`);
+          await loadHistory();
+        } catch (error) {
+          console.error('导入失败:', error);
+          alert('导入失败，请检查文件格式');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  } catch (error) {
+    console.error('导入失败:', error);
+    alert('导入失败，请重试');
+  }
+};
+
+const copyToClipboard = async (path: string) => {
+  try {
+    await navigator.clipboard.writeText(path);
+    alert('路径已复制到剪贴板');
+  } catch (error) {
+    console.error('复制失败:', error);
+    alert('复制失败，请重试');
+  }
+};
+
+const openFolder = async (path: string) => {
+  try {
+    await invoke('show_in_folder', { path });
+  } catch (error) {
+    console.error('打开文件夹失败:', error);
+    alert('打开文件夹失败，请重试');
+  }
+};
+
+const clearAllHistory = async () => {
+  const confirmed = confirm('确定要删除所有历史记录吗？此操作不可撤销！');
+  if (!confirmed) return;
+
+  try {
+    await invoke('clear_clipboard_history', { 
+      request: { keep_count: null, keep_days: null }
+    });
+    alert('历史记录已清空');
+    await loadHistory();
+  } catch (error) {
+    console.error('清空历史记录失败:', error);
+    alert('清空失败，请重试');
+  }
 };
 
 const hotkeyError = ref('');
@@ -992,6 +1147,28 @@ input:checked + .slider:before {
   height: 16px;
 }
 
+/* 路径显示 */
+.path-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.path-text {
+  flex: 1;
+  color: #595959;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 关于页面 */
 .about-content {
   display: flex;
@@ -1091,6 +1268,25 @@ input:checked + .slider:before {
 .btn-primary:disabled {
   background: #d9d9d9;
   cursor: not-allowed;
+}
+
+.btn-danger {
+  padding: 8px 16px;
+  background: #ff4d4f;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: #ff7875;
+}
+
+.btn-danger:active {
+  background: #d9363e;
 }
 
 /* Scrollbar */
