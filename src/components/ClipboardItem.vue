@@ -2,11 +2,14 @@
   <div 
     class="clipboard-item" 
     :class="{ 'is-hovered': isHovered, 'is-selected': isSelected }"
+    draggable="true"
     @click="handleClick"
     @dblclick="handleDoubleClick"
     @contextmenu.prevent="handleContextMenu"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
+    @dragstart="handleDragStart"
+    @dragend="handleDragEnd"
   >
     <div class="item-row" :class="{ 'has-tags': item.tags && item.tags.length > 0 }">
       <!-- 内容包装器 -->
@@ -44,6 +47,17 @@
         <!-- Hover 快捷按钮 - 绝对定位，不影响布局 -->
         <transition name="fade">
           <div v-if="isHovered" class="quick-actions" @click.stop>
+            <button 
+              class="action-btn" 
+              title="详情" 
+              @click="handleQuickAction('detail')"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+            </button>
             <button 
               class="action-btn" 
               title="添加到队列" 
@@ -222,6 +236,52 @@ const handleContextMenu = (event: MouseEvent) => {
 
 const handleQuickAction = (action: string) => {
   emit('quickAction', action, props.item);
+};
+
+const handleDragStart = (event: DragEvent) => {
+  if (!event.dataTransfer) return;
+  
+  // 设置拖拽效果
+  event.dataTransfer.effectAllowed = 'copy';
+  
+  // 根据内容类型设置不同的拖拽数据
+  switch (props.item.content_type) {
+    case 'text':
+    case 'html':
+      event.dataTransfer.setData('text/plain', props.item.content);
+      if (props.item.content_type === 'html') {
+        event.dataTransfer.setData('text/html', props.item.content);
+      }
+      break;
+    case 'image':
+      // 图片拖拽：设置图片 URL
+      if (props.item.thumbnail_path) {
+        event.dataTransfer.setData('text/uri-list', props.item.thumbnail_path);
+      }
+      break;
+    case 'file':
+    case 'folder':
+    case 'files':
+      // 文件拖拽：设置文件路径
+      if (props.item.file_paths && props.item.file_paths.length > 0) {
+        event.dataTransfer.setData('text/uri-list', props.item.file_paths.join('\n'));
+      } else {
+        event.dataTransfer.setData('text/plain', props.item.content);
+      }
+      break;
+    default:
+      event.dataTransfer.setData('text/plain', props.item.content);
+  }
+  
+  // 设置拖拽图像
+  const dragImage = new Image();
+  dragImage.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Crect x="9" y="9" width="13" height="13" rx="2" ry="2"/%3E%3Cpath d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/%3E%3C/svg%3E';
+  event.dataTransfer.setDragImage(dragImage, 12, 12);
+};
+
+const handleDragEnd = (event: DragEvent) => {
+  if (!event.dataTransfer) return;
+  event.dataTransfer.dropEffect = 'none';
 };
 </script>
 

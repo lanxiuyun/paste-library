@@ -112,6 +112,7 @@ import PasteQueuePanel from './PasteQueuePanel.vue';
 import DrawerEditor from './DrawerEditor.vue';
 import { useClipboard } from '@/composables/useClipboard';
 import { usePasteQueue } from '@/composables/usePasteQueue';
+import { useSettings } from '@/composables/useSettings';
 import { invoke } from '@tauri-apps/api/core';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 
@@ -124,6 +125,7 @@ const {
 } = useClipboard();
 
 const { addToQueue } = usePasteQueue();
+const { settings } = useSettings();
 const pasteQueueRef = ref<InstanceType<typeof PasteQueuePanel> | null>(null);
 
 // Drawer editor state
@@ -178,9 +180,15 @@ const handleSearch = async () => {
 };
 
 const handleItemClick = async (item: ClipboardItemType) => {
-  // 单击：打开抽屉编辑器
-  drawerItem.value = item;
-  drawerVisible.value = true;
+  // 单击：根据设置执行复制或粘贴
+  const action = settings.value.left_click_action;
+  if (action === 'paste') {
+    await restoreToClipboard(item);
+    // TODO: 模拟粘贴操作
+  } else {
+    // 默认复制
+    await restoreToClipboard(item);
+  }
 };
 
 const handleItemDoubleClick = async (item: ClipboardItemType) => {
@@ -197,6 +205,11 @@ const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType) => {
 
 const handleQuickAction = async (action: string, item: ClipboardItemType) => {
   switch (action) {
+    case 'detail':
+      // 打开抽屉编辑器查看详情
+      drawerItem.value = item;
+      drawerVisible.value = true;
+      break;
     case 'copy':
       await restoreToClipboard(item);
       break;
