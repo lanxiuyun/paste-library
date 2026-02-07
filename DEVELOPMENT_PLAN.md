@@ -37,6 +37,50 @@
 - [x] 数据导出与备份
 
 ### 阶段 5: Item 重构与体验优化 ✅ COMPLETE
+
+### 阶段 5.5: 设置功能实现 ⏳ IN PROGRESS
+**详情见 [SETTINGS_IMPLEMENTATION.md](docs/SETTINGS_IMPLEMENTATION.md)**
+
+设置面板UI已完成并可以保存数据，但前端代码没有实际使用这些设置。本阶段将实现所有"存而不用"的设置功能。
+
+**2026-02-07 需求变更**: 移除7项不需要的功能，新增智能激活功能
+
+**实现进度:** 27% (4/15项已完整实现)
+
+**🔴 P0 - 核心体验设置（4项）**
+- [x] **smart_activate** - 智能激活 ⭐ **已实现**
+  - 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
+  - 实现文件: ClipboardList.vue, useClipboard.ts
+- [ ] auto_paste - 自动粘贴行为（单击/双击）
+- [ ] window_position - 窗口位置（记住/居中/跟随光标）
+- [ ] search_position - 搜索框位置（顶部/底部）
+
+**🟡 P1 - 增强体验设置（4项）**
+- [ ] copy_sound - 复制音效
+- [ ] confirm_delete - 删除确认对话框
+- [ ] copy_as_plain_text - 复制为纯文本
+- [ ] auto_sort - 自动排序（重复内容置顶）
+
+**🟢 P2 - 进阶功能设置（3项）**
+- [ ] auto_start - 开机自启
+- [ ] paste_as_plain_text - 粘贴为纯文本
+- [ ] image_ocr - 图片OCR识别
+
+**✅ 已实现设置（3项）**
+- [x] hotkey - 唤醒快捷键（需重启生效）
+- [x] max_history_count - 最大历史记录数（后端自动）
+- [x] auto_cleanup_days - 自动清理天数（后端自动）
+
+**❌ 已移除设置（7项）**
+- ~~auto_favorite~~ - 自动收藏
+- ~~操作按钮~~ - 操作按钮自定义
+- ~~clear_search_on_activate~~ - 自动清除搜索
+- ~~scroll_to_top_on_activate~~ - 激活时回到顶部（合并到智能激活）
+- ~~switch_to_all_on_activate~~ - 激活时切换至全部分组（合并到智能激活）
+- ~~blacklist_apps~~ - 应用黑名单
+- ~~window_width/window_height~~ - 窗口尺寸
+
+### 阶段 6: 测试与优化 📋 PLANNED
 **Phase 1: Item 基础重构（Foundation）**
 - [x] 可变高度 Item 设计（文本最多3行、图片自适应高度）
 - [x] 信息展示简化（统计信息移至抽屉）
@@ -75,10 +119,11 @@
 | 用户界面 | 100% ✅ |
 | 高级功能 | 100% ✅ |
 | Item 重构与体验优化 | 100% ✅ |
+| 设置功能实现 | 20% ⏳ |
 | 测试与优化 | 0% 📋 |
 | 构建与发布 | 0% 📋 |
 
-**总体进度**: ~95%
+**总体进度**: ~85%
 
 ---
 
@@ -168,6 +213,57 @@
 - [ ] 缩略图懒加载
 - [ ] 性能优化
 
+### 设置功能实现 ⏳ (详见 docs/SETTINGS_IMPLEMENTATION.md)
+
+**2026-02-07 需求变更**: 移除7项不需要的功能，新增智能激活
+
+**P0 - 核心体验设置（必须实现）**
+- [x] **smart_activate** - 智能激活 ⭐ **已实现** (2026-02-07)
+  - 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
+  - ClipboardList.vue 监听 `tauri://focus` 窗口事件
+  - useClipboard.ts 记录 lastCopyTime
+- [ ] **auto_paste** - 自动粘贴行为（单击/双击/关闭）
+  - 当前只读取了设置值，未实现粘贴逻辑
+  - 需要模拟键盘粘贴操作
+- [ ] **window_position** - 窗口位置（remember/center/cursor）
+  - 后端 window_manager.rs 创建窗口时使用
+  - 需要实现记住位置功能
+- [ ] **search_position** - 搜索框位置（top/bottom）
+  - ClipboardList.vue 条件渲染搜索栏位置
+
+**P1 - 增强体验设置**
+- [ ] **copy_sound** - 复制音效
+  - 需要准备音效文件资源
+  - restoreToClipboard 时播放音效
+- [ ] **confirm_delete** - 删除确认对话框
+  - 删除操作前显示 confirm 弹窗
+- [ ] **copy_as_plain_text** - 复制为纯文本
+  - HTML/RTF 类型复制时去除标签
+- [ ] **auto_sort** - 自动排序
+  - 重复内容复制时置顶（后端逻辑）
+
+**P2 - 进阶功能设置**
+- [ ] **auto_start** - 开机自启
+  - 需要系统级配置或Tauri API
+- [ ] **paste_as_plain_text** - 粘贴为纯文本
+  - 模拟粘贴时去除富文本格式
+- [ ] **image_ocr** - 图片OCR识别
+  - 需要集成 OCR 库（如 tesseract）
+
+**已实现设置（3项）**
+- [x] **hotkey** - 唤醒快捷键（Alt+V）
+- [x] **max_history_count** - 最大历史记录数（后端自动限制）
+- [x] **auto_cleanup_days** - 自动清理天数（后端自动清理）
+
+**❌ 已移除设置（7项）**
+- ~~auto_favorite~~ - 自动收藏（不需要）
+- ~~操作按钮~~ - 操作按钮自定义（不需要）
+- ~~clear_search_on_activate~~ - 激活时清除搜索（不需要）
+- ~~scroll_to_top_on_activate~~ - 激活时回到顶部（合并到智能激活）
+- ~~switch_to_all_on_activate~~ - 激活时切换至全部分组（合并到智能激活）
+- ~~blacklist_apps~~ - 应用黑名单（不需要）
+- ~~window_width/window_height~~ - 窗口尺寸（不需要）
+
 ---
 
 ## 更新记录
@@ -191,3 +287,13 @@
   - ✅ 设置面板完善（历史记录删除按钮）
   - ✅ 跨应用拖拽（支持文本/图片/文件拖拽到其他应用）
   - ✅ 模糊搜索（拼音、首字母、容错、标签搜索）
+- 2026-02-07: **发现设置功能实现缺失问题**
+  - 设置面板UI完成但功能未实现（20%完成度）
+  - 创建 SETTINGS_IMPLEMENTATION.md 详细规划
+  - 20项设置中仅4项完整实现，16项存而不用
+- 2026-02-07: **完成智能激活功能**
+  - 移除7项不需要的设置（自动收藏、操作按钮、自动清除、应用黑名单、窗口尺寸等）
+  - 新增 smart_activate 智能激活功能
+  - 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
+  - 更新类型定义、Rust模型、数据库、设置面板UI
+  - 实现进度: 27% (4/15)
