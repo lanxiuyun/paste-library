@@ -4,6 +4,7 @@ mod storage;
 mod window_manager;
 mod shortcut_manager;
 mod tray_manager;
+mod fuzzy_search;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -212,6 +213,42 @@ fn validate_shortcut(hotkey: String) -> Result<(), String> {
     validate_hotkey(&hotkey)
 }
 
+#[tauri::command]
+fn export_clipboard_data(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<String, String> {
+    let state = state.blocking_lock();
+    state.clipboard_manager.export_data()
+}
+
+#[tauri::command]
+fn import_clipboard_data(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    json_data: String,
+) -> Result<i64, String> {
+    let state = state.blocking_lock();
+    state.clipboard_manager.import_data(&json_data)
+}
+
+#[tauri::command]
+fn get_storage_paths(app: tauri::AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
+    let mut paths = std::collections::HashMap::new();
+    
+    // 获取数据存储路径
+    let app_dir = app.path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?;
+    paths.insert("data_dir".to_string(), app_dir.to_string_lossy().to_string());
+    
+    // 获取日志存储路径
+    let log_dir = app.path()
+        .app_log_dir()
+        .map_err(|e| e.to_string())?;
+    paths.insert("log_dir".to_string(), log_dir.to_string_lossy().to_string());
+    
+    Ok(paths)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri_plugin_global_shortcut::ShortcutState;
@@ -308,6 +345,9 @@ pub fn run() {
             update_tags,
             get_all_tags,
             validate_shortcut,
+            export_clipboard_data,
+            import_clipboard_data,
+            get_storage_paths,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

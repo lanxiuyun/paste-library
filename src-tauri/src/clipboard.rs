@@ -179,4 +179,27 @@ impl ClipboardManager {
             .get_all_tags()
             .map_err(|e| e.to_string())
     }
+
+    pub fn export_data(&self) -> Result<String, String> {
+        let items = self.database
+            .get_history(10000, 0)
+            .map_err(|e| e.to_string())?;
+        
+        serde_json::to_string(&items)
+            .map_err(|e| format!("导出失败: {}", e))
+    }
+
+    pub fn import_data(&self, json_data: &str) -> Result<i64, String> {
+        let items: Vec<ClipboardItem> = serde_json::from_str(json_data)
+            .map_err(|e| format!("导入失败: JSON 格式错误 - {}", e))?;
+        
+        let mut count = 0i64;
+        for item in items {
+            if self.database.add_clipboard_item(&item).is_ok() {
+                count += 1;
+            }
+        }
+        
+        Ok(count)
+    }
 }
