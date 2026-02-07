@@ -233,20 +233,20 @@ impl Database {
 
     /// 搜索历史记录
     pub fn search_history(&self, query: &str, limit: i64) -> Result<Vec<ClipboardItem>> {
+        use crate::fuzzy_search::fuzzy_match;
+
         let conn = self.conn.lock().unwrap();
 
-        let search_pattern = format!("%{}%", query);
-
+        // 先获取所有记录，然后在内存中进行模糊搜索
         let mut stmt = conn.prepare(
             "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags
              FROM clipboard_history
-             WHERE content LIKE ?1 OR tags LIKE ?1
              ORDER BY created_at DESC
-             LIMIT ?2",
+             LIMIT 1000",
         )?;
 
         let items = stmt
-            .query_map(params![search_pattern, limit], |row| {
+            .query_map([], |row| {
                 let content_type_str: String = row.get(1)?;
                 let content_type = match content_type_str.as_str() {
                     "text" => ClipboardContentType::Text,
@@ -264,15 +264,14 @@ impl Database {
                     .parse::<chrono::DateTime<chrono::Utc>>()
                     .unwrap_or_else(|_| chrono::Utc::now());
 
-                let metadata: Option<ClipboardMetadata> = row
-                    .get::<_, Option<String>>(5)?
-                    .and_then(|s| serde_json::from_str(&s).ok());
-                let file_paths: Option<Vec<String>> = row
-                    .get::<_, Option<String>>(6)?
-                    .and_then(|s| serde_json::from_str(&s).ok());
-                let tags: Option<Vec<String>> = row
-                    .get::<_, Option<String>>(8)?
-                    .and_then(|s| serde_json::from_str(&s).ok());
+                let metadata_str: Option<String> = row.get(5)?;
+                let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+
+                let file_paths_str: Option<String> = row.get(6)?;
+                let file_paths = file_paths_str.and_then(|s| serde_json::from_str(&s).ok());
+
+                let tags_str: Option<String> = row.get(8)?;
+                let tags = tags_str.and_then(|s| serde_json::from_str(&s).ok());
 
                 Ok(ClipboardItem {
                     id: row.get(0)?,
@@ -286,7 +285,17 @@ impl Database {
                     tags,
                 })
             })?
-            .collect::<Result<Vec<_>>>()?;
+            .filter_map(|item| item.ok())
+            .filter(|item| {
+                // 应用模糊搜索过滤
+                fuzzy_match(query, &item.content)
+                    || (item
+                        .tags
+                        .as_ref()
+                        .map_or(false, |tags| tags.iter().any(|tag| fuzzy_match(query, tag))))
+            })
+            .take(limit as usize)
+            .collect();
 
         Ok(items)
     }
