@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { emit, listen } from '@tauri-apps/api/event';
 import { ref, onMounted } from 'vue';
 import type { AppSettings } from '@/types';
 
@@ -34,6 +35,9 @@ const settings = ref<AppSettings>({
   auto_start: false,
 });
 
+// 全局监听器标记
+let isListening = false;
+
 export function useSettings() {
   const loadSettings = async (): Promise<void> => {
     try {
@@ -48,6 +52,8 @@ export function useSettings() {
     try {
       await invoke('save_settings', { settings: newSettings });
       settings.value = newSettings;
+      // 发送事件通知其他窗口设置已更改
+      await emit('settings-changed', newSettings);
     } catch (error) {
       console.error('Failed to save settings:', error);
     }
@@ -63,6 +69,14 @@ export function useSettings() {
 
   onMounted(() => {
     loadSettings();
+    
+    // 只设置一次全局监听器
+    if (!isListening) {
+      isListening = true;
+      listen<AppSettings>('settings-changed', (event) => {
+        settings.value = event.payload;
+      });
+    }
   });
 
   return {

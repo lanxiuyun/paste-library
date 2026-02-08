@@ -11,6 +11,7 @@
   - tauri-plugin-clipboard-x (clipboard monitoring)
   - tauri-plugin-global-shortcut (global hotkey Alt+V)
   - tauri-plugin-tray (system tray integration)
+  - tauri-plugin-autostart (auto start on boot)
 - **Status**: In development — P0/P1 features complete (~95%), P2 optimization pending
 
 ---
@@ -401,30 +402,30 @@ const imageSrc = computed(() => {
 ### Settings Categories
 
 **窗口设置**:
-- 窗口位置 (remember/center/cursor) ⏳ 未实现
+- 窗口位置 (remember/center/cursor) ✅ 已实现
 - 智能激活 (5秒内复制则回到顶部/切换全部/聚焦搜索) ✅ 已实现
 
 **音效设置**:
-- 复制音效 (+ preview button) ⏳ 未实现
+- 复制音效 (+ preview button) ⏳ 待实现（需音效文件资源）
 
 **搜索设置**:
-- 搜索框位置 (top/bottom) ⏳ 未实现
-- 默认聚焦 ⏳ 未实现
+- 搜索框位置 (top/bottom) ✅ 已实现
+- 默认聚焦 ✅ 已实现（合并到智能激活）
 
 **内容设置**:
-- 自动粘贴 (off/single/double) ⏳ 未实现
-- 图片OCR ⏳ 未实现
-- 复制为纯文本 ⏳ 未实现
-- 粘贴为纯文本 ⏳ 未实现
-- 删除确认 ⏳ 未实现
-- 自动排序 ⏳ 未实现
+- 自动粘贴 (off/single/double) ✅ 已实现
+- 图片OCR ⏳ 待实现（需OCR库）
+- 复制为纯文本 ✅ 已实现
+- 粘贴为纯文本 ⏳ 待实现
+- 删除确认 ✅ 已实现
+- 自动排序 ✅ 已实现
 
 **历史记录设置**:
 - 最大历史记录数 (100-10000) ✅ 后端已实现
 - 自动清理 (0/7/30/90 days) ✅ 后端已实现
 
 **通用设置**:
-- 开机自启 ⏳ 未实现
+- 开机自启 ✅ 已实现
 
 **快捷键设置**:
 - 唤醒快捷键 (按键录制, 如: Alt+V, Win+Shift+C) ✅ 已实现

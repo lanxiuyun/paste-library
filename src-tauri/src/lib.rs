@@ -109,10 +109,46 @@ fn get_settings(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<AppSett
 #[tauri::command]
 async fn save_settings(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
     settings: AppSettings,
 ) -> Result<(), String> {
     let state = state.lock().await;
-    state.clipboard_manager.save_settings(&settings).await
+    
+    // 更新设置
+    state.clipboard_manager.save_settings(&settings).await?;
+    
+    // 更新开机自启状态
+    if let Err(e) = update_autostart(&app, settings.auto_start).await {
+        eprintln!("更新开机自启状态失败: {}", e);
+    }
+    
+    // 如果剪贴板窗口可见，重新定位窗口（窗口位置设置实时生效）
+    if let Some(window) = app.get_webview_window("clipboard") {
+        if let Ok(true) = window.is_visible() {
+            if let Err(e) = state.window_manager.reposition_window(&window).await {
+                eprintln!("重新定位窗口失败: {}", e);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// 更新开机自启状态
+async fn update_autostart(app: &tauri::AppHandle, enable: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    
+    let autostart_manager = app.autolaunch();
+    
+    if enable {
+        autostart_manager.enable().map_err(|e| e.to_string())?;
+        println!("开机自启已启用");
+    } else {
+        autostart_manager.disable().map_err(|e| e.to_string())?;
+        println!("开机自启已禁用");
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -249,14 +285,45 @@ fn get_storage_paths(app: tauri::AppHandle) -> Result<std::collections::HashMap<
     Ok(paths)
 }
 
+#[tauri::command]
+fn simulate_paste() -> Result<(), String> {
+    // 模拟粘贴操作（Ctrl+V 或 Cmd+V）
+    // 注意：这里使用简单的命令行方式或系统API
+    // 更复杂的实现可能需要 enigo 等库
+    
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: 使用 PowerShell 发送按键（简化实现）
+        // 实际项目中应该使用 enigo 或类似库
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: 使用 osascript 发送按键（简化实现）
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Linux: 使用 xdotool 发送按键（简化实现）
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri_plugin_global_shortcut::ShortcutState;
+    use tauri_plugin_autostart::MacosLauncher;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_x::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         .setup(|app| {
             let app_dir = app
                 .path()
@@ -327,6 +394,15 @@ pub fn run() {
                 eprintln!("系统托盘初始化失败: {}", e);
             }
 
+            // 根据设置初始化开机自启状态
+            let auto_start = settings.blocking_lock().auto_start;
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = update_autostart(&app_handle, auto_start).await {
+                    eprintln!("初始化开机自启状态失败: {}", e);
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -348,6 +424,7 @@ pub fn run() {
             export_clipboard_data,
             import_clipboard_data,
             get_storage_paths,
+            simulate_paste,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -23,6 +23,7 @@ impl ClipboardManager {
 
     pub async fn handle_clipboard_change(&self, text: String, html: Option<String>) -> Result<Option<ClipboardItem>, String> {
         let settings = self.settings.lock().await;
+        let auto_sort = settings.auto_sort;
 
         let count = self.database.get_count().map_err(|e| e.to_string())?;
         if count >= settings.max_history_count {
@@ -58,12 +59,7 @@ impl ClipboardManager {
             tags: None,
         };
 
-        let id = self.database.add_clipboard_item(&item).map_err(|e| {
-            if e.to_string().contains("UNIQUE constraint failed") {
-                return "DUPLICATE".to_string();
-            }
-            e.to_string()
-        })?;
+        let id = self.database.add_clipboard_item(&item, auto_sort).map_err(|e| e.to_string())?;
 
         let mut item_with_id = item;
         item_with_id.id = id;
@@ -80,6 +76,7 @@ impl ClipboardManager {
         metadata: Option<ClipboardMetadata>,
     ) -> Result<Option<ClipboardItem>, String> {
         let settings = self.settings.lock().await;
+        let auto_sort = settings.auto_sort;
 
         let count = self.database.get_count().map_err(|e| e.to_string())?;
         if count >= settings.max_history_count {
@@ -115,12 +112,7 @@ impl ClipboardManager {
             tags: None,
         };
 
-        let id = self.database.add_clipboard_item(&item).map_err(|e| {
-            if e.to_string().contains("UNIQUE constraint failed") {
-                return "DUPLICATE".to_string();
-            }
-            e.to_string()
-        })?;
+        let id = self.database.add_clipboard_item(&item, auto_sort).map_err(|e| e.to_string())?;
 
         let mut item_with_id = item;
         item_with_id.id = id;
@@ -195,7 +187,8 @@ impl ClipboardManager {
         
         let mut count = 0i64;
         for item in items {
-            if self.database.add_clipboard_item(&item).is_ok() {
+            // 导入时默认启用 auto_sort，避免重复项被忽略
+            if self.database.add_clipboard_item(&item, true).is_ok() {
                 count += 1;
             }
         }

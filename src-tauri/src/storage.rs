@@ -121,7 +121,7 @@ impl Database {
     }
 
     /// 添加剪贴板记录
-    pub fn add_clipboard_item(&self, item: &ClipboardItem) -> Result<i64> {
+    pub fn add_clipboard_item(&self, item: &ClipboardItem, auto_sort: bool) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
 
         let metadata_json = item
@@ -140,11 +140,18 @@ impl Database {
             .map(|t| serde_json::to_string(t).ok())
             .flatten();
 
+        // 根据 auto_sort 设置决定是否更新重复项的时间戳
+        let conflict_sql = if auto_sort {
+            "ON CONFLICT(content_hash) DO UPDATE SET
+                created_at = excluded.created_at"
+        } else {
+            "ON CONFLICT(content_hash) DO NOTHING"
+        };
+
         conn.execute(
-            "INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags)
+            &format!("INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-             ON CONFLICT(content_hash) DO UPDATE SET
-                created_at = excluded.created_at",
+             {}", conflict_sql),
             params![
                 match item.content_type {
                     ClipboardContentType::Text => "text",
@@ -165,7 +172,14 @@ impl Database {
             ],
         )?;
 
-        Ok(conn.last_insert_rowid())
+        // 如果发生 ON CONFLICT DO NOTHING，需要返回已存在项的 ID
+        let id: i64 = conn.query_row(
+            "SELECT id FROM clipboard_history WHERE content_hash = ?1",
+            params![item.content_hash],
+            |row| row.get(0),
+        )?;
+
+        Ok(id)
     }
 
     /// 获取历史记录
