@@ -173,8 +173,16 @@ export function useClipboard() {
     await clearHistory(0, undefined);
   };
 
-  const restoreToClipboard = async (item: ClipboardItem): Promise<void> => {
+  const restoreToClipboard = async (item: ClipboardItem, options?: { copyAsPlainText?: boolean }): Promise<void> => {
     try {
+      // 如果需要复制为纯文本，去除 HTML 标签
+      let content = item.content;
+      if (options?.copyAsPlainText && (item.content_type === 'html' || item.content_type === 'rtf')) {
+        content = content.replace(/<[^>]*>/g, '');
+        await writeText(content);
+        return;
+      }
+
       switch (item.content_type) {
         case 'html':
           await writeHTML(item.content, '');

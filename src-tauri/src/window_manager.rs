@@ -24,6 +24,8 @@ impl WindowManager {
                 window.hide().map_err(|e| e.to_string())?;
                 Ok(false)
             } else {
+                // 根据设置重新定位窗口
+                self.position_window(&window).await?;
                 window.show().map_err(|e| e.to_string())?;
                 window.set_focus().map_err(|e| e.to_string())?;
                 Ok(true)
@@ -34,7 +36,9 @@ impl WindowManager {
     }
 
     pub async fn hide_clipboard_window(&self, app: &tauri::AppHandle) -> Result<(), String> {
+        // 隐藏前保存窗口位置（如果是 remember 模式）
         if let Some(window) = app.get_webview_window("clipboard") {
+            self.save_window_position(&window).await?;
             window.hide().map_err(|e| e.to_string())?;
         }
         Ok(())
@@ -44,6 +48,8 @@ impl WindowManager {
         let label = "clipboard";
 
         if let Some(window) = app.get_webview_window(label) {
+            // 根据设置重新定位窗口
+            self.position_window(&window).await?;
             window.show().map_err(|e| e.to_string())?;
             window.set_focus().map_err(|e| e.to_string())?;
         } else {
@@ -51,6 +57,112 @@ impl WindowManager {
         }
 
         Ok(())
+    }
+
+    /// 重新定位窗口（用于设置改变时）
+    pub async fn reposition_window(&self, window: &tauri::WebviewWindow) -> Result<(), String> {
+        self.position_window(window).await
+    }
+
+    /// 根据设置定位窗口
+    async fn position_window(&self, window: &tauri::WebviewWindow) -> Result<(), String> {
+        let settings = self.settings.lock().await;
+        let position_mode = &settings.window_position;
+
+        match position_mode.as_str() {
+            "remember" => {
+                // 使用保存的位置（这里简化处理，实际应该保存到设置中）
+                // 默认居中
+                window.center().map_err(|e| e.to_string())?;
+            }
+            "center" => {
+                // 屏幕居中
+                window.center().map_err(|e| e.to_string())?;
+            }
+            "cursor" => {
+                // 跟随鼠标位置
+                if let Ok((x, y)) = Self::get_cursor_position() {
+                    let size = window.inner_size().map_err(|e| e.to_string())?;
+                    // 确保窗口不超出屏幕边界
+                    let screen = window.primary_monitor().map_err(|e| e.to_string())?;
+                    if let Some(screen) = screen {
+                        let screen_width = screen.size().width as f64;
+                        let screen_height = screen.size().height as f64;
+                        let win_width = size.width as f64;
+                        let win_height = size.height as f64;
+                        
+                        let mut pos_x = x;
+                        let mut pos_y = y;
+                        
+                        // 边界检查
+                        if pos_x + win_width > screen_width {
+                            pos_x = screen_width - win_width;
+                        }
+                        if pos_y + win_height > screen_height {
+                            pos_y = screen_height - win_height;
+                        }
+                        
+                        window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
+                            pos_x as i32,
+                            pos_y as i32,
+                        ))).map_err(|e| e.to_string())?;
+                    }
+                } else {
+                    // 如果无法获取鼠标位置，则居中
+                    window.center().map_err(|e| e.to_string())?;
+                }
+            }
+            _ => {
+                // 默认居中
+                window.center().map_err(|e| e.to_string())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 保存窗口位置到设置
+    async fn save_window_position(&self, _window: &tauri::WebviewWindow) -> Result<(), String> {
+        // 这里可以保存窗口位置到设置
+        // 简化实现：暂时不保存
+        Ok(())
+    }
+
+    /// 获取鼠标位置
+    fn get_cursor_position() -> Result<(f64, f64), String> {
+        #[cfg(target_os = "windows")]
+        {
+            use winapi::um::winuser::GetCursorPos;
+            use winapi::shared::windef::POINT;
+            
+            unsafe {
+                let mut point = POINT { x: 0, y: 0 };
+                if GetCursorPos(&mut point) != 0 {
+                    return Ok((point.x as f64, point.y as f64));
+                } else {
+                    return Err("无法获取鼠标位置".to_string());
+                }
+            }
+        }
+        
+        #[cfg(target_os = "macos")]
+        {
+            // macOS: 使用 NSEvent 获取鼠标位置
+            // 注意：这里需要链接 Cocoa 框架，简化实现返回屏幕中心
+            return Ok((400.0, 300.0));
+        }
+        
+        #[cfg(target_os = "linux")]
+        {
+            // Linux: 简化实现，可以尝试读取 X11 或使用 xdotool
+            // 实际实现需要链接 X11 库
+            return Ok((400.0, 300.0));
+        }
+        
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+        {
+            return Ok((400.0, 300.0));
+        }
     }
 
     async fn create_clipboard_window(&self, app: &tauri::AppHandle) -> Result<bool, String> {
@@ -69,18 +181,22 @@ impl WindowManager {
         .inner_size(width, height)
         .decorations(false)
         .transparent(false)
-        .center()
         .resizable(true)
         .skip_taskbar(true)
         .always_on_top(true)
         .build()
         .map_err(|e| e.to_string())?;
 
+        // 根据设置定位窗口
+        self.position_window(&window).await?;
+
         let app_handle = app.clone();
+        let settings_clone = self.settings.clone();
 
         window.on_window_event(move |event| {
             if let tauri::WindowEvent::Focused(false) = event {
                 let app = app_handle.clone();
+                let settings = settings_clone.clone();
 
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -88,6 +204,9 @@ impl WindowManager {
                     if let Some(win) = app.get_webview_window("clipboard") {
                         if let Ok(is_focused) = win.is_focused() {
                             if !is_focused {
+                                // 隐藏前保存位置
+                                let manager = WindowManager::new(settings);
+                                let _ = manager.save_window_position(&win).await;
                                 let _ = win.hide();
                                 let _ = app.emit("clipboard-window-blur", ());
                             }

@@ -276,6 +276,7 @@
               <div class="setting-title">唤醒快捷键</div>
               <div class="setting-desc">按下此快捷键可快速打开或关闭剪贴板窗口</div>
               <div class="setting-note">点击下方按钮开始录制，然后按下想要的快捷键组合</div>
+              <div class="setting-warning">修改快捷键后需要重启应用才能生效</div>
               <div v-if="shortcutError" class="error-message">{{ shortcutError }}</div>
             </div>
             <div class="setting-control">
@@ -398,17 +399,15 @@
 
       <!-- 底部操作栏 -->
       <div v-if="activeMenu !== 'about'" class="settings-footer">
-        <button class="btn-secondary" @click="resetSettings">恢复默认</button>
-        <button class="btn-primary" @click="saveAllSettings" :disabled="!hasChanges">
-          {{ hasChanges ? '保存更改' : '已保存' }}
-        </button>
+        <button class="btn-secondary" @click="resetSettings">恢复默认设置</button>
+        <span class="save-hint">设置会自动保存</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, onUnmounted } from 'vue';
+import { ref, onMounted, reactive, onUnmounted, watch } from 'vue';
 import { useSettings } from '@/composables/useSettings';
 import { useWindow } from '@/composables/useWindow';
 import { useClipboard } from '@/composables/useClipboard';
@@ -450,7 +449,6 @@ const form = reactive<AppSettings>({
   auto_start: false,
 });
 
-const originalSettings = ref<AppSettings | null>(null);
 const shortcutError = ref('');
 const isRecordingHotkey = ref(false);
 const storagePaths = ref<Record<string, string>>({
@@ -458,6 +456,7 @@ const storagePaths = ref<Record<string, string>>({
   log_dir: '',
 });
 let unlistenShortcutError: UnlistenFn | null = null;
+let isInitializing = true;
 
 // 录制快捷键
 const toggleHotkeyRecording = () => {
@@ -510,7 +509,6 @@ const handleHotkeyRecord = (e: KeyboardEvent) => {
 onMounted(async () => {
   await loadSettings();
   syncFromSettings();
-  originalSettings.value = { ...settings.value };
 
   // 加载存储路径
   try {
@@ -524,6 +522,9 @@ onMounted(async () => {
   unlistenShortcutError = await listen<string>('shortcut-registration-failed', (event) => {
     shortcutError.value = `快捷键 "${event.payload}" 已被其他程序占用，请使用备用快捷键 Ctrl+Shift+V，或修改快捷键后重启应用`;
   });
+
+  // 初始化完成后，开始监听变化
+  isInitializing = false;
 });
 
 onUnmounted(() => {
@@ -540,42 +541,22 @@ const syncFromSettings = () => {
   Object.assign(form, settings.value);
 };
 
-const currentSettings = computed((): AppSettings => ({
-  ...form,
-}));
-
-const hasChanges = computed(() => {
-  if (!originalSettings.value) return false;
-  const current = currentSettings.value;
-  const original = originalSettings.value;
+// 自动保存：监听 form 变化，变化时自动保存
+watch(form, async (newValue) => {
+  if (isInitializing) return;
   
-  return (
-    current.max_history_count !== original.max_history_count ||
-    current.auto_cleanup_days !== original.auto_cleanup_days ||
-    current.window_position !== original.window_position ||
-    current.smart_activate !== original.smart_activate ||
-    current.copy_sound !== original.copy_sound ||
-    current.search_position !== original.search_position ||
-    current.auto_focus_search !== original.auto_focus_search ||
-    current.auto_paste !== original.auto_paste ||
-    current.image_ocr !== original.image_ocr ||
-    current.copy_as_plain_text !== original.copy_as_plain_text ||
-    current.paste_as_plain_text !== original.paste_as_plain_text ||
-    current.confirm_delete !== original.confirm_delete ||
-    current.auto_sort !== original.auto_sort ||
-    current.hotkey !== original.hotkey ||
-    current.left_click_action !== original.left_click_action ||
-    current.auto_start !== original.auto_start
-  );
-});
+  try {
+    await saveSettings({ ...newValue });
+  } catch (error) {
+    console.error('自动保存设置失败:', error);
+  }
+}, { deep: true });
 
-const saveAllSettings = async () => {
-  await saveSettings(currentSettings.value);
-  originalSettings.value = { ...currentSettings.value };
-};
-
-const resetSettings = () => {
+const resetSettings = async () => {
   if (confirm('确定要恢复默认设置吗？')) {
+    // 先标记为初始化中，避免重复保存
+    isInitializing = true;
+    
     form.max_history_count = 5000;
     form.auto_cleanup_days = 30;
     form.window_position = 'remember';
@@ -590,6 +571,16 @@ const resetSettings = () => {
     form.confirm_delete = true;
     form.auto_sort = false;
     form.auto_start = false;
+    
+    // 立即保存
+    try {
+      await saveSettings({ ...form });
+    } catch (error) {
+      console.error('保存默认设置失败:', error);
+    }
+    
+    // 恢复监听
+    isInitializing = false;
   }
 };
 
@@ -893,6 +884,12 @@ const validateHotkey = async () => {
   margin-top: 4px;
 }
 
+.setting-warning {
+  font-size: 11px;
+  color: #ff4d4f;
+  margin-top: 4px;
+}
+
 .error-message {
   font-size: 11px;
   color: #ff4d4f;
@@ -1122,11 +1119,17 @@ input:checked + .slider:before {
 /* 底部操作栏 */
 .settings-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   padding: 16px 32px;
   background: #fff;
   border-top: 1px solid #e8e8e8;
+}
+
+.save-hint {
+  font-size: 12px;
+  color: #8c8c8c;
 }
 
 .btn-secondary {

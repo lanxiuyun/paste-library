@@ -1,5 +1,23 @@
 <template>
   <div class="clipboard-list">
+    <!-- 搜索栏 - 顶部位置 -->
+    <div v-if="settings.search_position === 'top'" class="search-bar search-bar-top">
+      <div class="search-input-wrapper">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input
+          ref="searchInputRef"
+          v-model="searchQuery"
+          type="text"
+          placeholder="搜索剪贴板..."
+          @input="handleSearch"
+        />
+        <kbd class="shortcut-key">Ctrl+F</kbd>
+      </div>
+    </div>
+
     <!-- 标签栏 -->
     <div class="list-header">
       <div class="tabs">
@@ -61,8 +79,8 @@
       <div v-if="loading" class="loading-more">加载中...</div>
     </div>
 
-    <!-- 底部搜索栏 -->
-    <div class="search-bar">
+    <!-- 搜索栏 - 底部位置（默认） -->
+    <div v-if="settings.search_position !== 'top'" class="search-bar search-bar-bottom">
       <div class="search-input-wrapper">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/>
@@ -101,6 +119,28 @@
       @paste="handleDrawerPaste"
       @saveAsNew="handleSaveAsNew"
     />
+
+    <!-- 删除确认对话框 -->
+    <div v-if="deleteConfirmVisible" class="confirm-dialog-overlay" @click="cancelDelete">
+      <div class="confirm-dialog" @click.stop>
+        <div class="confirm-dialog-header">
+          <svg class="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <h3>确认删除</h3>
+        </div>
+        <div class="confirm-dialog-content">
+          <p>确定要删除这条剪贴板记录吗？</p>
+          <p class="confirm-dialog-subtitle">此操作不可撤销</p>
+        </div>
+        <div class="confirm-dialog-actions">
+          <button class="confirm-btn cancel" @click="cancelDelete">取消</button>
+          <button class="confirm-btn confirm" @click="confirmDelete">删除</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -158,6 +198,10 @@ const contextMenuItem = ref<ClipboardItemType | null>(null);
 const selectedIndex = ref(-1);
 const listContainerRef = ref<HTMLElement | null>(null);
 
+// 删除确认对话框状态
+const deleteConfirmVisible = ref(false);
+const itemToDelete = ref<ClipboardItemType | null>(null);
+
 // 智能激活逻辑
 const handleSmartActivate = () => {
   // 检查智能激活是否开启
@@ -205,21 +249,36 @@ const handleSearch = async () => {
 };
 
 const handleItemClick = async (item: ClipboardItemType) => {
-  // 单击：根据设置执行复制或粘贴
-  const action = settings.value.left_click_action;
-  if (action === 'paste') {
-    await restoreToClipboard(item);
-    // TODO: 模拟粘贴操作
+  // 单击：根据 auto_paste 设置执行复制或粘贴
+  const autoPaste = settings.value.auto_paste;
+  const copyAsPlainText = settings.value.copy_as_plain_text;
+  
+  if (autoPaste === 'single') {
+    // 单击复制并粘贴
+    await restoreToClipboard(item, { copyAsPlainText });
+    // 模拟粘贴操作
+    await simulatePaste();
+  } else if (autoPaste === 'off') {
+    // 只复制，不粘贴
+    await restoreToClipboard(item, { copyAsPlainText });
   } else {
-    // 默认复制
-    await restoreToClipboard(item);
+    // double 或其他：只复制，粘贴由双击处理
+    await restoreToClipboard(item, { copyAsPlainText });
   }
 };
 
 const handleItemDoubleClick = async (item: ClipboardItemType) => {
-  // 双击：复制并粘贴
-  await restoreToClipboard(item);
-  // TODO: 实现模拟粘贴功能
+  // 双击：根据 auto_paste 设置执行粘贴
+  const autoPaste = settings.value.auto_paste;
+  const copyAsPlainText = settings.value.copy_as_plain_text;
+  
+  // 先复制到剪贴板
+  await restoreToClipboard(item, { copyAsPlainText });
+  
+  // 如果设置为双击粘贴，则模拟粘贴
+  if (autoPaste === 'double') {
+    await simulatePaste();
+  }
 };
 
 const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType) => {
@@ -236,10 +295,10 @@ const handleQuickAction = async (action: string, item: ClipboardItemType) => {
       drawerVisible.value = true;
       break;
     case 'copy':
-      await restoreToClipboard(item);
+      await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       break;
     case 'delete':
-      await deleteItem(item.id);
+      await handleDelete(item);
       break;
     case 'tag':
       // 打开标签管理弹窗
@@ -250,6 +309,33 @@ const handleQuickAction = async (action: string, item: ClipboardItemType) => {
       addToQueue(item);
       break;
   }
+};
+
+// 处理删除操作（带确认对话框）
+const handleDelete = async (item: ClipboardItemType) => {
+  if (settings.value.confirm_delete) {
+    // 显示确认对话框
+    itemToDelete.value = item;
+    deleteConfirmVisible.value = true;
+  } else {
+    // 直接删除
+    await deleteItem(item.id);
+  }
+};
+
+// 确认删除
+const confirmDelete = async () => {
+  if (itemToDelete.value) {
+    await deleteItem(itemToDelete.value.id);
+    itemToDelete.value = null;
+  }
+  deleteConfirmVisible.value = false;
+};
+
+// 取消删除
+const cancelDelete = () => {
+  itemToDelete.value = null;
+  deleteConfirmVisible.value = false;
 };
 
 const showTagManager = (item: ClipboardItemType) => {
@@ -271,13 +357,30 @@ const handleQueuePaste = async (content: string) => {
 
 // Drawer handlers
 const handleDrawerCopy = async (item: ClipboardItemType) => {
-  await restoreToClipboard(item);
+  await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
 };
 
 const handleDrawerPaste = async (item: ClipboardItemType) => {
-  await restoreToClipboard(item);
+  await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
   // TODO: 模拟粘贴操作
   console.log('Drawer paste:', item.content.substring(0, 100) + '...');
+};
+
+// 模拟粘贴操作
+const simulatePaste = async (): Promise<void> => {
+  try {
+    // 隐藏窗口，让用户看到粘贴效果
+    await invoke('hide_clipboard_window');
+    
+    // 等待窗口完全隐藏
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // 调用后端模拟粘贴命令（如果已实现）
+    await invoke('simulate_paste');
+  } catch (error) {
+    // 如果后端命令不存在，静默失败
+    console.log('Paste simulation not available yet');
+  }
 };
 
 const handleSaveAsNew = async (content: string, type: string) => {
@@ -296,10 +399,10 @@ const handleSaveAsNew = async (content: string, type: string) => {
 const handleContextMenuAction = async (action: string, item: ClipboardItemType) => {
   switch (action) {
     case 'copy':
-      await restoreToClipboard(item);
+      await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       break;
     case 'paste':
-      await restoreToClipboard(item);
+      await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       // TODO: 实现模拟粘贴功能
       break;
     case 'queue':
@@ -317,7 +420,7 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
       handleToggleFavorite(item.id, !item.tags?.includes('收藏'));
       break;
     case 'delete':
-      await deleteItem(item.id);
+      await handleDelete(item);
       break;
     case 'openFile':
       // 打开文件
@@ -379,7 +482,7 @@ const handleScroll = async (event: Event) => {
 };
 
 // 键盘导航处理
-const handleKeyDown = (e: KeyboardEvent) => {
+const handleKeyDown = async (e: KeyboardEvent) => {
   // Ctrl+F 聚焦搜索框
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
     e.preventDefault();
@@ -411,8 +514,9 @@ const handleKeyDown = (e: KeyboardEvent) => {
     e.preventDefault();
     const item = filteredHistory.value[selectedIndex.value];
     if (item) {
-      restoreToClipboard(item);
-      // TODO: 模拟粘贴
+      await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+      // 模拟粘贴
+      await simulatePaste();
     }
     return;
   }
@@ -424,8 +528,9 @@ const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       const item = filteredHistory.value[index];
       if (item) {
-        restoreToClipboard(item);
-        // TODO: 模拟粘贴
+        await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+        // 模拟粘贴
+        await simulatePaste();
       }
     }
     return;
@@ -584,13 +689,20 @@ watch(filteredHistory, () => {
   font-size: 12px;
 }
 
-/* 底部搜索栏 */
+/* 搜索栏 */
 .search-bar {
   padding: 10px 12px;
-  border-top: 1px solid #f0f0f0;
   background: #fff;
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+.search-bar-top {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.search-bar-bottom {
+  border-top: 1px solid #f0f0f0;
 }
 
 .search-input-wrapper {
@@ -657,5 +769,105 @@ watch(filteredHistory, () => {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #a0a0a0;
+}
+
+/* 确认对话框 */
+.confirm-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.confirm-dialog {
+  background: #fff;
+  border-radius: 12px;
+  width: 360px;
+  max-width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.confirm-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 12px;
+}
+
+.warning-icon {
+  width: 32px;
+  height: 32px;
+  color: #faad14;
+  flex-shrink: 0;
+}
+
+.confirm-dialog-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.confirm-dialog-content {
+  padding: 0 20px 20px;
+  padding-left: 64px;
+}
+
+.confirm-dialog-content p {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: #595959;
+  line-height: 1.5;
+}
+
+.confirm-dialog-subtitle {
+  font-size: 12px !important;
+  color: #8c8c8c !important;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 20px;
+  padding-left: 64px;
+}
+
+.confirm-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.confirm-btn.cancel {
+  background: #f5f5f5;
+  color: #595959;
+}
+
+.confirm-btn.cancel:hover {
+  background: #e8e8e8;
+  color: #262626;
+}
+
+.confirm-btn.confirm {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.confirm-btn.confirm:hover {
+  background: #ff7875;
 }
 </style>
