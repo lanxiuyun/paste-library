@@ -370,7 +370,7 @@ const imageSrc = computed(() => {
 - Copy/delete clipboard items
 - Data persistence with comprehensive settings
 - **Variable height Item design** (text 3 lines, adaptive image height)
-- **Tag system** replaces favorite (data model + UI)
+- **Tag system** replaces favorite (data model ✅, UI display ✅, tag manager popup ⏳)
 - **Hover quick action buttons** (detail/queue/copy/tag/delete)
 - **Keyboard navigation** (↑/↓, Enter, 1-9, Esc)
 - **Paste queue** (shopping cart mode, batch paste)
@@ -386,6 +386,7 @@ const imageSrc = computed(() => {
 - Advanced search filters (by date range)
 - Multi-language support
 - ItemList virtual scrolling
+- **Tag manager popup** - Add/remove tags UI (currently `showTagManager` is empty)
 
 ---
 
