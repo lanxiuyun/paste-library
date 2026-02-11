@@ -99,13 +99,14 @@ impl Database {
             ("copy_sound", "false"),
             ("search_position", "bottom"),
             ("auto_focus_search", "true"),
-            ("auto_paste", "double"),
+            ("click_action", "copy"),
+            ("double_click_action", "paste"),
+            ("paste_shortcut", "ctrl_v"),
             ("image_ocr", "false"),
             ("copy_as_plain_text", "false"),
             ("paste_as_plain_text", "true"),
             ("confirm_delete", "true"),
             ("auto_sort", "false"),
-            ("left_click_action", "copy"),
             ("hotkey", "Alt+V"),
             ("auto_start", "false"),
             ("app_initialized", "false"),
@@ -466,7 +467,9 @@ impl Database {
                         settings.auto_focus_search = v;
                     }
                 }
-                "auto_paste" => settings.auto_paste = value,
+                "click_action" => settings.click_action = value,
+                "double_click_action" => settings.double_click_action = value,
+                "paste_shortcut" => settings.paste_shortcut = value,
                 "image_ocr" => {
                     if let Ok(v) = value.parse() {
                         settings.image_ocr = v;
@@ -492,7 +495,6 @@ impl Database {
                         settings.auto_sort = v;
                     }
                 }
-                "left_click_action" => settings.left_click_action = value,
                 "hotkey" => settings.hotkey = value,
                 "auto_start" => {
                     if let Ok(v) = value.parse() {
@@ -528,7 +530,9 @@ impl Database {
             ("copy_sound", settings.copy_sound.to_string()),
             ("search_position", settings.search_position.clone()),
             ("auto_focus_search", settings.auto_focus_search.to_string()),
-            ("auto_paste", settings.auto_paste.clone()),
+            ("click_action", settings.click_action.clone()),
+            ("double_click_action", settings.double_click_action.clone()),
+            ("paste_shortcut", settings.paste_shortcut.clone()),
             ("image_ocr", settings.image_ocr.to_string()),
             (
                 "copy_as_plain_text",
@@ -540,7 +544,6 @@ impl Database {
             ),
             ("confirm_delete", settings.confirm_delete.to_string()),
             ("auto_sort", settings.auto_sort.to_string()),
-            ("left_click_action", settings.left_click_action.clone()),
             ("hotkey", settings.hotkey.clone()),
             ("auto_start", settings.auto_start.to_string()),
         ];

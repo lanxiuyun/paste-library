@@ -45,11 +45,12 @@
 
 **2026-02-07 需求变更**: 移除7项不需要的功能，新增智能激活功能
 
-**实现进度:** 73% (11/15项已完整实现)
+**实现进度:** 87% (13/15项已完整实现)
 
 **🔴 P0 - 核心体验设置（4项）**
 - [x] **smart_activate** - 智能激活 ⭐ **已实现**
-- [x] **auto_paste** - 自动粘贴行为（单击/双击）⭐ **已实现**
+- [x] **click_action** - 单击动作（复制/粘贴）⭐ **已实现**
+- [x] **double_click_action** - 双击动作（复制/粘贴）⭐ **已实现**
 - [x] **window_position** - 窗口位置（记住/居中/跟随光标）⭐ **已实现**
 - [x] **search_position** - 搜索框位置（顶部/底部）⭐ **已实现**
 
@@ -123,12 +124,12 @@
 | 用户界面 | 100% ✅ |
 | 高级功能 | 100% ✅ |
 | Item 重构与体验优化 | 100% ✅ |
-| 设置功能实现 | 73% ⏳ |
+| 设置功能实现 | 87% ⏳ |
 | Bug修复与稳定性 | 100% ✅ |
 | 测试与优化 | 0% 📋 |
 | 构建与发布 | 0% 📋 |
 
-**总体进度**: ~94%
+**总体进度**: ~96%
 
 ---
 
@@ -229,8 +230,9 @@
 
 **P0 - 核心体验设置（全部完成）**
 - [x] **smart_activate** - 智能激活 ⭐ **已实现** (2026-02-07)
-- [x] **auto_paste** - 自动粘贴行为（单击/双击/关闭）⭐ **已实现**
-- [x] **window_position** - 窗口位置（记住/居中/跟随光标）⭐ **已实现**
+- [x] **click_action** - 单击动作（复制/粘贴）⭐ **已实现** (2026-02-11)
+- [x] **double_click_action** - 双击动作（复制/粘贴）⭐ **已实现** (2026-02-11)
+- [x] **window_position** - 窗口位置（remember/center/cursor）⭐ **已实现**
 - [x] **search_position** - 搜索框位置（top/bottom）⭐ **已实现**
 
 **P1 - 增强体验设置**
@@ -244,17 +246,20 @@
 - [ ] **paste_as_plain_text** - 粘贴为纯文本（需要模拟粘贴支持）
 - [ ] **image_ocr** - 图片OCR识别（需要OCR库）
 
-**已实现设置（7项）**
+**已实现设置（9项）**
 - [x] **hotkey** - 唤醒快捷键（Alt+V）
 - [x] **max_history_count** - 最大历史记录数（后端自动限制）
 - [x] **auto_cleanup_days** - 自动清理天数（后端自动清理）
-- [x] **auto_paste** - 自动粘贴行为
+- [x] **click_action** - 单击动作（复制/粘贴）
+- [x] **double_click_action** - 双击动作（复制/粘贴）
+- [x] **paste_shortcut** - 粘贴快捷键（Ctrl+V / Shift+Insert）
 - [x] **window_position** - 窗口位置
 - [x] **search_position** - 搜索框位置
 - [x] **smart_activate** - 智能激活
 
-**❌ 已移除设置（7项）**
+**❌ 已移除设置（8项）**
 - ~~auto_favorite~~ - 自动收藏（不需要）
+- ~~auto_paste~~ - 自动粘贴（被 click_action + double_click_action 替代）
 - ~~操作按钮~~ - 操作按钮自定义（不需要）
 - ~~clear_search_on_activate~~ - 激活时清除搜索（不需要）
 - ~~scroll_to_top_on_activate~~ - 激活时回到顶部（合并到智能激活）
@@ -303,6 +308,7 @@
   - ✅ window_position - 窗口位置（remember/center/cursor）
   - ✅ auto_sort - 自动排序（重复内容置顶，后端逻辑）
   - ✅ auto_start - 开机自启（tauri-plugin-autostart）
+  - ✅ paste_shortcut - 粘贴快捷键模式（Ctrl+V / Shift+Insert）
   - ⏳ copy_sound - 复制音效（待实现，需音效文件）
   - ⏳ paste_as_plain_text - 粘贴为纯文本（待实现）
   - ⏳ image_ocr - 图片OCR识别（待实现，需OCR库）
@@ -318,3 +324,23 @@
     - 添加 `app_initialized` 数据库字段检测是否首次运行
     - 首次运行时自动显示设置窗口
     - 后续启动只显示托盘图标，静默运行在后台
+- 2026-02-11: **交互功能重构**
+  - ✅ 重新定义「复制」和「粘贴」动作
+    - **复制**: 仅将数据写入系统剪贴板
+    - **粘贴**: 复制数据 → 隐藏剪贴板窗口 → 模拟发送 Ctrl+V 到原焦点窗口
+  - ✅ 替换「自动粘贴」设置
+    - 移除 `auto_paste` 设置（off/single/double）
+    - 新增 `click_action` 设置：单击动作（复制/粘贴）
+    - 新增 `double_click_action` 设置：双击动作（复制/粘贴）
+  - ✅ 实现 Windows 原生粘贴模拟
+    - 使用 `winapi` 的 `keybd_event` 发送扫描码
+    - 绕过输入法拦截，正确触发 Ctrl+V 组合键
+- 2026-02-11: **粘贴快捷键模式**
+  - ✅ 添加 `paste_shortcut` 设置项
+    - 用户可选择 Ctrl+V（默认）或 Shift+Insert
+    - 终端/命令行用户推荐使用 Shift+Insert
+  - ✅ 后端支持两种快捷键模式
+    - Windows: 使用扫描码发送 Ctrl+V 或 Shift+Insert
+      - Insert 是扩展键，使用 KEYEVENTF_EXTENDEDKEY 标志
+    - Linux: 使用 enigo 库模拟对应快捷键
+    - macOS: 始终使用 Command+V

@@ -22,13 +22,14 @@ const settings = ref<AppSettings>({
   auto_focus_search: true,
 
   // 内容设置
-  auto_paste: 'double',
+  click_action: 'copy',
+  double_click_action: 'paste',
+  paste_shortcut: 'ctrl_v',
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,
   confirm_delete: true,
   auto_sort: false,
-  left_click_action: 'copy',
 
   // 通用设置
   hotkey: 'Alt+V',

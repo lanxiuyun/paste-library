@@ -249,34 +249,29 @@ const handleSearch = async () => {
 };
 
 const handleItemClick = async (item: ClipboardItemType) => {
-  // 单击：根据 auto_paste 设置执行复制或粘贴
-  const autoPaste = settings.value.auto_paste;
+  // 单击：根据 click_action 设置执行复制或粘贴
+  const clickAction = settings.value.click_action;
   const copyAsPlainText = settings.value.copy_as_plain_text;
-  
-  if (autoPaste === 'single') {
-    // 单击复制并粘贴
-    await restoreToClipboard(item, { copyAsPlainText });
-    // 模拟粘贴操作
+
+  // 先复制到剪贴板
+  await restoreToClipboard(item, { copyAsPlainText });
+
+  // 如果设置为粘贴，则执行粘贴动作
+  if (clickAction === 'paste') {
     await simulatePaste();
-  } else if (autoPaste === 'off') {
-    // 只复制，不粘贴
-    await restoreToClipboard(item, { copyAsPlainText });
-  } else {
-    // double 或其他：只复制，粘贴由双击处理
-    await restoreToClipboard(item, { copyAsPlainText });
   }
 };
 
 const handleItemDoubleClick = async (item: ClipboardItemType) => {
-  // 双击：根据 auto_paste 设置执行粘贴
-  const autoPaste = settings.value.auto_paste;
+  // 双击：根据 double_click_action 设置执行复制或粘贴
+  const doubleClickAction = settings.value.double_click_action;
   const copyAsPlainText = settings.value.copy_as_plain_text;
-  
+
   // 先复制到剪贴板
   await restoreToClipboard(item, { copyAsPlainText });
-  
-  // 如果设置为双击粘贴，则模拟粘贴
-  if (autoPaste === 'double') {
+
+  // 如果设置为粘贴，则执行粘贴动作
+  if (doubleClickAction === 'paste') {
     await simulatePaste();
   }
 };
@@ -375,8 +370,8 @@ const simulatePaste = async (): Promise<void> => {
     // 等待窗口完全隐藏
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // 调用后端模拟粘贴命令（如果已实现）
-    await invoke('simulate_paste');
+    // 调用后端模拟粘贴命令，传入用户设置的快捷键模式
+    await invoke('simulate_paste', { pasteShortcut: settings.value.paste_shortcut });
   } catch (error) {
     // 如果后端命令不存在，静默失败
     console.log('Paste simulation not available yet');

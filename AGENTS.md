@@ -380,6 +380,11 @@ const imageSrc = computed(() => {
   - First-run detection (show settings window on first launch only)
   - Window close-to-tray (hide instead of exit on close button)
   - Graceful autostart error handling (Windows registry errors)
+- **Click Actions**:
+  - **Copy**: Copy data to clipboard only
+  - **Paste**: Copy data → hide window → simulate paste shortcut at previous focus
+  - Configurable single/double click actions in settings
+  - **Paste Shortcut Mode**: User-selectable paste shortcut (Ctrl+V or Shift+Insert)
 
 ### In Progress ⏳
 - ItemList virtual scrolling (performance optimization)

@@ -117,18 +117,43 @@
         </div>
 
         <h2 class="section-title">内容设置</h2>
-        
+
         <div class="setting-group">
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-title">自动粘贴</div>
-              <div class="setting-desc">鼠标左键操作时，快速粘贴内容至输入位置</div>
+              <div class="setting-title">单击动作</div>
+              <div class="setting-desc">鼠标单击剪贴板项目时执行的动作</div>
             </div>
             <div class="setting-control">
-              <select v-model="form.auto_paste" class="select-input">
-                <option value="off">关闭</option>
-                <option value="single">单击</option>
-                <option value="double">双击</option>
+              <select v-model="form.click_action" class="select-input">
+                <option value="copy">复制</option>
+                <option value="paste">粘贴</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">双击动作</div>
+              <div class="setting-desc">鼠标双击剪贴板项目时执行的动作</div>
+            </div>
+            <div class="setting-control">
+              <select v-model="form.double_click_action" class="select-input">
+                <option value="copy">复制</option>
+                <option value="paste">粘贴</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">粘贴快捷键</div>
+              <div class="setting-desc">执行粘贴动作时使用的快捷键（终端推荐使用 Shift+Insert）</div>
+            </div>
+            <div class="setting-control">
+              <select v-model="form.paste_shortcut" class="select-input">
+                <option value="ctrl_v">Ctrl+V</option>
+                <option value="shift_insert">Shift+Insert</option>
               </select>
             </div>
           </div>
@@ -443,13 +468,14 @@ const form = reactive<AppSettings>({
   copy_sound: false,
   search_position: 'bottom',
   auto_focus_search: true,
-  auto_paste: 'double',
+  click_action: 'copy',
+  double_click_action: 'paste',
+  paste_shortcut: 'ctrl_v',
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,
   confirm_delete: true,
   auto_sort: false,
-  left_click_action: 'copy',
   hotkey: 'Alt+V',
   auto_start: false,
 });
@@ -569,7 +595,9 @@ const resetSettings = async () => {
     form.copy_sound = false;
     form.search_position = 'top';
     form.auto_focus_search = true;
-    form.auto_paste = 'double';
+    form.click_action = 'copy';
+    form.double_click_action = 'paste';
+    form.paste_shortcut = 'ctrl_v';
     form.image_ocr = false;
     form.copy_as_plain_text = false;
     form.paste_as_plain_text = true;

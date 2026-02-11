@@ -132,8 +132,12 @@ pub struct AppSettings {
     pub auto_focus_search: bool,
 
     // 内容设置
-    /// 自动粘贴模式 (off/single/double)
-    pub auto_paste: String,
+    /// 单击动作 (copy/paste)
+    pub click_action: String,
+    /// 双击动作 (copy/paste)
+    pub double_click_action: String,
+    /// 粘贴快捷键 (ctrl_v/shift_insert)
+    pub paste_shortcut: String,
     /// 图片OCR
     pub image_ocr: bool,
     /// 复制为纯文本
@@ -144,8 +148,6 @@ pub struct AppSettings {
     pub confirm_delete: bool,
     /// 自动排序 (复制已存在内容时置顶)
     pub auto_sort: bool,
-    /// 左键点击行为 (copy/paste)
-    pub left_click_action: String,
 
     // 通用设置
     /// 唤醒快捷键 (默认 "Alt+V")
@@ -175,13 +177,14 @@ impl Default for AppSettings {
             auto_focus_search: true,
 
             // 内容
-            auto_paste: "double".to_string(),
+            click_action: "copy".to_string(),
+            double_click_action: "paste".to_string(),
+            paste_shortcut: "ctrl_v".to_string(),
             image_ocr: false,
             copy_as_plain_text: false,
             paste_as_plain_text: true,
             confirm_delete: true,
             auto_sort: false,
-            left_click_action: "copy".to_string(),
 
             // 通用
             hotkey: "Alt+V".to_string(),

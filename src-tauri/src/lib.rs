@@ -317,28 +317,93 @@ fn get_storage_paths(app: tauri::AppHandle) -> Result<std::collections::HashMap<
 }
 
 #[tauri::command]
-fn simulate_paste() -> Result<(), String> {
-    // 模拟粘贴操作（Ctrl+V 或 Cmd+V）
-    // 注意：这里使用简单的命令行方式或系统API
-    // 更复杂的实现可能需要 enigo 等库
-    
+fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
+    // 模拟粘贴操作（根据设置使用 Ctrl+V 或 Shift+Insert）
+    use std::thread;
+    use std::time::Duration;
+
+    // 等待窗口隐藏并焦点回到原窗口
+    thread::sleep(Duration::from_millis(200));
+
+    let use_shift_insert = paste_shortcut == "shift_insert";
+
     #[cfg(target_os = "windows")]
     {
-        // Windows: 使用 PowerShell 发送按键（简化实现）
-        // 实际项目中应该使用 enigo 或类似库
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        use winapi::um::winuser::{keybd_event, VK_SHIFT, VK_INSERT, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, KEYEVENTF_EXTENDEDKEY};
+
+        unsafe {
+            if use_shift_insert {
+                // 使用 Shift+Insert
+                // Insert 是扩展键，需要 KEYEVENTF_EXTENDEDKEY 标志
+                const SCANCODE_SHIFT: u8 = 0x2A;
+
+                // 按下 Shift（使用虚拟键码 + 扫描码）
+                keybd_event(VK_SHIFT as u8, SCANCODE_SHIFT, KEYEVENTF_SCANCODE, 0);
+                thread::sleep(Duration::from_millis(20));
+
+                // 按下 Insert（使用扩展键标志）
+                keybd_event(VK_INSERT as u8, 0, KEYEVENTF_EXTENDEDKEY, 0);
+                thread::sleep(Duration::from_millis(50));
+
+                // 释放 Insert
+                keybd_event(VK_INSERT as u8, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+                thread::sleep(Duration::from_millis(20));
+
+                // 释放 Shift
+                keybd_event(VK_SHIFT as u8, SCANCODE_SHIFT, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
+            } else {
+                // 使用 Ctrl+V
+                // V 键的扫描码是 0x2F, Ctrl 扫描码: 0x1D
+                const SCANCODE_V: u8 = 0x2F;
+                const SCANCODE_CTRL: u8 = 0x1D;
+                const VK_CONTROL: u8 = 0xA3; // 右 Ctrl
+
+                // 按下 Ctrl
+                keybd_event(VK_CONTROL as u8, SCANCODE_CTRL, KEYEVENTF_SCANCODE, 0);
+                thread::sleep(Duration::from_millis(20));
+
+                // 按下 V
+                keybd_event(0x41 + 21, SCANCODE_V, KEYEVENTF_SCANCODE, 0); // 'V' = 0x56
+                thread::sleep(Duration::from_millis(50));
+
+                // 释放 V
+                keybd_event(0x41 + 21, SCANCODE_V, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
+                thread::sleep(Duration::from_millis(20));
+
+                // 释放 Ctrl
+                keybd_event(VK_CONTROL as u8, SCANCODE_CTRL, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
+            }
+        }
     }
+
     #[cfg(target_os = "macos")]
     {
-        // macOS: 使用 osascript 发送按键（简化实现）
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        // macOS 始终使用 Command+V
+        use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+        enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;
+        enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
+        enigo.key(Key::Meta, Direction::Release).map_err(|e| e.to_string())?;
     }
+
     #[cfg(target_os = "linux")]
     {
-        // Linux: 使用 xdotool 发送按键（简化实现）
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+        
+        if use_shift_insert {
+            // 使用 Shift+Insert
+            enigo.key(Key::Shift, Direction::Press).map_err(|e| e.to_string())?;
+            enigo.key(Key::Insert, Direction::Click).map_err(|e| e.to_string())?;
+            enigo.key(Key::Shift, Direction::Release).map_err(|e| e.to_string())?;
+        } else {
+            // 使用 Ctrl+V
+            enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
+            enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
+            enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
+        }
     }
-    
+
     Ok(())
 }
 

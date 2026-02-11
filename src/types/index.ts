@@ -109,13 +109,14 @@ export interface AppSettings {
   auto_focus_search: boolean;
 
   // 内容设置
-  auto_paste: 'off' | 'single' | 'double';
+  click_action: 'copy' | 'paste';
+  double_click_action: 'copy' | 'paste';
+  paste_shortcut: 'ctrl_v' | 'shift_insert';
   image_ocr: boolean;
   copy_as_plain_text: boolean;
   paste_as_plain_text: boolean;
   confirm_delete: boolean;
   auto_sort: boolean;
-  left_click_action: 'copy' | 'paste';
 
   // 通用设置
   hotkey: string;
