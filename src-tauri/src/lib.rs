@@ -370,7 +370,12 @@ pub fn run() {
                 .unwrap_or_else(|_| AppSettings::default());
             let settings = Arc::new(Mutex::new(settings));
 
-            let app_state = Arc::new(Mutex::new(AppState::new(database, settings.clone())));
+            // 在移动 database 之前先检查是否是首次运行
+            let is_first_run = database
+                .is_first_run()
+                .unwrap_or(true);
+
+            let app_state = Arc::new(Mutex::new(AppState::new(database.clone(), settings.clone())));
             app.manage(app_state.clone());
 
             // 尝试注册主快捷键
@@ -408,14 +413,25 @@ pub fn run() {
                 }
             }
 
-            // 获取主窗口并设置失焦监听
+            // 获取主窗口并设置事件监听
             if let Some(main_window) = app.get_webview_window("main") {
                 let app_handle = app.handle().clone();
                 main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(false) = event {
-                        // 窗口失去焦点时隐藏
-                        let app_handle = app_handle.clone();
-                        let _ = app_handle.emit("window-blur", ());
+                    match event {
+                        tauri::WindowEvent::Focused(false) => {
+                            // 窗口失去焦点时隐藏
+                            let app_handle = app_handle.clone();
+                            let _ = app_handle.emit("window-blur", ());
+                        }
+                        tauri::WindowEvent::CloseRequested { api, .. } => {
+                            // 阻止默认关闭行为，改为隐藏窗口
+                            api.prevent_close();
+                            let app_handle = app_handle.clone();
+                            if let Some(win) = app_handle.get_webview_window("main") {
+                                let _ = win.hide();
+                            }
+                        }
+                        _ => {}
                     }
                 });
             }
@@ -428,9 +444,23 @@ pub fn run() {
             // 根据设置初始化开机自启状态
             let auto_start = settings.blocking_lock().auto_start;
             let app_handle = app.handle().clone();
+            let database_for_init = database.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = update_autostart(&app_handle, auto_start).await {
                     eprintln!("初始化开机自启状态失败: {}", e);
+                }
+
+                // 如果是首次运行，显示设置窗口并标记已初始化
+                if is_first_run {
+                    println!("首次运行，显示设置窗口");
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                    // 标记应用已初始化
+                    if let Err(e) = database_for_init.mark_app_initialized() {
+                        eprintln!("标记应用初始化状态失败: {}", e);
+                    }
                 }
             });
 

@@ -376,6 +376,10 @@ const imageSrc = computed(() => {
 - **Paste queue** (shopping cart mode, batch paste)
 - **Drawer editor** (text editing, image preview)
 - Local image loading via `convertFileSrc`
+- **Application Lifecycle**:
+  - First-run detection (show settings window on first launch only)
+  - Window close-to-tray (hide instead of exit on close button)
+  - Graceful autostart error handling (Windows registry errors)
 
 ### In Progress ⏳
 - ItemList virtual scrolling (performance optimization)

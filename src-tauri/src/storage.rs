@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -108,6 +108,7 @@ impl Database {
             ("left_click_action", "copy"),
             ("hotkey", "Alt+V"),
             ("auto_start", "false"),
+            ("app_initialized", "false"),
         ];
 
         for (key, value) in defaults {
@@ -117,6 +118,33 @@ impl Database {
             )?;
         }
 
+        Ok(())
+    }
+
+    /// 检查是否是首次运行
+    pub fn is_first_run(&self) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let result: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'app_initialized'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        match result {
+            Some(value) => Ok(value != "true"),
+            None => Ok(true),
+        }
+    }
+
+    /// 标记应用已初始化（非首次运行）
+    pub fn mark_app_initialized(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('app_initialized', 'true')",
+            [],
+        )?;
         Ok(())
     }
 
