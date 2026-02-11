@@ -158,7 +158,7 @@
                 </span>
                 <span class="stat-item">
                   <span class="stat-label">大小:</span>
-                  <span class="stat-value">{{ formatFileSize(item.metadata?.file_size || 0) }}</span>
+                  <span class="stat-value">{{ imageFileSize }}</span>
                 </span>
               </template>
             </div>
@@ -171,7 +171,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { ClipboardItem } from '@/types';
 
 interface Props {
@@ -190,6 +190,7 @@ const emit = defineEmits<{
 
 const editedContent = ref('');
 const isPreview = ref(false);
+const actualFileSize = ref<number>(0);
 
 const isTextContent = computed(() => {
   return props.item?.content_type === 'text' || props.item?.content_type === 'html' || props.item?.content_type === 'rtf';
@@ -248,21 +249,42 @@ const drawerImageSrc = computed(() => {
   return convertFileSrc(props.item.thumbnail_path);
 });
 
-// 图片文件大小（从 metadata 获取或显示未知）
+// 图片文件大小（通过API获取）
 const imageFileSize = computed(() => {
-  if (!props.item?.metadata) return '未知';
-  // 尝试从 metadata 获取文件大小（如果有的话）
-  const bytes = props.item.metadata.file_size || 0;
+  const bytes = actualFileSize.value;
   if (bytes === 0) return '未知';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 });
 
-watch(() => props.item, (newItem) => {
+// 异步获取文件大小（通过Rust后端）
+const loadFileSize = async (filePath: string | null | undefined) => {
+  if (!filePath) {
+    actualFileSize.value = 0;
+    return;
+  }
+  try {
+    const size = await invoke<number>('get_file_size', { path: filePath });
+    actualFileSize.value = size || 0;
+  } catch (error) {
+    console.error('Failed to get file size:', error);
+    actualFileSize.value = 0;
+  }
+};
+
+watch(() => props.item, async (newItem) => {
   if (newItem) {
     editedContent.value = newItem.content;
     isPreview.value = false;
+    // 异步获取文件大小（图片/文件类型）
+    if (newItem.content_type === 'image') {
+      await loadFileSize(newItem.thumbnail_path);
+    } else if (newItem.content_type === 'file' || newItem.content_type === 'folder') {
+      await loadFileSize(newItem.file_paths?.[0]);
+    } else {
+      actualFileSize.value = 0;
+    }
   }
 }, { immediate: true });
 

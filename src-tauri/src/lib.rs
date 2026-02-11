@@ -258,6 +258,13 @@ fn show_in_folder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_file_size(path: String) -> Result<u64, String> {
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| format!("无法获取文件信息: {}", e))?;
+    Ok(metadata.len())
+}
+
+#[tauri::command]
 fn update_tags(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     id: i64,
@@ -544,6 +551,7 @@ pub fn run() {
             hide_clipboard_window,
             open_file,
             show_in_folder,
+            get_file_size,
             update_tags,
             get_all_tags,
             validate_shortcut,
