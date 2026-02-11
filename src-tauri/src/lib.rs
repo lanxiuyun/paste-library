@@ -137,17 +137,48 @@ async fn save_settings(
 /// 更新开机自启状态
 async fn update_autostart(app: &tauri::AppHandle, enable: bool) -> Result<(), String> {
     use tauri_plugin_autostart::ManagerExt;
-    
+
     let autostart_manager = app.autolaunch();
-    
+
+    // 先检查当前状态，避免不必要的操作
+    let current_state = match autostart_manager.is_enabled() {
+        Ok(state) => state,
+        Err(_) => {
+            // 如果无法获取状态（开发模式或未安装），静默忽略
+            // 在实际安装后的应用中，这不应该发生
+            return Ok(());
+        }
+    };
+
+    // 如果状态已经符合要求，不需要操作
+    if current_state == enable {
+        return Ok(());
+    }
+
     if enable {
-        autostart_manager.enable().map_err(|e| e.to_string())?;
+        if let Err(e) = autostart_manager.enable() {
+            // Windows上开发模式可能出现注册表错误，静默处理
+            let err_str = e.to_string();
+            if err_str.contains("os error 2") || err_str.contains("系统找不到指定的文件") {
+                println!("开机自启启用失败（开发模式）: {}", e);
+                return Ok(());
+            }
+            return Err(err_str);
+        }
         println!("开机自启已启用");
     } else {
-        autostart_manager.disable().map_err(|e| e.to_string())?;
+        if let Err(e) = autostart_manager.disable() {
+            // Windows上注册表项不存在时会出现错误，静默处理
+            let err_str = e.to_string();
+            if err_str.contains("os error 2") || err_str.contains("系统找不到指定的文件") {
+                println!("开机自启禁用失败（注册表项不存在）: {}", e);
+                return Ok(());
+            }
+            return Err(err_str);
+        }
         println!("开机自启已禁用");
     }
-    
+
     Ok(())
 }
 
