@@ -17,8 +17,8 @@ const settings = ref<AppSettings>({
   // 音效设置
   copy_sound: false,
 
-  // 搜索设置
-  search_position: 'bottom',
+  // 搜索设置（默认顶部，设置项已隐藏）
+  search_position: 'top',
   auto_focus_search: true,
 
   // 内容设置

@@ -170,8 +170,8 @@ impl Default for AppSettings {
             // 音效
             copy_sound: false,
 
-            // 搜索
-            search_position: "bottom".to_string(),
+            // 搜索（默认顶部，设置项已隐藏）
+            search_position: "top".to_string(),
             auto_focus_search: true,
 
             // 内容

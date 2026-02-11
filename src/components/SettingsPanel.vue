@@ -59,6 +59,7 @@
           </div>
         </div>
 
+        <!-- 音效设置 - 已隐藏
         <h2 class="section-title">音效设置</h2>
         
         <div class="setting-group">
@@ -80,10 +81,13 @@
             </div>
           </div>
         </div>
+        -->
 
+        <!-- 搜索设置 - 搜索框位置已隐藏，默认顶部 -->
         <h2 class="section-title">搜索设置</h2>
         
         <div class="setting-group">
+          <!-- 搜索框位置 - 已隐藏，默认顶部
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-title">搜索框位置</div>
@@ -95,6 +99,7 @@
               </select>
             </div>
           </div>
+          -->
 
           <div class="setting-item">
             <div class="setting-info">
@@ -562,7 +567,7 @@ const resetSettings = async () => {
     form.window_position = 'remember';
     form.smart_activate = true;
     form.copy_sound = false;
-    form.search_position = 'bottom';
+    form.search_position = 'top';
     form.auto_focus_search = true;
     form.auto_paste = 'double';
     form.image_ocr = false;
