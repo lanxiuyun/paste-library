@@ -119,22 +119,48 @@
           <!-- Stats Footer -->
           <div class="drawer-footer">
             <div class="stats">
-              <span class="stat-item">
-                <span class="stat-label">字符:</span>
-                <span class="stat-value">{{ charCount }}</span>
-              </span>
-              <span class="stat-item">
-                <span class="stat-label">单词:</span>
-                <span class="stat-value">{{ wordCount }}</span>
-              </span>
-              <span class="stat-item">
-                <span class="stat-label">行数:</span>
-                <span class="stat-value">{{ lineCount }}</span>
-              </span>
-              <span class="stat-item">
-                <span class="stat-label">大小:</span>
-                <span class="stat-value">{{ byteSize }}</span>
-              </span>
+              <template v-if="isTextContent">
+                <span class="stat-item">
+                  <span class="stat-label">字符:</span>
+                  <span class="stat-value">{{ charCount }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-label">单词:</span>
+                  <span class="stat-value">{{ wordCount }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-label">行数:</span>
+                  <span class="stat-value">{{ lineCount }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-label">大小:</span>
+                  <span class="stat-value">{{ byteSize }}</span>
+                </span>
+              </template>
+              <template v-else-if="item?.content_type === 'image'">
+                <span class="stat-item">
+                  <span class="stat-label">尺寸:</span>
+                  <span class="stat-value">{{ item.metadata?.width || '?' }} × {{ item.metadata?.height || '?' }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-label">格式:</span>
+                  <span class="stat-value">{{ item.metadata?.format || 'PNG' }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-label">大小:</span>
+                  <span class="stat-value">{{ imageFileSize }}</span>
+                </span>
+              </template>
+              <template v-else-if="item?.content_type === 'file' || item?.content_type === 'folder'">
+                <span class="stat-item">
+                  <span class="stat-label">类型:</span>
+                  <span class="stat-value">{{ item.content_type === 'folder' ? '文件夹' : '文件' }}</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-label">大小:</span>
+                  <span class="stat-value">{{ formatFileSize(item.metadata?.file_size || 0) }}</span>
+                </span>
+              </template>
             </div>
           </div>
         </div>
@@ -220,6 +246,17 @@ const byteSize = computed(() => {
 const drawerImageSrc = computed(() => {
   if (!props.item?.thumbnail_path) return '';
   return convertFileSrc(props.item.thumbnail_path);
+});
+
+// 图片文件大小（从 metadata 获取或显示未知）
+const imageFileSize = computed(() => {
+  if (!props.item?.metadata) return '未知';
+  // 尝试从 metadata 获取文件大小（如果有的话）
+  const bytes = props.item.metadata.file_size || 0;
+  if (bytes === 0) return '未知';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 });
 
 watch(() => props.item, (newItem) => {

@@ -184,9 +184,11 @@ export function useClipboard() {
       }
 
       switch (item.content_type) {
-        case 'html':
-          await writeHTML(item.content, '');
+        case 'html': {
+          const plainText = item.content.replace(/<[^>]*>/g, '').trim();
+          await writeHTML(plainText, item.content);
           break;
+        }
         case 'image':
           // 图片类型：使用缩略图路径或内容路径
           if (item.thumbnail_path) {

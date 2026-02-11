@@ -357,8 +357,8 @@ const handleDrawerCopy = async (item: ClipboardItemType) => {
 
 const handleDrawerPaste = async (item: ClipboardItemType) => {
   await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
-  // TODO: 模拟粘贴操作
-  console.log('Drawer paste:', item.content.substring(0, 100) + '...');
+  // 执行粘贴操作（与单击/双击粘贴行为一致）
+  await simulatePaste();
 };
 
 // 模拟粘贴操作
