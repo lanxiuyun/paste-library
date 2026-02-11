@@ -88,6 +88,10 @@
                     <span class="label">格式:</span>
                     <span class="value">{{ item.metadata?.format || 'PNG' }}</span>
                   </div>
+                  <div class="info-item">
+                    <span class="label">大小:</span>
+                    <span class="value">{{ imageFileSize }}</span>
+                  </div>
                 </div>
               </div>
             </template>
@@ -116,51 +120,25 @@
             </template>
           </div>
 
-          <!-- Stats Footer -->
-          <div class="drawer-footer">
+          <!-- Stats Footer (仅文本类型显示统计) -->
+          <div v-if="isTextContent" class="drawer-footer">
             <div class="stats">
-              <template v-if="isTextContent">
-                <span class="stat-item">
-                  <span class="stat-label">字符:</span>
-                  <span class="stat-value">{{ charCount }}</span>
-                </span>
-                <span class="stat-item">
-                  <span class="stat-label">单词:</span>
-                  <span class="stat-value">{{ wordCount }}</span>
-                </span>
-                <span class="stat-item">
-                  <span class="stat-label">行数:</span>
-                  <span class="stat-value">{{ lineCount }}</span>
-                </span>
-                <span class="stat-item">
-                  <span class="stat-label">大小:</span>
-                  <span class="stat-value">{{ byteSize }}</span>
-                </span>
-              </template>
-              <template v-else-if="item?.content_type === 'image'">
-                <span class="stat-item">
-                  <span class="stat-label">尺寸:</span>
-                  <span class="stat-value">{{ item.metadata?.width || '?' }} × {{ item.metadata?.height || '?' }}</span>
-                </span>
-                <span class="stat-item">
-                  <span class="stat-label">格式:</span>
-                  <span class="stat-value">{{ item.metadata?.format || 'PNG' }}</span>
-                </span>
-                <span class="stat-item">
-                  <span class="stat-label">大小:</span>
-                  <span class="stat-value">{{ imageFileSize }}</span>
-                </span>
-              </template>
-              <template v-else-if="item?.content_type === 'file' || item?.content_type === 'folder'">
-                <span class="stat-item">
-                  <span class="stat-label">类型:</span>
-                  <span class="stat-value">{{ item.content_type === 'folder' ? '文件夹' : '文件' }}</span>
-                </span>
-                <span class="stat-item">
-                  <span class="stat-label">大小:</span>
-                  <span class="stat-value">{{ imageFileSize }}</span>
-                </span>
-              </template>
+              <span class="stat-item">
+                <span class="stat-label">字符:</span>
+                <span class="stat-value">{{ charCount }}</span>
+              </span>
+              <span class="stat-item">
+                <span class="stat-label">单词:</span>
+                <span class="stat-value">{{ wordCount }}</span>
+              </span>
+              <span class="stat-item">
+                <span class="stat-label">行数:</span>
+                <span class="stat-value">{{ lineCount }}</span>
+              </span>
+              <span class="stat-item">
+                <span class="stat-label">大小:</span>
+                <span class="stat-value">{{ byteSize }}</span>
+              </span>
             </div>
           </div>
         </div>
