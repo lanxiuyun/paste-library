@@ -116,6 +116,10 @@ pub struct AppSettings {
     // 窗口设置
     /// 窗口位置 (remember/center/cursor)
     pub window_position: String,
+    /// 窗口位置 X 坐标 (remember 模式使用)
+    pub window_pos_x: Option<i32>,
+    /// 窗口位置 Y 坐标 (remember 模式使用)
+    pub window_pos_y: Option<i32>,
 
     // 智能激活设置 (新增)
     /// 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
@@ -165,6 +169,8 @@ impl Default for AppSettings {
 
             // 窗口
             window_position: "remember".to_string(),
+            window_pos_x: None,
+            window_pos_y: None,
 
             // 智能激活 (新增)
             smart_activate: true,
