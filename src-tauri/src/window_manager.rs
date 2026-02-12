@@ -260,7 +260,7 @@ impl WindowManager {
 
                 tauri::async_runtime::spawn(async move {
                     // 增加延迟时间，给用户足够的时间完成 hover 和点击操作
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
                     if let Some(win) = app.get_webview_window("clipboard") {
                         if let Ok(is_focused) = win.is_focused() {
