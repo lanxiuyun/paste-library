@@ -21,7 +21,13 @@ impl ClipboardManager {
         }
     }
 
-    pub async fn handle_clipboard_change(&self, text: String, html: Option<String>) -> Result<Option<ClipboardItem>, String> {
+    /// 处理剪贴板变化（文本/HTML类型）
+    ///
+    /// # 参数
+    /// - `text`: 纯文本内容
+    /// - `html`: HTML内容（可选）
+    /// - `is_internal_copy`: 是否是软件内部复制。true表示用户点击项目复制，false表示来自系统剪贴板
+    pub async fn handle_clipboard_change(&self, text: String, html: Option<String>, is_internal_copy: bool) -> Result<Option<ClipboardItem>, String> {
         let settings = self.settings.lock().await;
         let auto_sort = settings.auto_sort;
 
@@ -59,7 +65,7 @@ impl ClipboardManager {
             tags: None,
         };
 
-        let id = self.database.add_clipboard_item(&item, auto_sort).map_err(|e| e.to_string())?;
+        let id = self.database.add_clipboard_item(&item, auto_sort, is_internal_copy).map_err(|e| e.to_string())?;
 
         let mut item_with_id = item;
         item_with_id.id = id;
@@ -67,6 +73,15 @@ impl ClipboardManager {
         Ok(Some(item_with_id))
     }
 
+    /// 处理剪贴板变化（扩展类型：图片、文件等）
+    ///
+    /// # 参数
+    /// - `content_type`: 内容类型
+    /// - `content`: 内容
+    /// - `file_paths`: 文件路径列表（可选）
+    /// - `thumbnail_path`: 缩略图路径（可选）
+    /// - `metadata`: 元数据（可选）
+    /// - `is_internal_copy`: 是否是软件内部复制。true表示用户点击项目复制，false表示来自系统剪贴板
     pub async fn handle_clipboard_change_extended(
         &self,
         content_type: ClipboardContentType,
@@ -74,6 +89,7 @@ impl ClipboardManager {
         file_paths: Option<Vec<String>>,
         thumbnail_path: Option<String>,
         metadata: Option<ClipboardMetadata>,
+        is_internal_copy: bool,
     ) -> Result<Option<ClipboardItem>, String> {
         let settings = self.settings.lock().await;
         let auto_sort = settings.auto_sort;
@@ -112,7 +128,7 @@ impl ClipboardManager {
             tags: None,
         };
 
-        let id = self.database.add_clipboard_item(&item, auto_sort).map_err(|e| e.to_string())?;
+        let id = self.database.add_clipboard_item(&item, auto_sort, is_internal_copy).map_err(|e| e.to_string())?;
 
         let mut item_with_id = item;
         item_with_id.id = id;
@@ -184,15 +200,17 @@ impl ClipboardManager {
     pub fn import_data(&self, json_data: &str) -> Result<i64, String> {
         let items: Vec<ClipboardItem> = serde_json::from_str(json_data)
             .map_err(|e| format!("导入失败: JSON 格式错误 - {}", e))?;
-        
+
         let mut count = 0i64;
         for item in items {
-            // 导入时默认启用 auto_sort，避免重复项被忽略
-            if self.database.add_clipboard_item(&item, true).is_ok() {
+            // 导入时：
+            // - 启用 auto_sort（true）避免重复项被忽略
+            // - 标记为外部复制（false）以便更新时间戳
+            if self.database.add_clipboard_item(&item, true, false).is_ok() {
                 count += 1;
             }
         }
-        
+
         Ok(count)
     }
 }

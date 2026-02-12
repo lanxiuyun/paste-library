@@ -104,6 +104,7 @@ impl Database {
             ("click_action", "copy"),
             ("double_click_action", "paste"),
             ("paste_shortcut", "ctrl_v"),
+            ("hide_window_after_copy", "false"),
             ("image_ocr", "false"),
             ("copy_as_plain_text", "false"),
             ("paste_as_plain_text", "true"),
@@ -153,7 +154,17 @@ impl Database {
     }
 
     /// 添加剪贴板记录
-    pub fn add_clipboard_item(&self, item: &ClipboardItem, auto_sort: bool) -> Result<i64> {
+    ///
+    /// # 参数
+    /// - `item`: 要添加的剪贴板项
+    /// - `auto_sort`: 是否根据设置自动排序（将重复项置顶）
+    /// - `is_internal_copy`: 是否是软件内部复制。内部复制不会更新时间戳，外部复制（来自系统剪贴板）会更新时间戳
+    pub fn add_clipboard_item(
+        &self,
+        item: &ClipboardItem,
+        auto_sort: bool,
+        is_internal_copy: bool,
+    ) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
 
         let metadata_json = item
@@ -172,8 +183,22 @@ impl Database {
             .map(|t| serde_json::to_string(t).ok())
             .flatten();
 
-        // 根据 auto_sort 设置决定是否更新重复项的时间戳
-        let conflict_sql = if auto_sort {
+        // 决定是否更新重复项的时间戳：
+        // 1. 如果是内部复制（用户点击项目复制），不更新时间戳
+        // 2. 如果是外部复制（来自系统剪贴板），根据 auto_sort 设置或内容类型决定是否更新
+        let should_update_timestamp = if is_internal_copy {
+            false
+        } else {
+            auto_sort
+                || matches!(
+                    item.content_type,
+                    ClipboardContentType::File
+                        | ClipboardContentType::Folder
+                        | ClipboardContentType::Files
+                )
+        };
+
+        let conflict_sql = if should_update_timestamp {
             "ON CONFLICT(content_hash) DO UPDATE SET
                 created_at = excluded.created_at"
         } else {
@@ -493,6 +518,11 @@ impl Database {
                 "click_action" => settings.click_action = value,
                 "double_click_action" => settings.double_click_action = value,
                 "paste_shortcut" => settings.paste_shortcut = value,
+                "hide_window_after_copy" => {
+                    if let Ok(v) = value.parse() {
+                        settings.hide_window_after_copy = v;
+                    }
+                }
                 "image_ocr" => {
                     if let Ok(v) = value.parse() {
                         settings.image_ocr = v;
@@ -574,6 +604,10 @@ impl Database {
             ("click_action", settings.click_action.clone()),
             ("double_click_action", settings.double_click_action.clone()),
             ("paste_shortcut", settings.paste_shortcut.clone()),
+            (
+                "hide_window_after_copy",
+                settings.hide_window_after_copy.to_string(),
+            ),
             ("image_ocr", settings.image_ocr.to_string()),
             (
                 "copy_as_plain_text",

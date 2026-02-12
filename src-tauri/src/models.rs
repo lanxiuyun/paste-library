@@ -136,12 +136,14 @@ pub struct AppSettings {
     pub focus_search_on_activate: bool,
 
     // 内容设置
-    /// 单击动作 (copy/paste)
+    /// 单击动作 (copy/paste/none)
     pub click_action: String,
-    /// 双击动作 (copy/paste)
+    /// 双击动作 (copy/paste/none)
     pub double_click_action: String,
     /// 粘贴快捷键 (ctrl_v/shift_insert)
     pub paste_shortcut: String,
+    /// 复制后隐藏窗口
+    pub hide_window_after_copy: bool,
     /// 图片OCR
     pub image_ocr: bool,
     /// 复制为纯文本
@@ -190,6 +192,7 @@ impl Default for AppSettings {
             click_action: "copy".to_string(),
             double_click_action: "paste".to_string(),
             paste_shortcut: "ctrl_v".to_string(),
+            hide_window_after_copy: false,
             image_ocr: false,
             copy_as_plain_text: false,
             paste_as_plain_text: true,

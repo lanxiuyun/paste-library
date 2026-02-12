@@ -128,6 +128,7 @@
               <select v-model="form.click_action" class="select-input">
                 <option value="copy">复制</option>
                 <option value="paste">粘贴</option>
+                <option value="none">不操作</option>
               </select>
             </div>
           </div>
@@ -141,7 +142,21 @@
               <select v-model="form.double_click_action" class="select-input">
                 <option value="copy">复制</option>
                 <option value="paste">粘贴</option>
+                <option value="none">不操作</option>
               </select>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">复制后隐藏窗口</div>
+              <div class="setting-desc">复制后自动隐藏剪贴板窗口</div>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input type="checkbox" v-model="form.hide_window_after_copy" />
+                <span class="slider"></span>
+              </label>
             </div>
           </div>
 
@@ -447,7 +462,6 @@
       <!-- 底部操作栏 -->
       <div v-if="activeMenu !== 'about'" class="settings-footer">
         <button class="btn-secondary" @click="resetSettings">恢复默认设置</button>
-        <span class="save-hint">设置会自动保存</span>
       </div>
     </div>
   </div>
@@ -488,6 +502,7 @@ const form = reactive<AppSettings>({
   click_action: 'copy',
   double_click_action: 'paste',
   paste_shortcut: 'ctrl_v',
+  hide_window_after_copy: false,
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,
@@ -674,7 +689,7 @@ const resetSettings = async () => {
   if (confirm('确定要恢复默认设置吗？')) {
     // 先标记为初始化中，避免重复保存
     isInitializing = true;
-    
+
     form.max_history_count = 5000;
     form.auto_cleanup_days = 30;
     form.window_position = 'remember';
@@ -682,9 +697,10 @@ const resetSettings = async () => {
     form.copy_sound = false;
     form.search_position = 'top';
     form.focus_search_on_activate = false;
-    form.click_action = 'copy';
-    form.double_click_action = 'paste';
+    form.click_action = 'copy'; // 'copy' | 'paste' | 'none'
+    form.double_click_action = 'paste'; // 'copy' | 'paste' | 'none'
     form.paste_shortcut = 'ctrl_v';
+    form.hide_window_after_copy = false;
     form.image_ocr = false;
     form.copy_as_plain_text = false;
     form.paste_as_plain_text = true;
@@ -692,14 +708,14 @@ const resetSettings = async () => {
     form.auto_sort = false;
     form.auto_start = false;
     form.number_key_shortcut = 'ctrl';
-    
+
     // 立即保存
     try {
       await saveSettings({ ...form });
     } catch (error) {
       console.error('保存默认设置失败:', error);
     }
-    
+
     // 恢复监听
     isInitializing = false;
   }
@@ -1246,10 +1262,8 @@ input:checked + .slider:before {
 /* 底部操作栏 */
 .settings-footer {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 32px;
+  align-items: flex-end;
+  justify-content: flex-end;
   background: #fff;
   border-top: 1px solid #e8e8e8;
 }

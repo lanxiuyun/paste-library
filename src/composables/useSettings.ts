@@ -25,9 +25,10 @@ const settings = ref<AppSettings>({
   focus_search_on_activate: false,
 
   // 内容设置
-  click_action: 'copy',
-  double_click_action: 'paste',
+  click_action: 'copy', // 'copy' | 'paste' | 'none'
+  double_click_action: 'paste', // 'copy' | 'paste' | 'none'
   paste_shortcut: 'ctrl_v',
+  hide_window_after_copy: false,
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,

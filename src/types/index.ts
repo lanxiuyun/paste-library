@@ -114,9 +114,10 @@ export interface AppSettings {
   focus_search_on_activate: boolean;
 
   // 内容设置
-  click_action: 'copy' | 'paste';
-  double_click_action: 'copy' | 'paste';
+  click_action: 'copy' | 'paste' | 'none';
+  double_click_action: 'copy' | 'paste' | 'none';
   paste_shortcut: 'ctrl_v' | 'shift_insert';
+  hide_window_after_copy: boolean;
   image_ocr: boolean;
   copy_as_plain_text: boolean;
   paste_as_plain_text: boolean;

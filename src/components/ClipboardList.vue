@@ -204,29 +204,33 @@ const deleteConfirmVisible = ref(false);
 const itemToDelete = ref<ClipboardItemType | null>(null);
 
 // 智能激活逻辑
-const handleSmartActivate = () => {
+const handleSmartActivate = async () => {
   // 检查智能激活是否开启
   if (settings.value.smart_activate) {
     const timeDiff = Date.now() - lastCopyTime.value;
-    
+
     // 如果距离上次复制 < 5秒，执行智能激活
     if (timeDiff < 5000) {
-      // 1. 滚动到顶部
+      // 1. 清空搜索框
+      searchQuery.value = '';
+      await handleSearch();
+
+      // 2. 滚动到顶部
       if (listContainerRef.value) {
         listContainerRef.value.scrollTop = 0;
       }
-      
-      // 2. 切换到"全部"标签
+
+      // 3. 切换到"全部"标签
       activeTab.value = 'all';
-      
-      // 3. 聚焦搜索框（不自动滚动，避免影响列表）
+
+      // 4. 聚焦搜索框（不自动滚动，避免影响列表）
       searchInputRef.value?.focus({ preventScroll: true } as FocusOptions);
-      
+
       // 智能激活完成后不再执行 focus_search_on_activate
       return;
     }
   }
-  
+
   // 独立的「激活时聚焦搜索框」设置（与 smart_activate 独立工作）
   if (settings.value.focus_search_on_activate) {
     searchInputRef.value?.focus({ preventScroll: true } as FocusOptions);
@@ -244,6 +248,13 @@ const filteredHistory = computed(() => {
         item.content_type === 'file' ||
         item.content_type === 'files' ||
         item.content_type === 'folder'
+      );
+    } else if (activeTab.value === 'text') {
+      // 文本标签页显示所有文本相关类型：纯文本、HTML、RTF
+      result = result.filter(item =>
+        item.content_type === 'text' ||
+        item.content_type === 'html' ||
+        item.content_type === 'rtf'
       );
     } else {
       result = result.filter(item => item.content_type === activeTab.value);
@@ -276,8 +287,14 @@ const handleItemClick = async (item: ClipboardItemType, index: number) => {
   // 单击时选中该项
   selectedIndex.value = index;
 
-  // 单击：根据 click_action 设置执行复制或粘贴
+  // 单击：根据 click_action 设置执行复制、粘贴或不操作
   const clickAction = settings.value.click_action;
+
+  // 如果设置为不操作，仅选中该项
+  if (clickAction === 'none') {
+    return;
+  }
+
   const copyAsPlainText = settings.value.copy_as_plain_text;
 
   // 先复制到剪贴板
@@ -286,6 +303,9 @@ const handleItemClick = async (item: ClipboardItemType, index: number) => {
   // 如果设置为粘贴，则执行粘贴动作
   if (clickAction === 'paste') {
     await simulatePaste();
+  } else if (settings.value.hide_window_after_copy) {
+    // 如果设置了复制后隐藏窗口（且不是粘贴操作，因为粘贴已经会隐藏窗口）
+    await invoke('hide_clipboard_window');
   }
 };
 
@@ -293,8 +313,14 @@ const handleItemDoubleClick = async (item: ClipboardItemType, index: number) => 
   // 双击时选中该项
   selectedIndex.value = index;
 
-  // 双击：根据 double_click_action 设置执行复制或粘贴
+  // 双击：根据 double_click_action 设置执行复制、粘贴或不操作
   const doubleClickAction = settings.value.double_click_action;
+
+  // 如果设置为不操作，仅选中该项
+  if (doubleClickAction === 'none') {
+    return;
+  }
+
   const copyAsPlainText = settings.value.copy_as_plain_text;
 
   // 先复制到剪贴板
@@ -303,6 +329,9 @@ const handleItemDoubleClick = async (item: ClipboardItemType, index: number) => 
   // 如果设置为粘贴，则执行粘贴动作
   if (doubleClickAction === 'paste') {
     await simulatePaste();
+  } else if (settings.value.hide_window_after_copy) {
+    // 如果设置了复制后隐藏窗口（且不是粘贴操作，因为粘贴已经会隐藏窗口）
+    await invoke('hide_clipboard_window');
   }
 };
 
@@ -386,6 +415,10 @@ const cancelDelete = () => {
 // Drawer handlers
 const handleDrawerCopy = async (item: ClipboardItemType) => {
   await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+  // 如果设置了复制后隐藏窗口
+  if (settings.value.hide_window_after_copy) {
+    await invoke('hide_clipboard_window');
+  }
 };
 
 const handleDrawerPaste = async (item: ClipboardItemType) => {
@@ -450,6 +483,10 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
     case 'copy':
       // 右键菜单复制：仅复制到剪贴板（与单击/双击的复制行为一致）
       await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+      // 如果设置了复制后隐藏窗口
+      if (settings.value.hide_window_after_copy) {
+        await invoke('hide_clipboard_window');
+      }
       break;
     case 'paste':
       // 右键菜单粘贴：复制到剪贴板并执行粘贴（与单击/双击的粘贴行为一致）
@@ -467,6 +504,10 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
         content_type: 'text',
         content: item.content.replace(/<[^>]*>/g, ''),
       });
+      // 如果设置了复制后隐藏窗口
+      if (settings.value.hide_window_after_copy) {
+        await invoke('hide_clipboard_window');
+      }
       break;
     case 'pastePlain':
       // 粘贴为纯文本：复制纯文本到剪贴板并执行粘贴

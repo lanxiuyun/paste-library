@@ -71,15 +71,15 @@ export function useClipboard() {
     try {
       // 检查是否是应用内复制（如果是，跳过智能激活的时间记录）
       const wasInternalCopy = isInternalCopy.value;
-      
+
       // 优先级: files > image > html > rtf > text
       if (result.files) {
         // 文件类型
         const paths = result.files.value;
-        const contentType: ClipboardContentType = paths.length === 1 
+        const contentType: ClipboardContentType = paths.length === 1
           ? (await isDirectory(paths[0]) ? 'folder' : 'file')
           : 'files';
-        
+
         const metadata: ClipboardMetadata = paths.length === 1
           ? { file_name: getFileName(paths[0]), file_size: result.files.count }
           : { item_count: paths.length };
@@ -89,6 +89,7 @@ export function useClipboard() {
           content: paths.join('\n'),
           filePaths: paths,
           metadata,
+          isInternalCopy: wasInternalCopy,
         });
       } else if (result.image) {
         // 图片类型
@@ -103,18 +104,21 @@ export function useClipboard() {
           content: result.image.value,
           thumbnailPath: result.image.value,
           metadata,
+          isInternalCopy: wasInternalCopy,
         });
       } else if (result.html) {
         // HTML 类型
         await invoke('add_clipboard_item', {
           text: result.text?.value || '',
           html: result.html.value,
+          isInternalCopy: wasInternalCopy,
         });
       } else if (result.text) {
         // 纯文本类型
         await invoke('add_clipboard_item', {
           text: result.text.value,
           html: null,
+          isInternalCopy: wasInternalCopy,
         });
       }
 
@@ -122,10 +126,10 @@ export function useClipboard() {
       if (!wasInternalCopy) {
         lastCopyTime.value = Date.now();
       }
-      
+
       // 重置内部复制标志
       isInternalCopy.value = false;
-      
+
       await loadHistory();
     } catch (error) {
       console.error('Failed to handle clipboard change:', error);
