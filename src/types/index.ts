@@ -110,7 +110,8 @@ export interface AppSettings {
 
   // 搜索设置
   search_position: 'top' | 'bottom';
-  auto_focus_search: boolean;
+  /** 激活窗口时自动聚焦搜索框（与smart_activate独立） */
+  focus_search_on_activate: boolean;
 
   // 内容设置
   click_action: 'copy' | 'paste';

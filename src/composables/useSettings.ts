@@ -19,9 +19,10 @@ const settings = ref<AppSettings>({
   // 音效设置
   copy_sound: false,
 
-  // 搜索设置（默认顶部，设置项已隐藏）
+  // 搜索设置
   search_position: 'top',
-  auto_focus_search: true,
+  /** 激活窗口时自动聚焦搜索框 */
+  focus_search_on_activate: false,
 
   // 内容设置
   click_action: 'copy',

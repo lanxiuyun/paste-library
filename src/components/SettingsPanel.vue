@@ -108,7 +108,7 @@
             </div>
             <div class="setting-control">
               <label class="switch">
-                <input type="checkbox" v-model="form.auto_focus_search" />
+                <input type="checkbox" v-model="form.focus_search_on_activate" />
                 <span class="slider"></span>
               </label>
             </div>
@@ -467,7 +467,7 @@ const form = reactive<AppSettings>({
   smart_activate: true,
   copy_sound: false,
   search_position: 'bottom',
-  auto_focus_search: true,
+  focus_search_on_activate: false,
   click_action: 'copy',
   double_click_action: 'paste',
   paste_shortcut: 'ctrl_v',
@@ -594,7 +594,7 @@ const resetSettings = async () => {
     form.smart_activate = true;
     form.copy_sound = false;
     form.search_position = 'top';
-    form.auto_focus_search = true;
+    form.focus_search_on_activate = false;
     form.click_action = 'copy';
     form.double_click_action = 'paste';
     form.paste_shortcut = 'ctrl_v';
