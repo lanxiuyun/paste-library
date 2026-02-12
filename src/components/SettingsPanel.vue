@@ -320,6 +320,23 @@
             </div>
           </div>
 
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">数字键快捷粘贴</div>
+              <div class="setting-desc">按下 1-9 数字键粘贴对应位置剪贴板内容时需要同时按住的修饰键</div>
+              <div class="setting-note">点击右边按钮开始录制，然后按下想要的修饰键组合（如 Ctrl、Ctrl+Shift、Alt 等）</div>
+            </div>
+            <div class="setting-control">
+              <button
+                class="hotkey-record-btn small"
+                :class="{ 'recording': isRecordingNumberKeyShortcut, 'has-value': form.number_key_shortcut && !isRecordingNumberKeyShortcut }"
+                @click="toggleNumberKeyShortcutRecording"
+              >
+                {{ isRecordingNumberKeyShortcut ? '请按下修饰键...' : (formatNumberKeyShortcut(form.number_key_shortcut) || '点击录制') }}
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -478,16 +495,83 @@ const form = reactive<AppSettings>({
   auto_sort: false,
   hotkey: 'Alt+V',
   auto_start: false,
+  number_key_shortcut: 'ctrl',
 });
 
 const shortcutError = ref('');
 const isRecordingHotkey = ref(false);
+const isRecordingNumberKeyShortcut = ref(false);
 const storagePaths = ref<Record<string, string>>({
   data_dir: '',
   log_dir: '',
 });
 let unlistenShortcutError: UnlistenFn | null = null;
 let isInitializing = true;
+
+// 格式化数字键修饰键显示
+const formatNumberKeyShortcut = (shortcut: string): string => {
+  if (!shortcut || shortcut === 'none') return '直接按数字键';
+  return shortcut.split('+').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('+') + '+数字键';
+};
+
+// 录制数字键修饰键
+const toggleNumberKeyShortcutRecording = () => {
+  if (isRecordingNumberKeyShortcut.value) {
+    // 停止录制
+    isRecordingNumberKeyShortcut.value = false;
+    window.removeEventListener('keydown', handleNumberKeyShortcutRecord);
+  } else {
+    // 开始录制
+    isRecordingNumberKeyShortcut.value = true;
+    window.addEventListener('keydown', handleNumberKeyShortcutRecord, { capture: true });
+  }
+};
+
+const handleNumberKeyShortcutRecord = (e: KeyboardEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const modifiers: string[] = [];
+  if (e.ctrlKey) modifiers.push('ctrl');
+  if (e.altKey) modifiers.push('alt');
+  if (e.shiftKey) modifiers.push('shift');
+  if (e.metaKey) modifiers.push('meta');
+
+  // 获取按键
+  let key = e.key.toLowerCase();
+
+  // 如果是数字键，使用当前的修饰键组合
+  if (key >= '1' && key <= '9') {
+    // 如果只按了数字键没有修饰键，设置为 "none"
+    if (modifiers.length === 0) {
+      form.number_key_shortcut = 'none';
+    } else {
+      form.number_key_shortcut = modifiers.join('+');
+    }
+
+    // 停止录制
+    isRecordingNumberKeyShortcut.value = false;
+    window.removeEventListener('keydown', handleNumberKeyShortcutRecord, { capture: true });
+    return;
+  }
+
+  // 如果按下了其他键（非数字键），则记录修饰键组合
+  // 忽略单独的修饰键
+  if (key === 'control' || key === 'alt' || key === 'shift' || key === 'meta') {
+    return;
+  }
+
+  // 按其他键也停止录制并保存当前修饰键状态
+  if (modifiers.length === 0) {
+    form.number_key_shortcut = 'none';
+  } else {
+    form.number_key_shortcut = modifiers.join('+');
+  }
+
+  // 停止录制
+  isRecordingNumberKeyShortcut.value = false;
+  window.removeEventListener('keydown', handleNumberKeyShortcutRecord, { capture: true });
+};
 
 // 录制快捷键
 const toggleHotkeyRecording = () => {
@@ -566,6 +650,9 @@ onUnmounted(() => {
   if (isRecordingHotkey.value) {
     window.removeEventListener('keydown', handleHotkeyRecord, { capture: true });
   }
+  if (isRecordingNumberKeyShortcut.value) {
+    window.removeEventListener('keydown', handleNumberKeyShortcutRecord, { capture: true });
+  }
 });
 
 const syncFromSettings = () => {
@@ -604,6 +691,7 @@ const resetSettings = async () => {
     form.confirm_delete = true;
     form.auto_sort = false;
     form.auto_start = false;
+    form.number_key_shortcut = 'ctrl';
     
     // 立即保存
     try {
@@ -888,6 +976,12 @@ const validateHotkey = async () => {
   border-color: #52c41a;
   background: #f6ffed;
   color: #52c41a;
+}
+
+.hotkey-record-btn.small {
+  min-width: 100px;
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 @keyframes pulse {

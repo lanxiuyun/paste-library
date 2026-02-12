@@ -37,6 +37,9 @@ const settings = ref<AppSettings>({
   // 通用设置
   hotkey: 'Alt+V',
   auto_start: false,
+
+  // 快捷键设置
+  number_key_shortcut: 'ctrl',
 });
 
 // 全局监听器标记
