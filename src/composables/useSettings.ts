@@ -10,6 +10,8 @@ const settings = ref<AppSettings>({
 
   // 窗口设置
   window_position: 'remember',
+  window_pos_x: undefined,
+  window_pos_y: undefined,
 
   // 智能激活设置 (新增)
   smart_activate: true,
