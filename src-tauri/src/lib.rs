@@ -30,7 +30,7 @@ impl AppState {
     pub fn new(database: Arc<Database>, settings: Arc<Mutex<AppSettings>>) -> Self {
         Self {
             clipboard_manager: ClipboardManager::new(database.clone(), settings.clone()),
-            window_manager: WindowManager::new(settings),
+            window_manager: WindowManager::new(settings, database),
         }
     }
 }

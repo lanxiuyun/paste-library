@@ -4,14 +4,16 @@ use tauri::Manager;
 use tauri::Emitter;
 
 use crate::models::AppSettings;
+use crate::storage::Database;
 
 pub struct WindowManager {
     settings: Arc<Mutex<AppSettings>>,
+    database: Arc<Database>,
 }
 
 impl WindowManager {
-    pub fn new(settings: Arc<Mutex<AppSettings>>) -> Self {
-        Self { settings }
+    pub fn new(settings: Arc<Mutex<AppSettings>>, database: Arc<Database>) -> Self {
+        Self { settings, database }
     }
 
     pub async fn toggle_clipboard_window(&self, app: &tauri::AppHandle) -> Result<bool, String> {
@@ -71,9 +73,44 @@ impl WindowManager {
 
         match position_mode.as_str() {
             "remember" => {
-                // 使用保存的位置（这里简化处理，实际应该保存到设置中）
-                // 默认居中
-                window.center().map_err(|e| e.to_string())?;
+                // 使用保存的位置
+                if let (Some(x), Some(y)) = (settings.window_pos_x, settings.window_pos_y) {
+                    // 确保窗口不超出屏幕边界
+                    let size = window.outer_size().map_err(|e| e.to_string())?;
+                    let screen = window.primary_monitor().map_err(|e| e.to_string())?;
+                    if let Some(screen) = screen {
+                        let screen_width = screen.size().width as i32;
+                        let screen_height = screen.size().height as i32;
+                        let win_width = size.width as i32;
+                        let win_height = size.height as i32;
+
+                        let mut pos_x = x;
+                        let mut pos_y = y;
+
+                        // 边界检查：确保窗口至少有一部分在屏幕内
+                        if pos_x + win_width < 100 {
+                            pos_x = 100 - win_width;
+                        }
+                        if pos_x > screen_width - 100 {
+                            pos_x = screen_width - 100;
+                        }
+                        if pos_y + win_height < 100 {
+                            pos_y = 100 - win_height;
+                        }
+                        if pos_y > screen_height - 100 {
+                            pos_y = screen_height - 100;
+                        }
+
+                        window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
+                            pos_x, pos_y,
+                        ))).map_err(|e| e.to_string())?;
+                    } else {
+                        window.center().map_err(|e| e.to_string())?;
+                    }
+                } else {
+                    // 没有保存的位置，默认居中
+                    window.center().map_err(|e| e.to_string())?;
+                }
             }
             "center" => {
                 // 屏幕居中
@@ -122,9 +159,29 @@ impl WindowManager {
     }
 
     /// 保存窗口位置到设置
-    async fn save_window_position(&self, _window: &tauri::WebviewWindow) -> Result<(), String> {
-        // 这里可以保存窗口位置到设置
-        // 简化实现：暂时不保存
+    async fn save_window_position(&self, window: &tauri::WebviewWindow) -> Result<(), String> {
+        // 只在 remember 模式下保存位置
+        let settings = self.settings.lock().await;
+        if settings.window_position != "remember" {
+            return Ok(());
+        }
+        drop(settings);
+
+        // 获取窗口当前位置
+        let position = window.outer_position().map_err(|e| e.to_string())?;
+        let x = position.x;
+        let y = position.y;
+
+        // 更新设置
+        let mut settings = self.settings.lock().await;
+        settings.window_pos_x = Some(x);
+        settings.window_pos_y = Some(y);
+
+        // 保存到数据库
+        if let Err(e) = self.database.save_settings(&settings) {
+            eprintln!("保存窗口位置失败: {}", e);
+        }
+
         Ok(())
     }
 
@@ -192,11 +249,13 @@ impl WindowManager {
 
         let app_handle = app.clone();
         let settings_clone = self.settings.clone();
+        let database_clone = self.database.clone();
 
         window.on_window_event(move |event| {
             if let tauri::WindowEvent::Focused(false) = event {
                 let app = app_handle.clone();
                 let settings = settings_clone.clone();
+                let database = database_clone.clone();
 
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -205,7 +264,7 @@ impl WindowManager {
                         if let Ok(is_focused) = win.is_focused() {
                             if !is_focused {
                                 // 隐藏前保存位置
-                                let manager = WindowManager::new(settings);
+                                let manager = WindowManager::new(settings, database);
                                 let _ = manager.save_window_position(&win).await;
                                 let _ = win.hide();
                                 let _ = app.emit("clipboard-window-blur", ());
