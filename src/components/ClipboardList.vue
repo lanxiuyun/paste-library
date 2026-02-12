@@ -238,7 +238,16 @@ const filteredHistory = computed(() => {
 
   // 按类型过滤
   if (activeTab.value !== 'all') {
-    result = result.filter(item => item.content_type === activeTab.value);
+    if (activeTab.value === 'file') {
+      // 文件标签页显示所有文件相关类型：单个文件、多文件、文件夹
+      result = result.filter(item =>
+        item.content_type === 'file' ||
+        item.content_type === 'files' ||
+        item.content_type === 'folder'
+      );
+    } else {
+      result = result.filter(item => item.content_type === activeTab.value);
+    }
   }
 
   return result;
@@ -263,7 +272,10 @@ const handleSearch = async () => {
   });
 };
 
-const handleItemClick = async (item: ClipboardItemType) => {
+const handleItemClick = async (item: ClipboardItemType, index: number) => {
+  // 单击时选中该项
+  selectedIndex.value = index;
+
   // 单击：根据 click_action 设置执行复制或粘贴
   const clickAction = settings.value.click_action;
   const copyAsPlainText = settings.value.copy_as_plain_text;
@@ -277,7 +289,10 @@ const handleItemClick = async (item: ClipboardItemType) => {
   }
 };
 
-const handleItemDoubleClick = async (item: ClipboardItemType) => {
+const handleItemDoubleClick = async (item: ClipboardItemType, index: number) => {
+  // 双击时选中该项
+  selectedIndex.value = index;
+
   // 双击：根据 double_click_action 设置执行复制或粘贴
   const doubleClickAction = settings.value.double_click_action;
   const copyAsPlainText = settings.value.copy_as_plain_text;
@@ -544,14 +559,38 @@ const handleKeyDown = async (e: KeyboardEvent) => {
 
   // 数字键 1-9 快速粘贴
   if (e.key >= '1' && e.key <= '9') {
-    const index = parseInt(e.key) - 1;
-    if (index < filteredHistory.value.length) {
-      e.preventDefault();
-      const item = filteredHistory.value[index];
-      if (item) {
-        await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
-        // 模拟粘贴
-        await simulatePaste();
+    // 根据设置判断是否需要修饰键
+    const shortcut = settings.value.number_key_shortcut || 'ctrl';
+    let shouldTrigger = false;
+
+    if (shortcut === 'none') {
+      // 直接按数字键即可触发
+      shouldTrigger = !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+    } else {
+      // 解析用户设置的修饰键组合（如 "ctrl", "ctrl+shift", "alt+shift" 等）
+      const requiredModifiers = shortcut.toLowerCase().split('+').map(s => s.trim());
+      const actualModifiers: string[] = [];
+      if (e.ctrlKey) actualModifiers.push('ctrl');
+      if (e.altKey) actualModifiers.push('alt');
+      if (e.shiftKey) actualModifiers.push('shift');
+      if (e.metaKey) actualModifiers.push('meta');
+
+      // 检查是否完全匹配（修饰键种类和数量都相同）
+      const allRequiredPressed = requiredModifiers.every(mod => actualModifiers.includes(mod));
+      const noExtraModifiers = actualModifiers.every(mod => requiredModifiers.includes(mod));
+      shouldTrigger = allRequiredPressed && noExtraModifiers;
+    }
+
+    if (shouldTrigger) {
+      const index = parseInt(e.key) - 1;
+      if (index < filteredHistory.value.length) {
+        e.preventDefault();
+        const item = filteredHistory.value[index];
+        if (item) {
+          await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+          // 模拟粘贴
+          await simulatePaste();
+        }
       }
     }
     return;

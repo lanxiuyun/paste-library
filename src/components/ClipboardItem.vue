@@ -159,8 +159,8 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  click: [item: ClipboardItem];
-  dblclick: [item: ClipboardItem];
+  click: [item: ClipboardItem, index: number];
+  dblclick: [item: ClipboardItem, index: number];
   contextmenu: [event: MouseEvent, item: ClipboardItem];
   delete: [id: number];
   copy: [item: ClipboardItem];
@@ -333,11 +333,11 @@ const singleImageSrc = computed(() => {
 
 const handleClick = () => {
   clickCount++;
-  
+
   if (clickCount === 1) {
     clickTimer = setTimeout(() => {
       // 单击逻辑
-      emit('click', props.item);
+      emit('click', props.item, props.index);
       clickCount = 0;
     }, DOUBLE_CLICK_DELAY);
   }
@@ -351,7 +351,7 @@ const handleDoubleClick = () => {
   }
   clickCount = 0;
   // 双击逻辑
-  emit('dblclick', props.item);
+  emit('dblclick', props.item, props.index);
 };
 
 const handleContextMenu = (event: MouseEvent) => {
