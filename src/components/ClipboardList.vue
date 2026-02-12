@@ -424,8 +424,9 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
       await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       await simulatePaste();
       break;
-    case 'queue':
-      addToQueue(item);
+    case 'tag':
+      // 打开标签管理器
+      showTagManager(item);
       break;
     case 'copyPlain':
       // 复制为纯文本
@@ -435,8 +436,14 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
         content: item.content.replace(/<[^>]*>/g, ''),
       });
       break;
-    case 'favorite':
-      handleToggleFavorite(item.id, !item.tags?.includes('收藏'));
+    case 'pastePlain':
+      // 粘贴为纯文本：复制纯文本到剪贴板并执行粘贴
+      await restoreToClipboard({
+        ...item,
+        content_type: 'text',
+        content: item.content.replace(/<[^>]*>/g, ''),
+      });
+      await simulatePaste();
       break;
     case 'delete':
       await handleDelete(item);
@@ -461,35 +468,6 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
       // 复制文件路径到剪贴板
       await copyFilePath(item);
       break;
-  }
-};
-
-const handleToggleFavorite = async (id: number, isFavorite: boolean) => {
-  try {
-    // 获取当前项目
-    const item = history.value.find(i => i.id === id);
-    if (!item) return;
-
-    // 更新标签列表
-    const currentTags = item.tags || [];
-    let newTags: string[];
-
-    if (isFavorite) {
-      // 添加"收藏"标签
-      if (!currentTags.includes('收藏')) {
-        newTags = [...currentTags, '收藏'];
-      } else {
-        newTags = currentTags;
-      }
-    } else {
-      // 移除"收藏"标签
-      newTags = currentTags.filter(t => t !== '收藏');
-    }
-
-    await invoke('update_tags', { id, tags: newTags });
-    await loadHistory();
-  } catch (error) {
-    console.error('Failed to toggle favorite:', error);
   }
 };
 
