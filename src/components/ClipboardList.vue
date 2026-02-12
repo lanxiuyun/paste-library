@@ -1,5 +1,23 @@
 <template>
   <div class="clipboard-list">
+    <!-- 搜索栏 - 顶部位置 -->
+    <div v-if="settings.search_position === 'top'" class="search-bar search-bar-top">
+      <div class="search-input-wrapper">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input
+          ref="searchInputRef"
+          v-model="searchQuery"
+          type="text"
+          placeholder="搜索剪贴板..."
+          @input="handleSearch"
+        />
+        <kbd class="shortcut-key">Ctrl+F</kbd>
+      </div>
+    </div>
+
     <!-- 标签栏 -->
     <div class="list-header">
       <div class="tabs">
@@ -31,7 +49,7 @@
     </div>
 
     <!-- 列表内容 -->
-    <div class="list-container" @scroll="handleScroll">
+    <div ref="listContainerRef" class="list-container" @scroll="handleScroll">
       <div v-if="filteredHistory.length === 0" class="empty-state">
         <div class="empty-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -61,8 +79,8 @@
       <div v-if="loading" class="loading-more">加载中...</div>
     </div>
 
-    <!-- 底部搜索栏 -->
-    <div class="search-bar">
+    <!-- 搜索栏 - 底部位置（默认） -->
+    <div v-if="settings.search_position !== 'top'" class="search-bar search-bar-bottom">
       <div class="search-input-wrapper">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/>
@@ -101,6 +119,28 @@
       @paste="handleDrawerPaste"
       @saveAsNew="handleSaveAsNew"
     />
+
+    <!-- 删除确认对话框 -->
+    <div v-if="deleteConfirmVisible" class="confirm-dialog-overlay" @click="cancelDelete">
+      <div class="confirm-dialog" @click.stop>
+        <div class="confirm-dialog-header">
+          <svg class="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <h3>确认删除</h3>
+        </div>
+        <div class="confirm-dialog-content">
+          <p>确定要删除这条剪贴板记录吗？</p>
+          <p class="confirm-dialog-subtitle">此操作不可撤销</p>
+        </div>
+        <div class="confirm-dialog-actions">
+          <button class="confirm-btn cancel" @click="cancelDelete">取消</button>
+          <button class="confirm-btn confirm" @click="confirmDelete">删除</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -111,13 +151,16 @@ import ContextMenu from './ContextMenu.vue';
 import PasteQueuePanel from './PasteQueuePanel.vue';
 import DrawerEditor from './DrawerEditor.vue';
 import { useClipboard } from '@/composables/useClipboard';
+import { writeText } from 'tauri-plugin-clipboard-x-api';
 import { usePasteQueue } from '@/composables/usePasteQueue';
 import { useSettings } from '@/composables/useSettings';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
 
 const {
   history,
+  lastCopyTime,
   loadHistory,
   searchHistory,
   deleteItem,
@@ -154,6 +197,33 @@ const contextMenuPosition = ref({ x: 0, y: 0 });
 const contextMenuItem = ref<ClipboardItemType | null>(null);
 
 const selectedIndex = ref(-1);
+const listContainerRef = ref<HTMLElement | null>(null);
+
+// 删除确认对话框状态
+const deleteConfirmVisible = ref(false);
+const itemToDelete = ref<ClipboardItemType | null>(null);
+
+// 智能激活逻辑
+const handleSmartActivate = () => {
+  // 检查智能激活是否开启
+  if (!settings.value.smart_activate) return;
+  
+  const timeDiff = Date.now() - lastCopyTime.value;
+  
+  // 如果距离上次复制 < 5秒，执行智能激活
+  if (timeDiff < 5000) {
+    // 1. 滚动到顶部
+    if (listContainerRef.value) {
+      listContainerRef.value.scrollTop = 0;
+    }
+    
+    // 2. 切换到"全部"标签
+    activeTab.value = 'all';
+    
+    // 3. 聚焦搜索框
+    searchInputRef.value?.focus();
+  }
+};
 
 const filteredHistory = computed(() => {
   let result = history.value;
@@ -180,21 +250,31 @@ const handleSearch = async () => {
 };
 
 const handleItemClick = async (item: ClipboardItemType) => {
-  // 单击：根据设置执行复制或粘贴
-  const action = settings.value.left_click_action;
-  if (action === 'paste') {
-    await restoreToClipboard(item);
-    // TODO: 模拟粘贴操作
-  } else {
-    // 默认复制
-    await restoreToClipboard(item);
+  // 单击：根据 click_action 设置执行复制或粘贴
+  const clickAction = settings.value.click_action;
+  const copyAsPlainText = settings.value.copy_as_plain_text;
+
+  // 先复制到剪贴板
+  await restoreToClipboard(item, { copyAsPlainText });
+
+  // 如果设置为粘贴，则执行粘贴动作
+  if (clickAction === 'paste') {
+    await simulatePaste();
   }
 };
 
 const handleItemDoubleClick = async (item: ClipboardItemType) => {
-  // 双击：复制并粘贴
-  await restoreToClipboard(item);
-  // TODO: 实现模拟粘贴功能
+  // 双击：根据 double_click_action 设置执行复制或粘贴
+  const doubleClickAction = settings.value.double_click_action;
+  const copyAsPlainText = settings.value.copy_as_plain_text;
+
+  // 先复制到剪贴板
+  await restoreToClipboard(item, { copyAsPlainText });
+
+  // 如果设置为粘贴，则执行粘贴动作
+  if (doubleClickAction === 'paste') {
+    await simulatePaste();
+  }
 };
 
 const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType) => {
@@ -211,10 +291,10 @@ const handleQuickAction = async (action: string, item: ClipboardItemType) => {
       drawerVisible.value = true;
       break;
     case 'copy':
-      await restoreToClipboard(item);
+      await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       break;
     case 'delete':
-      await deleteItem(item.id);
+      await handleDelete(item);
       break;
     case 'tag':
       // 打开标签管理弹窗
@@ -225,6 +305,33 @@ const handleQuickAction = async (action: string, item: ClipboardItemType) => {
       addToQueue(item);
       break;
   }
+};
+
+// 处理删除操作（带确认对话框）
+const handleDelete = async (item: ClipboardItemType) => {
+  if (settings.value.confirm_delete) {
+    // 显示确认对话框
+    itemToDelete.value = item;
+    deleteConfirmVisible.value = true;
+  } else {
+    // 直接删除
+    await deleteItem(item.id);
+  }
+};
+
+// 确认删除
+const confirmDelete = async () => {
+  if (itemToDelete.value) {
+    await deleteItem(itemToDelete.value.id);
+    itemToDelete.value = null;
+  }
+  deleteConfirmVisible.value = false;
+};
+
+// 取消删除
+const cancelDelete = () => {
+  itemToDelete.value = null;
+  deleteConfirmVisible.value = false;
 };
 
 const showTagManager = (item: ClipboardItemType) => {
@@ -246,13 +353,51 @@ const handleQueuePaste = async (content: string) => {
 
 // Drawer handlers
 const handleDrawerCopy = async (item: ClipboardItemType) => {
-  await restoreToClipboard(item);
+  await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
 };
 
 const handleDrawerPaste = async (item: ClipboardItemType) => {
-  await restoreToClipboard(item);
-  // TODO: 模拟粘贴操作
-  console.log('Drawer paste:', item.content.substring(0, 100) + '...');
+  await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+  // 执行粘贴操作（与单击/双击粘贴行为一致）
+  await simulatePaste();
+};
+
+// 模拟粘贴操作
+const simulatePaste = async (): Promise<void> => {
+  try {
+    // 隐藏窗口，让用户看到粘贴效果
+    await invoke('hide_clipboard_window');
+
+    // 等待窗口完全隐藏
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // 调用后端模拟粘贴命令，传入用户设置的快捷键模式
+    await invoke('simulate_paste', { pasteShortcut: settings.value.paste_shortcut });
+  } catch (error) {
+    // 如果后端命令不存在，静默失败
+    console.log('Paste simulation not available yet');
+  }
+};
+
+// 复制文件路径到剪贴板
+const copyFilePath = async (item: ClipboardItemType): Promise<void> => {
+  try {
+    let pathToCopy = '';
+
+    if (item.file_paths && item.file_paths.length > 0) {
+      // 多文件时复制所有路径，用换行符分隔（Windows风格 \r\n）
+      pathToCopy = item.file_paths.join('\r\n') + '\r\n';
+    } else if (item.content) {
+      // 使用 content 字段（文件夹类型），末尾添加换行符
+      pathToCopy = item.content + '\r\n';
+    }
+
+    if (pathToCopy) {
+      await writeText(pathToCopy);
+    }
+  } catch (error) {
+    console.error('Failed to copy file path:', error);
+  }
 };
 
 const handleSaveAsNew = async (content: string, type: string) => {
@@ -271,14 +416,17 @@ const handleSaveAsNew = async (content: string, type: string) => {
 const handleContextMenuAction = async (action: string, item: ClipboardItemType) => {
   switch (action) {
     case 'copy':
-      await restoreToClipboard(item);
+      // 右键菜单复制：仅复制到剪贴板（与单击/双击的复制行为一致）
+      await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       break;
     case 'paste':
-      await restoreToClipboard(item);
-      // TODO: 实现模拟粘贴功能
+      // 右键菜单粘贴：复制到剪贴板并执行粘贴（与单击/双击的粘贴行为一致）
+      await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+      await simulatePaste();
       break;
-    case 'queue':
-      addToQueue(item);
+    case 'tag':
+      // 打开标签管理器
+      showTagManager(item);
       break;
     case 'copyPlain':
       // 复制为纯文本
@@ -288,11 +436,17 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
         content: item.content.replace(/<[^>]*>/g, ''),
       });
       break;
-    case 'favorite':
-      handleToggleFavorite(item.id, !item.tags?.includes('收藏'));
+    case 'pastePlain':
+      // 粘贴为纯文本：复制纯文本到剪贴板并执行粘贴
+      await restoreToClipboard({
+        ...item,
+        content_type: 'text',
+        content: item.content.replace(/<[^>]*>/g, ''),
+      });
+      await simulatePaste();
       break;
     case 'delete':
-      await deleteItem(item.id);
+      await handleDelete(item);
       break;
     case 'openFile':
       // 打开文件
@@ -310,35 +464,10 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
         await invoke('show_in_folder', { path: item.thumbnail_path });
       }
       break;
-  }
-};
-
-const handleToggleFavorite = async (id: number, isFavorite: boolean) => {
-  try {
-    // 获取当前项目
-    const item = history.value.find(i => i.id === id);
-    if (!item) return;
-
-    // 更新标签列表
-    const currentTags = item.tags || [];
-    let newTags: string[];
-
-    if (isFavorite) {
-      // 添加"收藏"标签
-      if (!currentTags.includes('收藏')) {
-        newTags = [...currentTags, '收藏'];
-      } else {
-        newTags = currentTags;
-      }
-    } else {
-      // 移除"收藏"标签
-      newTags = currentTags.filter(t => t !== '收藏');
-    }
-
-    await invoke('update_tags', { id, tags: newTags });
-    await loadHistory();
-  } catch (error) {
-    console.error('Failed to toggle favorite:', error);
+    case 'copyFilePath':
+      // 复制文件路径到剪贴板
+      await copyFilePath(item);
+      break;
   }
 };
 
@@ -354,7 +483,7 @@ const handleScroll = async (event: Event) => {
 };
 
 // 键盘导航处理
-const handleKeyDown = (e: KeyboardEvent) => {
+const handleKeyDown = async (e: KeyboardEvent) => {
   // Ctrl+F 聚焦搜索框
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
     e.preventDefault();
@@ -386,8 +515,9 @@ const handleKeyDown = (e: KeyboardEvent) => {
     e.preventDefault();
     const item = filteredHistory.value[selectedIndex.value];
     if (item) {
-      restoreToClipboard(item);
-      // TODO: 模拟粘贴
+      await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+      // 模拟粘贴
+      await simulatePaste();
     }
     return;
   }
@@ -399,25 +529,40 @@ const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       const item = filteredHistory.value[index];
       if (item) {
-        restoreToClipboard(item);
-        // TODO: 模拟粘贴
+        await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+        // 模拟粘贴
+        await simulatePaste();
       }
     }
     return;
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   loadHistory(limit, 0);
   window.addEventListener('keydown', handleKeyDown);
   // 初始化选中第一项
   if (filteredHistory.value.length > 0) {
     selectedIndex.value = 0;
   }
+  
+  // 使用 Tauri 窗口监听 focus 事件（智能激活）
+  const appWindow = getCurrentWindow();
+  const unlistenFocus = await appWindow.listen('tauri://focus', () => {
+    // 窗口获得焦点时执行智能激活
+    handleSmartActivate();
+  });
+  
+  // 保存清理函数
+  (window as any).__unlistenFocus = unlistenFocus;
 });
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
+  // 清理 Tauri 事件监听
+  if ((window as any).__unlistenFocus) {
+    (window as any).__unlistenFocus();
+  }
 });
 
 // 监听过滤变化，重置选中状态
@@ -545,13 +690,20 @@ watch(filteredHistory, () => {
   font-size: 12px;
 }
 
-/* 底部搜索栏 */
+/* 搜索栏 */
 .search-bar {
   padding: 10px 12px;
-  border-top: 1px solid #f0f0f0;
   background: #fff;
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+.search-bar-top {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.search-bar-bottom {
+  border-top: 1px solid #f0f0f0;
 }
 
 .search-input-wrapper {
@@ -618,5 +770,105 @@ watch(filteredHistory, () => {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #a0a0a0;
+}
+
+/* 确认对话框 */
+.confirm-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.confirm-dialog {
+  background: #fff;
+  border-radius: 12px;
+  width: 360px;
+  max-width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.confirm-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 12px;
+}
+
+.warning-icon {
+  width: 32px;
+  height: 32px;
+  color: #faad14;
+  flex-shrink: 0;
+}
+
+.confirm-dialog-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.confirm-dialog-content {
+  padding: 0 20px 20px;
+  padding-left: 64px;
+}
+
+.confirm-dialog-content p {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: #595959;
+  line-height: 1.5;
+}
+
+.confirm-dialog-subtitle {
+  font-size: 12px !important;
+  color: #8c8c8c !important;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 20px;
+  padding-left: 64px;
+}
+
+.confirm-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.confirm-btn.cancel {
+  background: #f5f5f5;
+  color: #595959;
+}
+
+.confirm-btn.cancel:hover {
+  background: #e8e8e8;
+  color: #262626;
+}
+
+.confirm-btn.confirm {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.confirm-btn.confirm:hover {
+  background: #ff7875;
 }
 </style>

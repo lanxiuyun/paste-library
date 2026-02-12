@@ -25,19 +25,51 @@
               v-if="item.thumbnail_path" 
               :src="imageSrc" 
               :alt="'图片 ' + (item.metadata?.width || 0) + 'x' + (item.metadata?.height || 0)"
+              @error="handleImageError"
             />
+            <div v-if="imageLoadError" class="image-error">图片加载失败</div>
           </div>
           
-          <!-- 文件预览 -->
-          <div v-else-if="item.content_type === 'file' || item.content_type === 'folder'" class="file-preview">
-            <span class="file-icon">{{ item.content_type === 'folder' ? '📁' : '📄' }}</span>
-            <span class="file-name">{{ item.metadata?.file_name || item.metadata?.folder_name || getFileName(item.content) }}</span>
+          <!-- 单个图片文件预览（显示预览图+路径） -->
+          <div v-else-if="isSingleImageFile" class="single-image-file-preview">
+            <div class="image-file-row">
+              <img 
+                v-if="singleImageSrc && !imageLoadError" 
+                :src="singleImageSrc" 
+                :alt="getFileName(item.file_paths![0])"
+                class="file-thumbnail"
+                @error="handleImageError"
+              />
+              <div v-if="imageLoadError" class="file-thumbnail-error">📄</div>
+              <span class="file-path">{{ item.file_paths![0] }}</span>
+            </div>
           </div>
-          
-          <!-- 多文件预览 -->
-          <div v-else-if="item.content_type === 'files'" class="files-preview">
-            <span class="file-icon">📚</span>
-            <span class="files-count">{{ item.metadata?.item_count || item.file_paths?.length || 0 }} 个项目</span>
+
+          <!-- 文件预览（非图片单个文件） -->
+          <div v-else-if="item.content_type === 'file'" class="file-preview">
+            <span class="file-icon">📄</span>
+            <span class="file-path">{{ item.file_paths?.[0] || item.content }}</span>
+          </div>
+
+          <!-- 文件夹预览（显示路径） -->
+          <div v-else-if="item.content_type === 'folder'" class="file-preview">
+            <span class="file-icon">📁</span>
+            <span class="file-path">{{ item.content }}</span>
+          </div>
+
+          <!-- 多文件预览（显示多行文件路径） -->
+          <div v-else-if="item.content_type === 'files'" class="files-preview-list">
+            <div 
+              v-for="(path, idx) in (item.file_paths?.slice(0, 3) || [])" 
+              :key="idx"
+              class="file-path-row"
+            >
+              <span class="file-icon-small">{{ isImageFile(path) ? '🖼️' : (path.endsWith('/') ? '📁' : '📄') }}</span>
+              <span class="file-path-text">{{ path }}</span>
+            </div>
+            <div v-if="(item.file_paths?.length || 0) > 3" class="more-files-hint">
+              +{{ (item.file_paths?.length || 0) - 3 }} 个文件...
+            </div>
           </div>
           
           <!-- 文本预览 -->
@@ -147,6 +179,13 @@ const emit = defineEmits<{
 }>();
 
 const isHovered = ref(false);
+const imageLoadError = ref(false);
+
+// 处理图片加载错误
+const handleImageError = () => {
+  imageLoadError.value = true;
+  console.error('Failed to load image:', props.item.thumbnail_path);
+};
 
 // 用于区分单击和双击
 let clickTimer: ReturnType<typeof setTimeout> | null = null;
@@ -206,6 +245,28 @@ const imageSrc = computed(() => {
 const getFileName = (path: string): string => {
   return path.split(/[/\\]/).pop() || path;
 };
+
+// 判断是否为图片文件
+const isImageFile = (path: string): boolean => {
+  const ext = path.split('.').pop()?.toLowerCase();
+  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico'].includes(ext || '');
+};
+
+// 判断文件项是否为单个图片文件
+const isSingleImageFile = computed(() => {
+  if (props.item.content_type !== 'file' || !props.item.file_paths || props.item.file_paths.length !== 1) {
+    return false;
+  }
+  return isImageFile(props.item.file_paths[0]);
+});
+
+// 单个图片文件的缩略图路径
+const singleImageSrc = computed(() => {
+  if (!isSingleImageFile.value || !props.item.file_paths || props.item.file_paths.length === 0) {
+    return '';
+  }
+  return convertFileSrc(props.item.file_paths[0]);
+});
 
 const handleClick = () => {
   clickCount++;
@@ -410,30 +471,113 @@ const handleDragEnd = (event: DragEvent) => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* 文件预览 */
-.file-preview,
-.files-preview {
+.image-error {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #ff4d4f;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 4px;
+}
+
+/* 单个图片文件预览 */
+.single-image-file-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-file-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.file-thumbnail {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--bg-hover, #f5f5f5);
+  flex-shrink: 0;
+}
+
+.file-thumbnail-error {
+  width: 60px;
+  height: 60px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: var(--bg-hover, #f5f5f5);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* 文件预览 */
+.file-preview {
+  display: flex;
+  align-items: flex-start;
   gap: 8px;
 }
 
 .file-icon {
   font-size: 18px;
   line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
-.file-name {
-  font-size: 14px;
+.file-path {
+  font-size: 13px;
   color: var(--text-primary, #262626);
+  line-height: 1.5;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
-.files-count {
+/* 多文件预览列表 */
+.files-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-path-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.file-icon-small {
   font-size: 14px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.file-path-text {
+  font-size: 12px;
+  color: var(--text-primary, #262626);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.more-files-hint {
+  font-size: 11px;
   color: var(--text-secondary, #595959);
+  padding-left: 20px;
+  margin-top: 2px;
 }
 
 /* Hover 快捷按钮 - 绝对定位，不影响布局 */

@@ -30,7 +30,7 @@ impl AppState {
     pub fn new(database: Arc<Database>, settings: Arc<Mutex<AppSettings>>) -> Self {
         Self {
             clipboard_manager: ClipboardManager::new(database.clone(), settings.clone()),
-            window_manager: WindowManager::new(settings),
+            window_manager: WindowManager::new(settings, database),
         }
     }
 }
@@ -109,10 +109,77 @@ fn get_settings(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<AppSett
 #[tauri::command]
 async fn save_settings(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
     settings: AppSettings,
 ) -> Result<(), String> {
     let state = state.lock().await;
-    state.clipboard_manager.save_settings(&settings).await
+    
+    // 更新设置
+    state.clipboard_manager.save_settings(&settings).await?;
+    
+    // 更新开机自启状态
+    if let Err(e) = update_autostart(&app, settings.auto_start).await {
+        eprintln!("更新开机自启状态失败: {}", e);
+    }
+    
+    // 如果剪贴板窗口可见，重新定位窗口（窗口位置设置实时生效）
+    if let Some(window) = app.get_webview_window("clipboard") {
+        if let Ok(true) = window.is_visible() {
+            if let Err(e) = state.window_manager.reposition_window(&window).await {
+                eprintln!("重新定位窗口失败: {}", e);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// 更新开机自启状态
+async fn update_autostart(app: &tauri::AppHandle, enable: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+
+    let autostart_manager = app.autolaunch();
+
+    // 先检查当前状态，避免不必要的操作
+    let current_state = match autostart_manager.is_enabled() {
+        Ok(state) => state,
+        Err(_) => {
+            // 如果无法获取状态（开发模式或未安装），静默忽略
+            // 在实际安装后的应用中，这不应该发生
+            return Ok(());
+        }
+    };
+
+    // 如果状态已经符合要求，不需要操作
+    if current_state == enable {
+        return Ok(());
+    }
+
+    if enable {
+        if let Err(e) = autostart_manager.enable() {
+            // Windows上开发模式可能出现注册表错误，静默处理
+            let err_str = e.to_string();
+            if err_str.contains("os error 2") || err_str.contains("系统找不到指定的文件") {
+                println!("开机自启启用失败（开发模式）: {}", e);
+                return Ok(());
+            }
+            return Err(err_str);
+        }
+        println!("开机自启已启用");
+    } else {
+        if let Err(e) = autostart_manager.disable() {
+            // Windows上注册表项不存在时会出现错误，静默处理
+            let err_str = e.to_string();
+            if err_str.contains("os error 2") || err_str.contains("系统找不到指定的文件") {
+                println!("开机自启禁用失败（注册表项不存在）: {}", e);
+                return Ok(());
+            }
+            return Err(err_str);
+        }
+        println!("开机自启已禁用");
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -191,6 +258,13 @@ fn show_in_folder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_file_size(path: String) -> Result<u64, String> {
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| format!("无法获取文件信息: {}", e))?;
+    Ok(metadata.len())
+}
+
+#[tauri::command]
 fn update_tags(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     id: i64,
@@ -249,14 +323,110 @@ fn get_storage_paths(app: tauri::AppHandle) -> Result<std::collections::HashMap<
     Ok(paths)
 }
 
+#[tauri::command]
+fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
+    // 模拟粘贴操作（根据设置使用 Ctrl+V 或 Shift+Insert）
+    use std::thread;
+    use std::time::Duration;
+
+    // 等待窗口隐藏并焦点回到原窗口
+    thread::sleep(Duration::from_millis(200));
+
+    let use_shift_insert = paste_shortcut == "shift_insert";
+
+    #[cfg(target_os = "windows")]
+    {
+        use winapi::um::winuser::{keybd_event, VK_SHIFT, VK_INSERT, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, KEYEVENTF_EXTENDEDKEY};
+
+        unsafe {
+            if use_shift_insert {
+                // 使用 Shift+Insert
+                // Insert 是扩展键，需要 KEYEVENTF_EXTENDEDKEY 标志
+                const SCANCODE_SHIFT: u8 = 0x2A;
+
+                // 按下 Shift（使用虚拟键码 + 扫描码）
+                keybd_event(VK_SHIFT as u8, SCANCODE_SHIFT, KEYEVENTF_SCANCODE, 0);
+                thread::sleep(Duration::from_millis(20));
+
+                // 按下 Insert（使用扩展键标志）
+                keybd_event(VK_INSERT as u8, 0, KEYEVENTF_EXTENDEDKEY, 0);
+                thread::sleep(Duration::from_millis(50));
+
+                // 释放 Insert
+                keybd_event(VK_INSERT as u8, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+                thread::sleep(Duration::from_millis(20));
+
+                // 释放 Shift
+                keybd_event(VK_SHIFT as u8, SCANCODE_SHIFT, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
+            } else {
+                // 使用 Ctrl+V
+                // V 键的扫描码是 0x2F, Ctrl 扫描码: 0x1D
+                const SCANCODE_V: u8 = 0x2F;
+                const SCANCODE_CTRL: u8 = 0x1D;
+                const VK_CONTROL: u8 = 0xA3; // 右 Ctrl
+
+                // 按下 Ctrl
+                keybd_event(VK_CONTROL as u8, SCANCODE_CTRL, KEYEVENTF_SCANCODE, 0);
+                thread::sleep(Duration::from_millis(20));
+
+                // 按下 V
+                keybd_event(0x41 + 21, SCANCODE_V, KEYEVENTF_SCANCODE, 0); // 'V' = 0x56
+                thread::sleep(Duration::from_millis(50));
+
+                // 释放 V
+                keybd_event(0x41 + 21, SCANCODE_V, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
+                thread::sleep(Duration::from_millis(20));
+
+                // 释放 Ctrl
+                keybd_event(VK_CONTROL as u8, SCANCODE_CTRL, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // macOS 始终使用 Command+V
+        use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+        enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;
+        enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
+        enigo.key(Key::Meta, Direction::Release).map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+        
+        if use_shift_insert {
+            // 使用 Shift+Insert
+            enigo.key(Key::Shift, Direction::Press).map_err(|e| e.to_string())?;
+            enigo.key(Key::Insert, Direction::Click).map_err(|e| e.to_string())?;
+            enigo.key(Key::Shift, Direction::Release).map_err(|e| e.to_string())?;
+        } else {
+            // 使用 Ctrl+V
+            enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
+            enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
+            enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri_plugin_global_shortcut::ShortcutState;
+    use tauri_plugin_autostart::MacosLauncher;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_x::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         .setup(|app| {
             let app_dir = app
                 .path()
@@ -272,7 +442,12 @@ pub fn run() {
                 .unwrap_or_else(|_| AppSettings::default());
             let settings = Arc::new(Mutex::new(settings));
 
-            let app_state = Arc::new(Mutex::new(AppState::new(database, settings.clone())));
+            // 在移动 database 之前先检查是否是首次运行
+            let is_first_run = database
+                .is_first_run()
+                .unwrap_or(true);
+
+            let app_state = Arc::new(Mutex::new(AppState::new(database.clone(), settings.clone())));
             app.manage(app_state.clone());
 
             // 尝试注册主快捷键
@@ -310,14 +485,25 @@ pub fn run() {
                 }
             }
 
-            // 获取主窗口并设置失焦监听
+            // 获取主窗口并设置事件监听
             if let Some(main_window) = app.get_webview_window("main") {
                 let app_handle = app.handle().clone();
                 main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(false) = event {
-                        // 窗口失去焦点时隐藏
-                        let app_handle = app_handle.clone();
-                        let _ = app_handle.emit("window-blur", ());
+                    match event {
+                        tauri::WindowEvent::Focused(false) => {
+                            // 窗口失去焦点时隐藏
+                            let app_handle = app_handle.clone();
+                            let _ = app_handle.emit("window-blur", ());
+                        }
+                        tauri::WindowEvent::CloseRequested { api, .. } => {
+                            // 阻止默认关闭行为，改为隐藏窗口
+                            api.prevent_close();
+                            let app_handle = app_handle.clone();
+                            if let Some(win) = app_handle.get_webview_window("main") {
+                                let _ = win.hide();
+                            }
+                        }
+                        _ => {}
                     }
                 });
             }
@@ -326,6 +512,29 @@ pub fn run() {
             if let Err(e) = tray_manager::create_tray(app.handle()) {
                 eprintln!("系统托盘初始化失败: {}", e);
             }
+
+            // 根据设置初始化开机自启状态
+            let auto_start = settings.blocking_lock().auto_start;
+            let app_handle = app.handle().clone();
+            let database_for_init = database.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = update_autostart(&app_handle, auto_start).await {
+                    eprintln!("初始化开机自启状态失败: {}", e);
+                }
+
+                // 如果是首次运行，显示设置窗口并标记已初始化
+                if is_first_run {
+                    println!("首次运行，显示设置窗口");
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                    // 标记应用已初始化
+                    if let Err(e) = database_for_init.mark_app_initialized() {
+                        eprintln!("标记应用初始化状态失败: {}", e);
+                    }
+                }
+            });
 
             Ok(())
         })
@@ -342,12 +551,14 @@ pub fn run() {
             hide_clipboard_window,
             open_file,
             show_in_folder,
+            get_file_size,
             update_tags,
             get_all_tags,
             validate_shortcut,
             export_clipboard_data,
             import_clipboard_data,
             get_storage_paths,
+            simulate_paste,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

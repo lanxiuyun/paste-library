@@ -14,6 +14,7 @@ import type { ClipboardItem, ClipboardContentType, ClipboardMetadata, GetHistory
 
 const history = ref<ClipboardItem[]>([]);
 const isListening = ref(false);
+const lastCopyTime = ref<number>(Date.now());
 
 export function useClipboard() {
   const loadHistory = async (limit = 100, offset = 0): Promise<void> => {
@@ -112,6 +113,9 @@ export function useClipboard() {
         });
       }
 
+      // 记录上次复制时间
+      lastCopyTime.value = Date.now();
+      
       await loadHistory();
     } catch (error) {
       console.error('Failed to handle clipboard change:', error);
@@ -169,12 +173,22 @@ export function useClipboard() {
     await clearHistory(0, undefined);
   };
 
-  const restoreToClipboard = async (item: ClipboardItem): Promise<void> => {
+  const restoreToClipboard = async (item: ClipboardItem, options?: { copyAsPlainText?: boolean }): Promise<void> => {
     try {
+      // 如果需要复制为纯文本，去除 HTML 标签
+      let content = item.content;
+      if (options?.copyAsPlainText && (item.content_type === 'html' || item.content_type === 'rtf')) {
+        content = content.replace(/<[^>]*>/g, '');
+        await writeText(content);
+        return;
+      }
+
       switch (item.content_type) {
-        case 'html':
-          await writeHTML(item.content, '');
+        case 'html': {
+          const plainText = item.content.replace(/<[^>]*>/g, '').trim();
+          await writeHTML(plainText, item.content);
           break;
+        }
         case 'image':
           // 图片类型：使用缩略图路径或内容路径
           if (item.thumbnail_path) {
@@ -250,6 +264,7 @@ export function useClipboard() {
   return {
     history,
     isListening,
+    lastCopyTime,
     loadHistory,
     startClipboardListening,
     stopClipboardListening,

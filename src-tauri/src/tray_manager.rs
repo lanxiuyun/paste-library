@@ -88,7 +88,7 @@ fn show_settings_window(app: &tauri::AppHandle) {
         let _ = window.unminimize();
     } else {
         // 重新创建设置窗口
-        let _ = tauri::webview::WebviewWindowBuilder::new(
+        let window = tauri::webview::WebviewWindowBuilder::new(
             app,
             "main",
             tauri::WebviewUrl::App("/".into()),
@@ -104,6 +104,21 @@ fn show_settings_window(app: &tauri::AppHandle) {
         .closable(true)
         .always_on_top(false)
         .build();
+
+        // 添加关闭事件处理，关闭时隐藏窗口而非退出应用
+        if let Ok(window) = window {
+            let app_handle = app.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    // 阻止默认关闭行为
+                    api.prevent_close();
+                    // 隐藏窗口
+                    if let Some(win) = app_handle.get_webview_window("main") {
+                        let _ = win.hide();
+                    }
+                }
+            });
+        }
     }
 }
 

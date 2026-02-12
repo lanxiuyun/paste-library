@@ -47,30 +47,19 @@
 
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-title">激活时回到顶部</div>
-              <div class="setting-desc">激活窗口时，滚动至顶部并选中首条</div>
+              <div class="setting-title">智能激活</div>
+              <div class="setting-desc">5秒内复制过内容时，激活窗口自动回到顶部、切换至全部、聚焦搜索框</div>
             </div>
             <div class="setting-control">
               <label class="switch">
-                <input type="checkbox" v-model="form.scroll_to_top_on_activate" />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">激活时切换至全部分组</div>
-            </div>
-            <div class="setting-control">
-              <label class="switch">
-                <input type="checkbox" v-model="form.switch_to_all_on_activate" />
+                <input type="checkbox" v-model="form.smart_activate" />
                 <span class="slider"></span>
               </label>
             </div>
           </div>
         </div>
 
+        <!-- 音效设置 - 已隐藏
         <h2 class="section-title">音效设置</h2>
         
         <div class="setting-group">
@@ -92,10 +81,13 @@
             </div>
           </div>
         </div>
+        -->
 
+        <!-- 搜索设置 - 搜索框位置已隐藏，默认顶部 -->
         <h2 class="section-title">搜索设置</h2>
         
         <div class="setting-group">
+          <!-- 搜索框位置 - 已隐藏，默认顶部
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-title">搜索框位置</div>
@@ -107,6 +99,7 @@
               </select>
             </div>
           </div>
+          -->
 
           <div class="setting-item">
             <div class="setting-info">
@@ -121,33 +114,46 @@
             </div>
           </div>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">自动清除</div>
-              <div class="setting-desc">激活窗口时，清除搜索框内容</div>
-            </div>
-            <div class="setting-control">
-              <label class="switch">
-                <input type="checkbox" v-model="form.clear_search_on_activate" />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
         </div>
 
         <h2 class="section-title">内容设置</h2>
-        
+
         <div class="setting-group">
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-title">自动粘贴</div>
-              <div class="setting-desc">鼠标左键操作时，快速粘贴内容至输入位置</div>
+              <div class="setting-title">单击动作</div>
+              <div class="setting-desc">鼠标单击剪贴板项目时执行的动作</div>
             </div>
             <div class="setting-control">
-              <select v-model="form.auto_paste" class="select-input">
-                <option value="off">关闭</option>
-                <option value="single">单击</option>
-                <option value="double">双击</option>
+              <select v-model="form.click_action" class="select-input">
+                <option value="copy">复制</option>
+                <option value="paste">粘贴</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">双击动作</div>
+              <div class="setting-desc">鼠标双击剪贴板项目时执行的动作</div>
+            </div>
+            <div class="setting-control">
+              <select v-model="form.double_click_action" class="select-input">
+                <option value="copy">复制</option>
+                <option value="paste">粘贴</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">粘贴快捷键</div>
+              <div class="setting-desc">执行粘贴动作时使用的快捷键（终端推荐使用 Shift+Insert）</div>
+            </div>
+            <div class="setting-control">
+              <select v-model="form.paste_shortcut" class="select-input">
+                <option value="ctrl_v">Ctrl+V</option>
+                <option value="shift_insert">Shift+Insert</option>
               </select>
             </div>
           </div>
@@ -167,7 +173,7 @@
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-title">复制为纯文本</div>
-              <div class="setting-desc">富文本和HTML格式在复制时仅保留纯文本内容</div>
+              <div class="setting-desc">HTML格式在复制时仅保留纯文本内容</div>
             </div>
             <div class="setting-control">
               <label class="switch">
@@ -180,34 +186,11 @@
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-title">粘贴为纯文本</div>
-              <div class="setting-desc">富文本和HTML格式在粘贴时仅保留纯文本内容</div>
+              <div class="setting-desc">HTML格式在粘贴时仅保留纯文本内容</div>
             </div>
             <div class="setting-control">
               <label class="switch">
                 <input type="checkbox" v-model="form.paste_as_plain_text" />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">操作按钮</div>
-              <div class="setting-desc">自定义操作剪贴板内容的图标按钮</div>
-            </div>
-            <div class="setting-control">
-              <button class="btn-secondary">自定义</button>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">自动收藏</div>
-              <div class="setting-desc">新增或编辑备注后自动收藏</div>
-            </div>
-            <div class="setting-control">
-              <label class="switch">
-                <input type="checkbox" v-model="form.auto_favorite" />
                 <span class="slider"></span>
               </label>
             </div>
@@ -310,20 +293,6 @@
             </div>
           </div>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">应用黑名单</div>
-              <div class="setting-desc">来自这些应用的剪贴板内容将被忽略（每行一个应用名）</div>
-            </div>
-          </div>
-          <div class="setting-item full-width">
-            <textarea 
-              v-model="blacklistText"
-              class="textarea-input"
-              rows="4"
-              placeholder="例如：&#10;Password Manager&#10;1Password&#10;KeePass"
-            />
-          </div>
         </div>
       </div>
 
@@ -337,6 +306,7 @@
               <div class="setting-title">唤醒快捷键</div>
               <div class="setting-desc">按下此快捷键可快速打开或关闭剪贴板窗口</div>
               <div class="setting-note">点击下方按钮开始录制，然后按下想要的快捷键组合</div>
+              <div class="setting-warning">修改快捷键后需要重启应用才能生效</div>
               <div v-if="shortcutError" class="error-message">{{ shortcutError }}</div>
             </div>
             <div class="setting-control">
@@ -350,29 +320,6 @@
             </div>
           </div>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-title">窗口尺寸</div>
-              <div class="setting-desc">剪贴板窗口的默认大小</div>
-            </div>
-            <div class="setting-control size-control">
-              <input 
-                type="number" 
-                v-model.number="form.window_width"
-                min="400"
-                max="1200"
-                class="number-input small"
-              />
-              <span class="size-separator">×</span>
-              <input 
-                type="number" 
-                v-model.number="form.window_height"
-                min="300"
-                max="900"
-                class="number-input small"
-              />
-            </div>
-          </div>
         </div>
       </div>
 
@@ -482,17 +429,15 @@
 
       <!-- 底部操作栏 -->
       <div v-if="activeMenu !== 'about'" class="settings-footer">
-        <button class="btn-secondary" @click="resetSettings">恢复默认</button>
-        <button class="btn-primary" @click="saveAllSettings" :disabled="!hasChanges">
-          {{ hasChanges ? '保存更改' : '已保存' }}
-        </button>
+        <button class="btn-secondary" @click="resetSettings">恢复默认设置</button>
+        <span class="save-hint">设置会自动保存</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, onUnmounted } from 'vue';
+import { ref, onMounted, reactive, onUnmounted, watch } from 'vue';
 import { useSettings } from '@/composables/useSettings';
 import { useWindow } from '@/composables/useWindow';
 import { useClipboard } from '@/composables/useClipboard';
@@ -519,29 +464,22 @@ const form = reactive<AppSettings>({
   max_history_count: 5000,
   auto_cleanup_days: 30,
   window_position: 'remember',
-  window_width: 800,
-  window_height: 600,
-  scroll_to_top_on_activate: false,
-  switch_to_all_on_activate: true,
+  smart_activate: true,
   copy_sound: false,
   search_position: 'bottom',
   auto_focus_search: true,
-  clear_search_on_activate: false,
-  auto_paste: 'double',
+  click_action: 'copy',
+  double_click_action: 'paste',
+  paste_shortcut: 'ctrl_v',
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,
-  auto_favorite: false,
   confirm_delete: true,
   auto_sort: false,
-  left_click_action: 'copy',
   hotkey: 'Alt+V',
   auto_start: false,
-  blacklist_apps: [],
 });
 
-const blacklistText = ref('');
-const originalSettings = ref<AppSettings | null>(null);
 const shortcutError = ref('');
 const isRecordingHotkey = ref(false);
 const storagePaths = ref<Record<string, string>>({
@@ -549,6 +487,7 @@ const storagePaths = ref<Record<string, string>>({
   log_dir: '',
 });
 let unlistenShortcutError: UnlistenFn | null = null;
+let isInitializing = true;
 
 // 录制快捷键
 const toggleHotkeyRecording = () => {
@@ -601,7 +540,6 @@ const handleHotkeyRecord = (e: KeyboardEvent) => {
 onMounted(async () => {
   await loadSettings();
   syncFromSettings();
-  originalSettings.value = { ...settings.value };
 
   // 加载存储路径
   try {
@@ -615,6 +553,9 @@ onMounted(async () => {
   unlistenShortcutError = await listen<string>('shortcut-registration-failed', (event) => {
     shortcutError.value = `快捷键 "${event.payload}" 已被其他程序占用，请使用备用快捷键 Ctrl+Shift+V，或修改快捷键后重启应用`;
   });
+
+  // 初始化完成后，开始监听变化
+  isInitializing = false;
 });
 
 onUnmounted(() => {
@@ -629,72 +570,50 @@ onUnmounted(() => {
 
 const syncFromSettings = () => {
   Object.assign(form, settings.value);
-  blacklistText.value = settings.value.blacklist_apps.join('\n');
 };
 
-const currentSettings = computed((): AppSettings => ({
-  ...form,
-  blacklist_apps: blacklistText.value.split('\n').filter(s => s.trim()),
-}));
-
-const hasChanges = computed(() => {
-  if (!originalSettings.value) return false;
-  const current = currentSettings.value;
-  const original = originalSettings.value;
+// 自动保存：监听 form 变化，变化时自动保存
+watch(form, async (newValue) => {
+  if (isInitializing) return;
   
-  return (
-    current.max_history_count !== original.max_history_count ||
-    current.auto_cleanup_days !== original.auto_cleanup_days ||
-    current.window_position !== original.window_position ||
-    current.window_width !== original.window_width ||
-    current.window_height !== original.window_height ||
-    current.scroll_to_top_on_activate !== original.scroll_to_top_on_activate ||
-    current.switch_to_all_on_activate !== original.switch_to_all_on_activate ||
-    current.copy_sound !== original.copy_sound ||
-    current.search_position !== original.search_position ||
-    current.auto_focus_search !== original.auto_focus_search ||
-    current.clear_search_on_activate !== original.clear_search_on_activate ||
-    current.auto_paste !== original.auto_paste ||
-    current.image_ocr !== original.image_ocr ||
-    current.copy_as_plain_text !== original.copy_as_plain_text ||
-    current.paste_as_plain_text !== original.paste_as_plain_text ||
-    current.auto_favorite !== original.auto_favorite ||
-    current.confirm_delete !== original.confirm_delete ||
-    current.auto_sort !== original.auto_sort ||
-    current.hotkey !== original.hotkey ||
-    current.left_click_action !== original.left_click_action ||
-    current.auto_start !== original.auto_start ||
-    JSON.stringify(current.blacklist_apps) !== JSON.stringify(original.blacklist_apps)
-  );
-});
+  try {
+    await saveSettings({ ...newValue });
+  } catch (error) {
+    console.error('自动保存设置失败:', error);
+  }
+}, { deep: true });
 
-const saveAllSettings = async () => {
-  await saveSettings(currentSettings.value);
-  originalSettings.value = { ...currentSettings.value };
-};
-
-const resetSettings = () => {
+const resetSettings = async () => {
   if (confirm('确定要恢复默认设置吗？')) {
+    // 先标记为初始化中，避免重复保存
+    isInitializing = true;
+    
     form.max_history_count = 5000;
     form.auto_cleanup_days = 30;
     form.window_position = 'remember';
-    form.window_width = 800;
-    form.window_height = 600;
-    form.scroll_to_top_on_activate = false;
-    form.switch_to_all_on_activate = true;
+    form.smart_activate = true;
     form.copy_sound = false;
-    form.search_position = 'bottom';
+    form.search_position = 'top';
     form.auto_focus_search = true;
-    form.clear_search_on_activate = false;
-    form.auto_paste = 'double';
+    form.click_action = 'copy';
+    form.double_click_action = 'paste';
+    form.paste_shortcut = 'ctrl_v';
     form.image_ocr = false;
     form.copy_as_plain_text = false;
     form.paste_as_plain_text = true;
-    form.auto_favorite = false;
     form.confirm_delete = true;
     form.auto_sort = false;
     form.auto_start = false;
-    blacklistText.value = '';
+    
+    // 立即保存
+    try {
+      await saveSettings({ ...form });
+    } catch (error) {
+      console.error('保存默认设置失败:', error);
+    }
+    
+    // 恢复监听
+    isInitializing = false;
   }
 };
 
@@ -998,6 +917,12 @@ const validateHotkey = async () => {
   margin-top: 4px;
 }
 
+.setting-warning {
+  font-size: 11px;
+  color: #ff4d4f;
+  margin-top: 4px;
+}
+
 .error-message {
   font-size: 11px;
   color: #ff4d4f;
@@ -1227,11 +1152,17 @@ input:checked + .slider:before {
 /* 底部操作栏 */
 .settings-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   padding: 16px 32px;
   background: #fff;
   border-top: 1px solid #e8e8e8;
+}
+
+.save-hint {
+  font-size: 12px;
+  color: #8c8c8c;
 }
 
 .btn-secondary {

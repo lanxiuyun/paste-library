@@ -88,6 +88,10 @@
                     <span class="label">格式:</span>
                     <span class="value">{{ item.metadata?.format || 'PNG' }}</span>
                   </div>
+                  <div class="info-item">
+                    <span class="label">大小:</span>
+                    <span class="value">{{ imageFileSize }}</span>
+                  </div>
                 </div>
               </div>
             </template>
@@ -111,13 +115,51 @@
                     <span class="label">路径:</span>
                     <span class="value path">{{ item.content }}</span>
                   </div>
+                  <div class="info-item actions-row">
+                    <button class="path-action-btn" @click="copyFilePath">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                      </svg>
+                      复制路径
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Multiple Files Info -->
+            <template v-else-if="item?.content_type === 'files'">
+              <div class="files-viewer">
+                <div class="files-header">
+                  <span class="files-icon-large">📚</span>
+                  <span class="files-count">{{ item.file_paths?.length || 0 }} 个文件</span>
+                </div>
+                <div class="files-list">
+                  <div 
+                    v-for="(path, idx) in item.file_paths" 
+                    :key="idx"
+                    class="file-list-item"
+                  >
+                    <span class="file-list-icon">{{ isImageFile(path) ? '🖼️' : '📄' }}</span>
+                    <span class="file-list-path">{{ path }}</span>
+                  </div>
+                </div>
+                <div class="files-actions">
+                  <button class="path-action-btn" @click="copyFilePath">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    复制所有路径
+                  </button>
                 </div>
               </div>
             </template>
           </div>
 
-          <!-- Stats Footer -->
-          <div class="drawer-footer">
+          <!-- Stats Footer (仅文本类型显示统计) -->
+          <div v-if="isTextContent" class="drawer-footer">
             <div class="stats">
               <span class="stat-item">
                 <span class="stat-label">字符:</span>
@@ -145,7 +187,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { writeText } from 'tauri-plugin-clipboard-x-api';
 import type { ClipboardItem } from '@/types';
 
 interface Props {
@@ -164,6 +207,7 @@ const emit = defineEmits<{
 
 const editedContent = ref('');
 const isPreview = ref(false);
+const actualFileSize = ref<number>(0);
 
 const isTextContent = computed(() => {
   return props.item?.content_type === 'text' || props.item?.content_type === 'html' || props.item?.content_type === 'rtf';
@@ -222,10 +266,42 @@ const drawerImageSrc = computed(() => {
   return convertFileSrc(props.item.thumbnail_path);
 });
 
-watch(() => props.item, (newItem) => {
+// 图片文件大小（通过API获取）
+const imageFileSize = computed(() => {
+  const bytes = actualFileSize.value;
+  if (bytes === 0) return '未知';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+});
+
+// 异步获取文件大小（通过Rust后端）
+const loadFileSize = async (filePath: string | null | undefined) => {
+  if (!filePath) {
+    actualFileSize.value = 0;
+    return;
+  }
+  try {
+    const size = await invoke<number>('get_file_size', { path: filePath });
+    actualFileSize.value = size || 0;
+  } catch (error) {
+    console.error('Failed to get file size:', error);
+    actualFileSize.value = 0;
+  }
+};
+
+watch(() => props.item, async (newItem) => {
   if (newItem) {
     editedContent.value = newItem.content;
     isPreview.value = false;
+    // 异步获取文件大小（图片/文件类型）
+    if (newItem.content_type === 'image') {
+      await loadFileSize(newItem.thumbnail_path);
+    } else if (newItem.content_type === 'file' || newItem.content_type === 'folder') {
+      await loadFileSize(newItem.file_paths?.[0]);
+    } else {
+      actualFileSize.value = 0;
+    }
   }
 }, { immediate: true });
 
@@ -260,6 +336,35 @@ const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+};
+
+// 判断是否为图片文件
+const isImageFile = (path: string): boolean => {
+  const ext = path.split('.').pop()?.toLowerCase();
+  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico'].includes(ext || '');
+};
+
+// 复制文件路径到剪贴板
+const copyFilePath = async (): Promise<void> => {
+  if (!props.item) return;
+
+  try {
+    let pathToCopy = '';
+
+    if (props.item.file_paths && props.item.file_paths.length > 0) {
+      // 多文件时复制所有路径，用换行符分隔（Windows风格 \r\n）
+      pathToCopy = props.item.file_paths.join('\r\n') + '\r\n';
+    } else if (props.item.content) {
+      // 使用 content 字段（文件夹类型），末尾添加换行符
+      pathToCopy = props.item.content + '\r\n';
+    }
+
+    if (pathToCopy) {
+      await writeText(pathToCopy);
+    }
+  } catch (error) {
+    console.error('Failed to copy file path:', error);
+  }
 };
 </script>
 
@@ -494,6 +599,105 @@ const formatFileSize = (bytes: number): string => {
 .info-item .value.path {
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 12px;
+}
+
+.info-item.actions-row {
+  margin-top: 8px;
+}
+
+.path-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #595959;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.path-action-btn:hover {
+  color: #262626;
+  background: #e8e8e8;
+  border-color: #bfbfbf;
+}
+
+.path-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 多文件视图 */
+.files-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.files-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.files-icon-large {
+  font-size: 48px;
+}
+
+.files-count {
+  font-size: 16px;
+  font-weight: 500;
+  color: #262626;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+}
+
+.file-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.file-list-item:hover {
+  background: #f0f0f0;
+}
+
+.file-list-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.file-list-path {
+  font-size: 12px;
+  color: #262626;
+  line-height: 1.4;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.files-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .drawer-footer {

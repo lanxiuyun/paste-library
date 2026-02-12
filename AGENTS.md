@@ -11,6 +11,7 @@
   - tauri-plugin-clipboard-x (clipboard monitoring)
   - tauri-plugin-global-shortcut (global hotkey Alt+V)
   - tauri-plugin-tray (system tray integration)
+  - tauri-plugin-autostart (auto start on boot)
 - **Status**: In development — P0/P1 features complete (~95%), P2 optimization pending
 
 ---
@@ -369,12 +370,21 @@ const imageSrc = computed(() => {
 - Copy/delete clipboard items
 - Data persistence with comprehensive settings
 - **Variable height Item design** (text 3 lines, adaptive image height)
-- **Tag system** replaces favorite (data model + UI)
+- **Tag system** replaces favorite (data model ✅, UI display ✅, tag manager popup ⏳)
 - **Hover quick action buttons** (detail/queue/copy/tag/delete)
 - **Keyboard navigation** (↑/↓, Enter, 1-9, Esc)
 - **Paste queue** (shopping cart mode, batch paste)
 - **Drawer editor** (text editing, image preview)
 - Local image loading via `convertFileSrc`
+- **Application Lifecycle**:
+  - First-run detection (show settings window on first launch only)
+  - Window close-to-tray (hide instead of exit on close button)
+  - Graceful autostart error handling (Windows registry errors)
+- **Click Actions**:
+  - **Copy**: Copy data to clipboard only
+  - **Paste**: Copy data → hide window → simulate paste shortcut at previous focus
+  - Configurable single/double click actions in settings
+  - **Paste Shortcut Mode**: User-selectable paste shortcut (Ctrl+V or Shift+Insert)
 
 ### In Progress ⏳
 - ItemList virtual scrolling (performance optimization)
@@ -385,6 +395,7 @@ const imageSrc = computed(() => {
 - Advanced search filters (by date range)
 - Multi-language support
 - ItemList virtual scrolling
+- **Tag manager popup** - Add/remove tags UI (currently `showTagManager` is empty)
 
 ---
 
@@ -401,39 +412,33 @@ const imageSrc = computed(() => {
 ### Settings Categories
 
 **窗口设置**:
-- 窗口位置 (remember/center/cursor)
-- 激活时回到顶部
-- 激活时切换至全部分组
+- 窗口位置 (remember/center/cursor) ✅ 已实现
+- 智能激活 (5秒内复制则回到顶部/切换全部/聚焦搜索) ✅ 已实现
 
 **音效设置**:
-- 复制音效 (+ preview button)
+- 复制音效 (+ preview button) ⏳ 待实现（需音效文件资源）
 
 **搜索设置**:
-- 搜索框位置 (top/bottom)
-- 默认聚焦
-- 自动清除
+- 搜索框位置 (top/bottom) ✅ 已实现
+- 默认聚焦 ✅ 已实现（合并到智能激活）
 
 **内容设置**:
-- 自动粘贴 (off/single/double)
-- 图片OCR
-- 复制为纯文本
-- 粘贴为纯文本
-- 操作按钮 (customize)
-- 自动收藏
-- 删除确认
-- 自动排序
+- 自动粘贴 (off/single/double) ✅ 已实现
+- 图片OCR ⏳ 待实现（需OCR库）
+- 复制为纯文本 ✅ 已实现
+- 粘贴为纯文本 ⏳ 待实现
+- 删除确认 ✅ 已实现
+- 自动排序 ✅ 已实现
 
 **历史记录设置**:
-- 最大历史记录数 (100-10000)
-- 自动清理 (0/7/30/90 days)
+- 最大历史记录数 (100-10000) ✅ 后端已实现
+- 自动清理 (0/7/30/90 days) ✅ 后端已实现
 
 **通用设置**:
-- 开机自启
-- 应用黑名单 (textarea, one per line)
+- 开机自启 ✅ 已实现
 
 **快捷键设置**:
-- 唤醒快捷键 (按键录制, 如: Alt+V, Win+Shift+C)
-- 窗口尺寸 (width × height)
+- 唤醒快捷键 (按键录制, 如: Alt+V, Win+Shift+C) ✅ 已实现
 
 ---
 
@@ -441,6 +446,7 @@ const imageSrc = computed(() => {
 
 - **No linter/prettier config**: Follow existing code patterns (Vue template formatting, semicolons-optional style)
 - **Never run tauri dev**: I will run by my self
+- **Never run cargo check**: I will run by my self
 - **No test framework yet**: Run type checks with `pnpm run build` (includes `vue-tsc`)
 - **Type strictness is critical**: The project has `strict: true` and `noUnusedLocals`; zero tolerance for `any` types
 - **Settings panel**: Normal window with title bar (decorations: true)

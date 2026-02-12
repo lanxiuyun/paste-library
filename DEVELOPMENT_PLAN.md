@@ -37,6 +37,49 @@
 - [x] 数据导出与备份
 
 ### 阶段 5: Item 重构与体验优化 ✅ COMPLETE
+
+### 阶段 5.5: 设置功能实现 ⏳ IN PROGRESS
+**详情见 [SETTINGS_IMPLEMENTATION.md](docs/SETTINGS_IMPLEMENTATION.md)**
+
+设置面板UI已完成并可以保存数据，但前端代码没有实际使用这些设置。本阶段将实现所有"存而不用"的设置功能。
+
+**2026-02-07 需求变更**: 移除7项不需要的功能，新增智能激活功能
+
+**实现进度:** 87% (13/15项已完整实现)
+
+**🔴 P0 - 核心体验设置（4项）**
+- [x] **smart_activate** - 智能激活 ⭐ **已实现**
+- [x] **click_action** - 单击动作（复制/粘贴）⭐ **已实现**
+- [x] **double_click_action** - 双击动作（复制/粘贴）⭐ **已实现**
+- [x] **window_position** - 窗口位置（记住/居中/跟随光标）⭐ **已实现**
+- [x] **search_position** - 搜索框位置（顶部/底部）⭐ **已实现**
+
+**🟡 P1 - 增强体验设置（4项）**
+- [x] **confirm_delete** - 删除确认对话框 ⭐ **已实现**
+- [x] **copy_as_plain_text** - 复制为纯文本 ⭐ **已实现**
+- [x] **auto_sort** - 自动排序（重复内容置顶）⭐ **已实现**
+- [ ] copy_sound - 复制音效
+
+**🟢 P2 - 进阶功能设置（3项）**
+- [x] **auto_start** - 开机自启 ⭐ **已实现**
+- [ ] paste_as_plain_text - 粘贴为纯文本
+- [ ] image_ocr - 图片OCR识别
+
+**✅ 已实现设置（3项）**
+- [x] hotkey - 唤醒快捷键（需重启生效）
+- [x] max_history_count - 最大历史记录数（后端自动）
+- [x] auto_cleanup_days - 自动清理天数（后端自动）
+
+**❌ 已移除设置（7项）**
+- ~~auto_favorite~~ - 自动收藏
+- ~~操作按钮~~ - 操作按钮自定义
+- ~~clear_search_on_activate~~ - 自动清除搜索
+- ~~scroll_to_top_on_activate~~ - 激活时回到顶部（合并到智能激活）
+- ~~switch_to_all_on_activate~~ - 激活时切换至全部分组（合并到智能激活）
+- ~~blacklist_apps~~ - 应用黑名单
+- ~~window_width/window_height~~ - 窗口尺寸
+
+### 阶段 6: 测试与优化 📋 PLANNED
 **Phase 1: Item 基础重构（Foundation）**
 - [x] 可变高度 Item 设计（文本最多3行、图片自适应高度）
 - [x] 信息展示简化（统计信息移至抽屉）
@@ -53,6 +96,12 @@
 - [x] 模糊搜索（拼音、首字母、容错、标签搜索）
 - [x] 图片文件缩略图显示（使用 convertFileSrc）
 - [ ] ItemList虚拟滚动
+
+### 阶段 5.6: Bug修复与稳定性改进 ✅ COMPLETE
+**2026-02-11完成**
+- [x] 修复开机自启初始化错误处理（Windows注册表错误）
+- [x] 修复窗口关闭行为（关闭时隐藏而非退出）
+- [x] 实现首次运行检测功能
 
 ### 阶段 6: 测试与优化 📋 PLANNED
 - [ ] 功能测试
@@ -75,10 +124,12 @@
 | 用户界面 | 100% ✅ |
 | 高级功能 | 100% ✅ |
 | Item 重构与体验优化 | 100% ✅ |
+| 设置功能实现 | 87% ⏳ |
+| Bug修复与稳定性 | 100% ✅ |
 | 测试与优化 | 0% 📋 |
 | 构建与发布 | 0% 📋 |
 
-**总体进度**: ~95%
+**总体进度**: ~96%
 
 ---
 
@@ -103,6 +154,8 @@
 - [x] 右键显示上下文菜单
 - [x] 打开文件 (open_file)
 - [x] 在文件夹中显示 (show_in_folder)
+- [x] 复制文件路径到剪贴板
+- [x] 右键菜单复制/粘贴行为与单击/双击一致
 
 ### 重构计划 (开发中)
 详见 [FEATURE_IMPLEMENTATION_CHECKLIST.md](docs/FEATURE_IMPLEMENTATION_CHECKLIST.md)
@@ -155,6 +208,10 @@
 - [x] 跨应用拖拽
 - [x] 模糊搜索（拼音、首字母、容错）
 - [x] 图片文件缩略图显示（使用 convertFileSrc）
+- [x] 文件Item显示优化
+  - 单文件/文件夹显示完整路径
+  - 多文件显示前3个文件路径列表
+  - 图片文件在Item列表直接显示缩略图
 - [ ] ItemList虚拟滚动
 
 ### 中优先级 (P1)
@@ -167,6 +224,54 @@
 - [ ] 主题切换
 - [ ] 缩略图懒加载
 - [ ] 性能优化
+- [ ] **标签管理功能** - 标签管理弹窗未实现
+  - [ ] 添加/删除标签UI弹窗（showTagManager为空函数）
+  - [ ] 显示所有可用标签列表
+  - [ ] 标签使用数量统计
+  - [ ] 自定义标签创建
+
+### 设置功能实现 ⏳ (详见 docs/SETTINGS_IMPLEMENTATION.md)
+
+**2026-02-07 需求变更**: 移除7项不需要的功能，新增智能激活
+
+**P0 - 核心体验设置（全部完成）**
+- [x] **smart_activate** - 智能激活 ⭐ **已实现** (2026-02-07)
+- [x] **click_action** - 单击动作（复制/粘贴）⭐ **已实现** (2026-02-11)
+- [x] **double_click_action** - 双击动作（复制/粘贴）⭐ **已实现** (2026-02-11)
+- [x] **window_position** - 窗口位置（remember/center/cursor）⭐ **已实现**
+- [x] **search_position** - 搜索框位置（top/bottom）⭐ **已实现**
+
+**P1 - 增强体验设置**
+- [x] **confirm_delete** - 删除确认对话框 ⭐ **已实现**
+- [x] **copy_as_plain_text** - 复制为纯文本 ⭐ **已实现**
+- [x] **auto_sort** - 自动排序（重复内容置顶）⭐ **已实现**
+- [ ] **copy_sound** - 复制音效（需要音效文件资源）
+
+**P2 - 进阶功能设置**
+- [x] **auto_start** - 开机自启 ⭐ **已实现**
+- [ ] **paste_as_plain_text** - 粘贴为纯文本（需要模拟粘贴支持）
+- [ ] **image_ocr** - 图片OCR识别（需要OCR库）
+
+**已实现设置（9项）**
+- [x] **hotkey** - 唤醒快捷键（Alt+V）
+- [x] **max_history_count** - 最大历史记录数（后端自动限制）
+- [x] **auto_cleanup_days** - 自动清理天数（后端自动清理）
+- [x] **click_action** - 单击动作（复制/粘贴）
+- [x] **double_click_action** - 双击动作（复制/粘贴）
+- [x] **paste_shortcut** - 粘贴快捷键（Ctrl+V / Shift+Insert）
+- [x] **window_position** - 窗口位置
+- [x] **search_position** - 搜索框位置
+- [x] **smart_activate** - 智能激活
+
+**❌ 已移除设置（8项）**
+- ~~auto_favorite~~ - 自动收藏（不需要）
+- ~~auto_paste~~ - 自动粘贴（被 click_action + double_click_action 替代）
+- ~~操作按钮~~ - 操作按钮自定义（不需要）
+- ~~clear_search_on_activate~~ - 激活时清除搜索（不需要）
+- ~~scroll_to_top_on_activate~~ - 激活时回到顶部（合并到智能激活）
+- ~~switch_to_all_on_activate~~ - 激活时切换至全部分组（合并到智能激活）
+- ~~blacklist_apps~~ - 应用黑名单（不需要）
+- ~~window_width/window_height~~ - 窗口尺寸（不需要）
 
 ---
 
@@ -191,3 +296,92 @@
   - ✅ 设置面板完善（历史记录删除按钮）
   - ✅ 跨应用拖拽（支持文本/图片/文件拖拽到其他应用）
   - ✅ 模糊搜索（拼音、首字母、容错、标签搜索）
+- 2026-02-07: **发现设置功能实现缺失问题**
+  - 设置面板UI完成但功能未实现（20%完成度）
+  - 创建 SETTINGS_IMPLEMENTATION.md 详细规划
+  - 20项设置中仅4项完整实现，16项存而不用
+- 2026-02-07: **完成智能激活功能**
+  - 移除7项不需要的设置（自动收藏、操作按钮、自动清除、应用黑名单、窗口尺寸等）
+  - 新增 smart_activate 智能激活功能
+  - 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
+  - 更新类型定义、Rust模型、数据库、设置面板UI
+  - 实现进度: 27% (4/15)
+- 2026-02-07: **完成设置功能实现** (进度: 73% - 11/15项)
+  - ✅ search_position - 搜索框位置（顶部/底部切换）
+  - ✅ confirm_delete - 删除确认对话框
+  - ✅ copy_as_plain_text - 复制为纯文本（HTML/RTF转纯文本）
+  - ✅ auto_paste - 自动粘贴行为（off/single/double）
+  - ✅ window_position - 窗口位置（remember/center/cursor）
+  - ✅ auto_sort - 自动排序（重复内容置顶，后端逻辑）
+  - ✅ auto_start - 开机自启（tauri-plugin-autostart）
+  - ✅ paste_shortcut - 粘贴快捷键模式（Ctrl+V / Shift+Insert）
+  - ⏳ copy_sound - 复制音效（待实现，需音效文件）
+  - ⏳ paste_as_plain_text - 粘贴为纯文本（待实现）
+  - ⏳ image_ocr - 图片OCR识别（待实现，需OCR库）
+- 2026-02-11: **BUG修复**
+  - ✅ 修复开机自启初始化错误 "系统找不到指定的文件 (os error 2)"
+    - 添加错误处理：检测 `is_enabled()` 状态，避免开发模式下的注册表错误
+    - 静默处理 Windows 注册表相关错误，不影响应用正常使用
+  - ✅ 修复窗口关闭行为
+    - 设置窗口关闭时改为隐藏而非退出应用
+    - 只有通过托盘菜单「退出」才能完全关闭应用
+    - 主窗口默认启动时不显示（`visible: false`）
+  - ✅ 首次运行检测
+    - 添加 `app_initialized` 数据库字段检测是否首次运行
+    - 首次运行时自动显示设置窗口
+    - 后续启动只显示托盘图标，静默运行在后台
+- 2026-02-11: **交互功能重构**
+  - ✅ 重新定义「复制」和「粘贴」动作
+    - **复制**: 仅将数据写入系统剪贴板
+    - **粘贴**: 复制数据 → 隐藏剪贴板窗口 → 模拟发送 Ctrl+V 到原焦点窗口
+  - ✅ 替换「自动粘贴」设置
+    - 移除 `auto_paste` 设置（off/single/double）
+    - 新增 `click_action` 设置：单击动作（复制/粘贴）
+    - 新增 `double_click_action` 设置：双击动作（复制/粘贴）
+  - ✅ 实现 Windows 原生粘贴模拟
+    - 使用 `winapi` 的 `keybd_event` 发送扫描码
+    - 绕过输入法拦截，正确触发 Ctrl+V 组合键
+- 2026-02-11: **粘贴快捷键模式**
+  - ✅ 添加 `paste_shortcut` 设置项
+    - 用户可选择 Ctrl+V（默认）或 Shift+Insert
+    - 终端/命令行用户推荐使用 Shift+Insert
+  - ✅ 后端支持两种快捷键模式
+    - Windows: 使用扫描码发送 Ctrl+V 或 Shift+Insert
+      - Insert 是扩展键，使用 KEYEVENTF_EXTENDEDKEY 标志
+    - Linux: 使用 enigo 库模拟对应快捷键
+    - macOS: 始终使用 Command+V
+- 2026-02-11: **Bug修复与细节优化**
+  - ✅ 修复 HTML 复制时的多余空格问题
+    - 问题: `writeHTML` 参数顺序错误，纯文本和 HTML 内容传反了
+    - 修复: 正确传入 `writeHTML(plainText, htmlContent)`
+    - 现在 HTML 内容复制时格式正确，无多余空格
+  - ✅ 修复详情窗口粘贴按钮行为不一致
+    - 问题: 详情窗口的「粘贴」按钮只复制到剪贴板，未执行粘贴动作
+    - 修复: 点击粘贴按钮后调用 `simulatePaste()`，与单击/双击粘贴行为一致
+  - ✅ 修复图片详情底部信息显示
+    - 问题: 图片详情显示字符/单词/行数统计（文本统计信息）
+    - 修复: 图片详情现在显示尺寸、格式、大小等图片相关信息
+  - ✅ 优化详情窗口布局
+    - 图片/文件详情：信息统一在内容区域显示（尺寸、格式、大小），底部统计栏移除
+    - 文本详情：保留底部统计栏（字符、单词、行数、大小）
+    - 避免信息重复显示，界面更简洁
+- 2026-02-12: **右键菜单与文件显示优化**
+  - ✅ 统一右键菜单复制粘贴行为
+    - 右键「复制」：仅复制到剪贴板（与单击/双击复制行为一致）
+    - 右键「粘贴」：复制数据 → 隐藏窗口 → 模拟粘贴（与单击/双击粘贴行为一致）
+  - ✅ 文件Item显示优化
+    - 单个图片文件：显示预览缩略图 + 完整文件路径
+    - 单个非图片文件：显示 📄 图标 + 完整文件路径
+    - 文件夹：显示 📁 图标 + 完整文件夹路径
+    - 多文件：显示前3个文件的图标和路径，超出显示 "+N 个文件..."
+    - 路径显示使用等宽字体，最多3行，支持自动换行
+  - ✅ 复制文件路径功能
+    - 右键菜单新增「复制文件路径」选项（适用于文件/文件夹/多文件类型）
+    - 详情窗口新增「复制路径」按钮（单文件/文件夹）
+    - 新增多文件详情视图，显示文件列表和「复制所有路径」按钮
+    - 多文件路径使用 Windows 风格换行符 (`\r\n`) 分隔，末尾自动添加换行符
+  - ✅ 修改文件
+    - `src/components/ClipboardList.vue` - 右键菜单动作处理、复制文件路径函数
+    - `src/components/ClipboardItem.vue` - 文件预览显示优化（图片缩略图、多行路径）
+    - `src/components/ContextMenu.vue` - 添加「复制文件路径」菜单项
+    - `src/components/DrawerEditor.vue` - 添加复制路径按钮、多文件详情视图

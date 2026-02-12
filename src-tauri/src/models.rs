@@ -116,14 +116,14 @@ pub struct AppSettings {
     // 窗口设置
     /// 窗口位置 (remember/center/cursor)
     pub window_position: String,
-    /// 窗口宽度
-    pub window_width: f64,
-    /// 窗口高度
-    pub window_height: f64,
-    /// 激活时回到顶部
-    pub scroll_to_top_on_activate: bool,
-    /// 激活时切换至全部分组
-    pub switch_to_all_on_activate: bool,
+    /// 窗口位置 X 坐标 (remember 模式使用)
+    pub window_pos_x: Option<i32>,
+    /// 窗口位置 Y 坐标 (remember 模式使用)
+    pub window_pos_y: Option<i32>,
+
+    // 智能激活设置 (新增)
+    /// 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
+    pub smart_activate: bool,
 
     // 音效设置
     /// 复制音效
@@ -134,34 +134,30 @@ pub struct AppSettings {
     pub search_position: String,
     /// 默认聚焦搜索框
     pub auto_focus_search: bool,
-    /// 激活时清除搜索框
-    pub clear_search_on_activate: bool,
 
     // 内容设置
-    /// 自动粘贴模式 (off/single/double)
-    pub auto_paste: String,
+    /// 单击动作 (copy/paste)
+    pub click_action: String,
+    /// 双击动作 (copy/paste)
+    pub double_click_action: String,
+    /// 粘贴快捷键 (ctrl_v/shift_insert)
+    pub paste_shortcut: String,
     /// 图片OCR
     pub image_ocr: bool,
     /// 复制为纯文本
     pub copy_as_plain_text: bool,
     /// 粘贴为纯文本
     pub paste_as_plain_text: bool,
-    /// 自动收藏
-    pub auto_favorite: bool,
     /// 删除确认
     pub confirm_delete: bool,
     /// 自动排序 (复制已存在内容时置顶)
     pub auto_sort: bool,
-    /// 左键点击行为 (copy/paste)
-    pub left_click_action: String,
 
     // 通用设置
     /// 唤醒快捷键 (默认 "Alt+V")
     pub hotkey: String,
     /// 是否开机自启
     pub auto_start: bool,
-    /// 黑名单应用列表 (来源应用名)
-    pub blacklist_apps: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -173,33 +169,32 @@ impl Default for AppSettings {
 
             // 窗口
             window_position: "remember".to_string(),
-            window_width: 800.0,
-            window_height: 600.0,
-            scroll_to_top_on_activate: false,
-            switch_to_all_on_activate: true,
+            window_pos_x: None,
+            window_pos_y: None,
+
+            // 智能激活 (新增)
+            smart_activate: true,
 
             // 音效
             copy_sound: false,
 
-            // 搜索
-            search_position: "bottom".to_string(),
+            // 搜索（默认顶部，设置项已隐藏）
+            search_position: "top".to_string(),
             auto_focus_search: true,
-            clear_search_on_activate: false,
 
             // 内容
-            auto_paste: "double".to_string(),
+            click_action: "copy".to_string(),
+            double_click_action: "paste".to_string(),
+            paste_shortcut: "ctrl_v".to_string(),
             image_ocr: false,
             copy_as_plain_text: false,
             paste_as_plain_text: true,
-            auto_favorite: false,
             confirm_delete: true,
             auto_sort: false,
-            left_click_action: "copy".to_string(),
 
             // 通用
             hotkey: "Alt+V".to_string(),
             auto_start: false,
-            blacklist_apps: vec![],
         }
     }
 }

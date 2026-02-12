@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { emit, listen } from '@tauri-apps/api/event';
 import { ref, onMounted } from 'vue';
 import type { AppSettings } from '@/types';
 
@@ -9,34 +10,36 @@ const settings = ref<AppSettings>({
 
   // 窗口设置
   window_position: 'remember',
-  window_width: 800,
-  window_height: 600,
-  scroll_to_top_on_activate: false,
-  switch_to_all_on_activate: true,
+  window_pos_x: undefined,
+  window_pos_y: undefined,
+
+  // 智能激活设置 (新增)
+  smart_activate: true,
 
   // 音效设置
   copy_sound: false,
 
-  // 搜索设置
-  search_position: 'bottom',
+  // 搜索设置（默认顶部，设置项已隐藏）
+  search_position: 'top',
   auto_focus_search: true,
-  clear_search_on_activate: false,
 
   // 内容设置
-  auto_paste: 'double',
+  click_action: 'copy',
+  double_click_action: 'paste',
+  paste_shortcut: 'ctrl_v',
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,
-  auto_favorite: false,
   confirm_delete: true,
   auto_sort: false,
-  left_click_action: 'copy',
 
   // 通用设置
   hotkey: 'Alt+V',
   auto_start: false,
-  blacklist_apps: [],
 });
+
+// 全局监听器标记
+let isListening = false;
 
 export function useSettings() {
   const loadSettings = async (): Promise<void> => {
@@ -52,6 +55,8 @@ export function useSettings() {
     try {
       await invoke('save_settings', { settings: newSettings });
       settings.value = newSettings;
+      // 发送事件通知其他窗口设置已更改
+      await emit('settings-changed', newSettings);
     } catch (error) {
       console.error('Failed to save settings:', error);
     }
@@ -67,6 +72,14 @@ export function useSettings() {
 
   onMounted(() => {
     loadSettings();
+    
+    // 只设置一次全局监听器
+    if (!isListening) {
+      isListening = true;
+      listen<AppSettings>('settings-changed', (event) => {
+        settings.value = event.payload;
+      });
+    }
   });
 
   return {

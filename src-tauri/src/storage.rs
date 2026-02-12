@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -95,25 +95,23 @@ impl Database {
             ("max_history_count", "5000"),
             ("auto_cleanup_days", "30"),
             ("window_position", "remember"),
-            ("window_width", "800"),
-            ("window_height", "600"),
-            ("scroll_to_top_on_activate", "false"),
-            ("switch_to_all_on_activate", "true"),
+            ("window_pos_x", ""),
+            ("window_pos_y", ""),
+            ("smart_activate", "true"),
             ("copy_sound", "false"),
             ("search_position", "bottom"),
             ("auto_focus_search", "true"),
-            ("clear_search_on_activate", "false"),
-            ("auto_paste", "double"),
+            ("click_action", "copy"),
+            ("double_click_action", "paste"),
+            ("paste_shortcut", "ctrl_v"),
             ("image_ocr", "false"),
             ("copy_as_plain_text", "false"),
             ("paste_as_plain_text", "true"),
-            ("auto_favorite", "false"),
             ("confirm_delete", "true"),
             ("auto_sort", "false"),
-            ("left_click_action", "copy"),
             ("hotkey", "Alt+V"),
             ("auto_start", "false"),
-            ("blacklist_apps", "[]"),
+            ("app_initialized", "false"),
         ];
 
         for (key, value) in defaults {
@@ -126,8 +124,35 @@ impl Database {
         Ok(())
     }
 
+    /// 检查是否是首次运行
+    pub fn is_first_run(&self) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let result: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'app_initialized'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        match result {
+            Some(value) => Ok(value != "true"),
+            None => Ok(true),
+        }
+    }
+
+    /// 标记应用已初始化（非首次运行）
+    pub fn mark_app_initialized(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('app_initialized', 'true')",
+            [],
+        )?;
+        Ok(())
+    }
+
     /// 添加剪贴板记录
-    pub fn add_clipboard_item(&self, item: &ClipboardItem) -> Result<i64> {
+    pub fn add_clipboard_item(&self, item: &ClipboardItem, auto_sort: bool) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
 
         let metadata_json = item
@@ -146,11 +171,18 @@ impl Database {
             .map(|t| serde_json::to_string(t).ok())
             .flatten();
 
+        // 根据 auto_sort 设置决定是否更新重复项的时间戳
+        let conflict_sql = if auto_sort {
+            "ON CONFLICT(content_hash) DO UPDATE SET
+                created_at = excluded.created_at"
+        } else {
+            "ON CONFLICT(content_hash) DO NOTHING"
+        };
+
         conn.execute(
-            "INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags)
+            &format!("INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-             ON CONFLICT(content_hash) DO UPDATE SET
-                created_at = excluded.created_at",
+             {}", conflict_sql),
             params![
                 match item.content_type {
                     ClipboardContentType::Text => "text",
@@ -171,7 +203,14 @@ impl Database {
             ],
         )?;
 
-        Ok(conn.last_insert_rowid())
+        // 如果发生 ON CONFLICT DO NOTHING，需要返回已存在项的 ID
+        let id: i64 = conn.query_row(
+            "SELECT id FROM clipboard_history WHERE content_hash = ?1",
+            params![item.content_hash],
+            |row| row.get(0),
+        )?;
+
+        Ok(id)
     }
 
     /// 获取历史记录
@@ -414,24 +453,23 @@ impl Database {
                     }
                 }
                 "window_position" => settings.window_position = value,
-                "window_width" => {
-                    if let Ok(v) = value.parse() {
-                        settings.window_width = v;
+                "window_pos_x" => {
+                    if !value.is_empty() {
+                        if let Ok(v) = value.parse() {
+                            settings.window_pos_x = Some(v);
+                        }
                     }
                 }
-                "window_height" => {
-                    if let Ok(v) = value.parse() {
-                        settings.window_height = v;
+                "window_pos_y" => {
+                    if !value.is_empty() {
+                        if let Ok(v) = value.parse() {
+                            settings.window_pos_y = Some(v);
+                        }
                     }
                 }
-                "scroll_to_top_on_activate" => {
+                "smart_activate" => {
                     if let Ok(v) = value.parse() {
-                        settings.scroll_to_top_on_activate = v;
-                    }
-                }
-                "switch_to_all_on_activate" => {
-                    if let Ok(v) = value.parse() {
-                        settings.switch_to_all_on_activate = v;
+                        settings.smart_activate = v;
                     }
                 }
                 "copy_sound" => {
@@ -445,12 +483,9 @@ impl Database {
                         settings.auto_focus_search = v;
                     }
                 }
-                "clear_search_on_activate" => {
-                    if let Ok(v) = value.parse() {
-                        settings.clear_search_on_activate = v;
-                    }
-                }
-                "auto_paste" => settings.auto_paste = value,
+                "click_action" => settings.click_action = value,
+                "double_click_action" => settings.double_click_action = value,
+                "paste_shortcut" => settings.paste_shortcut = value,
                 "image_ocr" => {
                     if let Ok(v) = value.parse() {
                         settings.image_ocr = v;
@@ -466,11 +501,6 @@ impl Database {
                         settings.paste_as_plain_text = v;
                     }
                 }
-                "auto_favorite" => {
-                    if let Ok(v) = value.parse() {
-                        settings.auto_favorite = v;
-                    }
-                }
                 "confirm_delete" => {
                     if let Ok(v) = value.parse() {
                         settings.confirm_delete = v;
@@ -481,17 +511,21 @@ impl Database {
                         settings.auto_sort = v;
                     }
                 }
-                "left_click_action" => settings.left_click_action = value,
                 "hotkey" => settings.hotkey = value,
                 "auto_start" => {
                     if let Ok(v) = value.parse() {
                         settings.auto_start = v;
                     }
                 }
-                "blacklist_apps" => {
-                    if let Ok(v) = serde_json::from_str(&value) {
-                        settings.blacklist_apps = v;
-                    }
+                // 忽略已移除的设置字段（保持向后兼容）
+                "window_width"
+                | "window_height"
+                | "scroll_to_top_on_activate"
+                | "switch_to_all_on_activate"
+                | "clear_search_on_activate"
+                | "auto_favorite"
+                | "blacklist_apps" => {
+                    // 这些字段已移除，忽略即可
                 }
                 _ => {}
             }
@@ -508,24 +542,27 @@ impl Database {
             ("max_history_count", settings.max_history_count.to_string()),
             ("auto_cleanup_days", settings.auto_cleanup_days.to_string()),
             ("window_position", settings.window_position.clone()),
-            ("window_width", settings.window_width.to_string()),
-            ("window_height", settings.window_height.to_string()),
             (
-                "scroll_to_top_on_activate",
-                settings.scroll_to_top_on_activate.to_string(),
+                "window_pos_x",
+                settings
+                    .window_pos_x
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
             ),
             (
-                "switch_to_all_on_activate",
-                settings.switch_to_all_on_activate.to_string(),
+                "window_pos_y",
+                settings
+                    .window_pos_y
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
             ),
+            ("smart_activate", settings.smart_activate.to_string()),
             ("copy_sound", settings.copy_sound.to_string()),
             ("search_position", settings.search_position.clone()),
             ("auto_focus_search", settings.auto_focus_search.to_string()),
-            (
-                "clear_search_on_activate",
-                settings.clear_search_on_activate.to_string(),
-            ),
-            ("auto_paste", settings.auto_paste.clone()),
+            ("click_action", settings.click_action.clone()),
+            ("double_click_action", settings.double_click_action.clone()),
+            ("paste_shortcut", settings.paste_shortcut.clone()),
             ("image_ocr", settings.image_ocr.to_string()),
             (
                 "copy_as_plain_text",
@@ -535,16 +572,10 @@ impl Database {
                 "paste_as_plain_text",
                 settings.paste_as_plain_text.to_string(),
             ),
-            ("auto_favorite", settings.auto_favorite.to_string()),
             ("confirm_delete", settings.confirm_delete.to_string()),
             ("auto_sort", settings.auto_sort.to_string()),
-            ("left_click_action", settings.left_click_action.clone()),
             ("hotkey", settings.hotkey.clone()),
             ("auto_start", settings.auto_start.to_string()),
-            (
-                "blacklist_apps",
-                serde_json::to_string(&settings.blacklist_apps).unwrap_or_default(),
-            ),
         ];
 
         for (key, value) in settings_to_save {

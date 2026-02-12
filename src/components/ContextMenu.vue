@@ -62,6 +62,12 @@ const emit = defineEmits<{
 }>();
 
 // 菜单项定义
+// 根据 Test.md 规范：
+// - 文本：复制、粘贴、标签、删除
+// - HTML/RTF：复制、粘贴、标签、复制为纯文本、粘贴为纯文本、删除
+// - 图片：复制、粘贴、标签、打开文件、在文件夹中显示、复制文件路径、删除
+// - 单文件：复制、粘贴、标签、打开文件、在文件夹中显示、复制文件路径、删除
+// - 多文件：复制、粘贴、标签、复制文件路径、删除
 const menuItems: MenuItem[] = [
   {
     key: 'copy',
@@ -76,35 +82,38 @@ const menuItems: MenuItem[] = [
     shortcut: 'Ctrl+V',
     visibleFor: ['text', 'html', 'rtf', 'image', 'file'],
   },
-  { key: 'divider1', type: 'divider', label: '' },
   {
-    key: 'queue',
-    label: '添加到队列',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+    key: 'tag',
+    label: '标签',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
   },
   {
     key: 'copyPlain',
     label: '复制为纯文本',
-    visibleFor: ['text', 'html', 'rtf'],
+    visibleFor: ['html', 'rtf'], // 只对 HTML/RTF 显示，文本类型不需要
   },
-  { key: 'divider2', type: 'divider', label: '' },
+  {
+    key: 'pastePlain',
+    label: '粘贴为纯文本',
+    visibleFor: ['html', 'rtf'], // 只对 HTML/RTF 显示
+  },
   {
     key: 'openFile',
     label: '打开文件',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>',
-    visibleFor: ['image', 'file'],
+    visibleFor: ['image', 'file'], // 多文件不显示，需要特殊处理
   },
   {
     key: 'showInFolder',
     label: '在文件夹中显示',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>',
-    visibleFor: ['image', 'file', 'folder'],
+    visibleFor: ['image', 'file', 'folder'], // 多文件不显示，需要特殊处理
   },
-  { key: 'divider3', type: 'divider', label: '' },
   {
-    key: 'favorite',
-    label: '收藏',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
+    key: 'copyFilePath',
+    label: '复制文件路径',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+    visibleFor: ['image', 'file', 'folder', 'files'], // 图片也需要
   },
   {
     key: 'delete',
@@ -118,30 +127,68 @@ const menuItems: MenuItem[] = [
 // 根据内容类型过滤可见菜单项
 const visibleMenuItems = computed(() => {
   if (!props.item) return [];
-  
+
   const contentType = props.item.content_type;
-  
-  return menuItems.filter(item => {
-    // 分割线特殊处理
+  const isMultiFiles = contentType === 'files' && (props.item.file_paths?.length || 0) > 1;
+
+  // 第一步：过滤掉不可见的菜单项
+  const filtered = menuItems.filter(item => {
+    // 分割线特殊处理 - 先不过滤，后面统一处理
     if (item.type === 'divider') {
       return true;
     }
+
+    // 多文件不显示"打开文件"和"在文件夹中显示"
+    if (isMultiFiles && (item.key === 'openFile' || item.key === 'showInFolder')) {
+      return false;
+    }
+
     // 如果没有指定 visibleFor，则对所有类型可见
     if (!item.visibleFor) {
       return true;
     }
+
     // 检查当前类型是否在可见列表中
     return item.visibleFor.includes(contentType);
-  }).filter((item, index, arr) => {
-    // 移除连续的分割线和首尾的分割线
-    if (item.type === 'divider') {
-      const prev = arr[index - 1];
-      const next = arr[index + 1];
-      if (!prev || prev.type === 'divider') return false;
-      if (!next || next.type === 'divider') return false;
-    }
-    return true;
   });
+
+  // 第二步：移除所有分割线，然后重新根据剩余的菜单项添加分割线
+  const withoutDividers = filtered.filter(item => item.type !== 'divider');
+
+  // 第三步：重新构建带分割线的菜单
+  const result: MenuItem[] = [];
+
+  // 第一组：复制、粘贴、标签
+  const group1 = ['copy', 'paste', 'tag'];
+  const group1Items = withoutDividers.filter(item => group1.includes(item.key));
+  if (group1Items.length > 0) {
+    result.push(...group1Items);
+    result.push({ key: 'divider_group1', type: 'divider', label: '' });
+  }
+
+  // 第二组：复制/粘贴为纯文本（仅HTML/RTF）
+  const group2 = ['copyPlain', 'pastePlain'];
+  const group2Items = withoutDividers.filter(item => group2.includes(item.key));
+  if (group2Items.length > 0) {
+    result.push(...group2Items);
+    result.push({ key: 'divider_group2', type: 'divider', label: '' });
+  }
+
+  // 第三组：文件操作（打开文件、在文件夹中显示、复制文件路径）
+  const group3 = ['openFile', 'showInFolder', 'copyFilePath'];
+  const group3Items = withoutDividers.filter(item => group3.includes(item.key));
+  if (group3Items.length > 0) {
+    result.push(...group3Items);
+    result.push({ key: 'divider_group3', type: 'divider', label: '' });
+  }
+
+  // 第四组：删除
+  const deleteItem = withoutDividers.find(item => item.key === 'delete');
+  if (deleteItem) {
+    result.push(deleteItem);
+  }
+
+  return result;
 });
 
 // 计算菜单位置，确保不超出视口
