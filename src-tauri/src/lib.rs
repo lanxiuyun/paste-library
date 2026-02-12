@@ -5,6 +5,7 @@ mod window_manager;
 mod shortcut_manager;
 mod tray_manager;
 mod fuzzy_search;
+mod prevent_default;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -434,6 +435,9 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        // 禁用 webview 的默认行为（阻止系统菜单、快捷键等）
+        // https://github.com/ferreira-tb/tauri-plugin-prevent-default
+        .plugin(prevent_default::init())
         .setup(|app| {
             let app_dir = app
                 .path()
