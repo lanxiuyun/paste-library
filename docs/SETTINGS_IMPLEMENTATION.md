@@ -148,6 +148,29 @@
 - **当前行为**: 只在应用启动时注册一次
 - **改进建议**: 修改后需要提示用户重启应用生效
 
+#### 16. 数字键快捷粘贴修饰键 (number_key_shortcut)
+- **当前状态**: ✅ **已实现** (2026-02-12)
+- **设置类型**: string (如 "ctrl", "ctrl+shift", "alt", "none")
+- **默认行为**: "ctrl" (Ctrl+1~9 粘贴对应位置的剪贴板内容)
+- **实现功能**: 
+  - 支持用户自定义 1-9 数字键的修饰键组合
+  - 可选项：
+    - "none": 直接按数字键即可粘贴
+    - "ctrl": Ctrl+数字键
+    - "alt": Alt+数字键
+    - "shift": Shift+数字键
+    - "ctrl+shift": Ctrl+Shift+数字键
+    - "ctrl+alt": Ctrl+Alt+数字键
+    - "alt+shift": Alt+Shift+数字键
+    - 其他任意组合
+- **涉及文件**: 
+  - `src/types/index.ts` - 类型定义
+  - `src-tauri/src/models.rs` - Rust模型
+  - `src-tauri/src/storage.rs` - 存储读写
+  - `src/composables/useSettings.ts` - 默认值
+  - `src/components/SettingsPanel.vue` - 设置UI（录制按钮）
+  - `src/components/ClipboardList.vue` - 键盘事件处理
+
 ---
 
 ## ❌ 已移除的功能

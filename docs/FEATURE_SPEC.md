@@ -55,7 +55,11 @@
   - 支持: 特殊键 Space, Enter, Escape, Tab, Backspace, Delete, 方向键
   - 修改后需重启应用生效
 - 打开偏好设置窗口: string (可配置)
-- 快速粘贴: boolean + modifier
+- 数字键快捷粘贴: 按键录制按钮 (仅捕获修饰键)
+  - 支持: Ctrl, Alt, Shift, Meta 修饰键组合
+  - 可设置为直接按数字键（无修饰键）
+  - 默认: Ctrl+1~9 粘贴对应位置内容
+  - 实时生效，无需重启
 - 粘贴为纯文本: string
 
 ### 5. 数据备份
