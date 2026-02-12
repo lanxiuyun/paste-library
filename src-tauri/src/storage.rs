@@ -100,7 +100,7 @@ impl Database {
             ("smart_activate", "true"),
             ("copy_sound", "false"),
             ("search_position", "bottom"),
-            ("auto_focus_search", "true"),
+            ("focus_search_on_activate", "false"),
             ("click_action", "copy"),
             ("double_click_action", "paste"),
             ("paste_shortcut", "ctrl_v"),
@@ -478,9 +478,15 @@ impl Database {
                     }
                 }
                 "search_position" => settings.search_position = value,
+                "focus_search_on_activate" => {
+                    if let Ok(v) = value.parse() {
+                        settings.focus_search_on_activate = v;
+                    }
+                }
+                // 向后兼容：读取旧设置
                 "auto_focus_search" => {
                     if let Ok(v) = value.parse() {
-                        settings.auto_focus_search = v;
+                        settings.focus_search_on_activate = v;
                     }
                 }
                 "click_action" => settings.click_action = value,
@@ -559,7 +565,10 @@ impl Database {
             ("smart_activate", settings.smart_activate.to_string()),
             ("copy_sound", settings.copy_sound.to_string()),
             ("search_position", settings.search_position.clone()),
-            ("auto_focus_search", settings.auto_focus_search.to_string()),
+            (
+                "focus_search_on_activate",
+                settings.focus_search_on_activate.to_string(),
+            ),
             ("click_action", settings.click_action.clone()),
             ("double_click_action", settings.double_click_action.clone()),
             ("paste_shortcut", settings.paste_shortcut.clone()),

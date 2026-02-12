@@ -241,6 +241,7 @@ impl WindowManager {
         .resizable(true)
         .skip_taskbar(true)
         .always_on_top(true)
+        .accept_first_mouse(true)
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -258,7 +259,8 @@ impl WindowManager {
                 let database = database_clone.clone();
 
                 tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    // 增加延迟时间，给用户足够的时间完成 hover 和点击操作
+                    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
                     if let Some(win) = app.get_webview_window("clipboard") {
                         if let Ok(is_focused) = win.is_focused() {

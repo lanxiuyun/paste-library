@@ -132,8 +132,8 @@ pub struct AppSettings {
     // 搜索设置
     /// 搜索框位置 (top/bottom)
     pub search_position: String,
-    /// 默认聚焦搜索框
-    pub auto_focus_search: bool,
+    /// 激活窗口时自动聚焦搜索框（与smart_activate独立）
+    pub focus_search_on_activate: bool,
 
     // 内容设置
     /// 单击动作 (copy/paste)
@@ -178,9 +178,9 @@ impl Default for AppSettings {
             // 音效
             copy_sound: false,
 
-            // 搜索（默认顶部，设置项已隐藏）
+            // 搜索
             search_position: "top".to_string(),
-            auto_focus_search: true,
+            focus_search_on_activate: false,
 
             // 内容
             click_action: "copy".to_string(),
