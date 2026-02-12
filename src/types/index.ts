@@ -126,4 +126,8 @@ export interface AppSettings {
   // 通用设置
   hotkey: string;
   auto_start: boolean;
+
+  // 快捷键设置
+  /** 数字键 1-9 快速粘贴修饰键组合，如 "ctrl", "ctrl+shift", "alt", "none" 等 */
+  number_key_shortcut: string;
 }
