@@ -305,7 +305,7 @@
             <div class="setting-info">
               <div class="setting-title">唤醒快捷键</div>
               <div class="setting-desc">按下此快捷键可快速打开或关闭剪贴板窗口</div>
-              <div class="setting-note">点击下方按钮开始录制，然后按下想要的快捷键组合</div>
+              <div class="setting-note">点击右边按钮开始录制，然后按下想要的快捷键组合</div>
               <div class="setting-warning">修改快捷键后需要重启应用才能生效</div>
               <div v-if="shortcutError" class="error-message">{{ shortcutError }}</div>
             </div>
