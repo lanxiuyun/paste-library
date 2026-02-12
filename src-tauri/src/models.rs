@@ -158,6 +158,10 @@ pub struct AppSettings {
     pub hotkey: String,
     /// 是否开机自启
     pub auto_start: bool,
+
+    // 快捷键设置
+    /// 数字键 1-9 快速粘贴修饰键组合，如 "ctrl", "ctrl+shift", "alt", "none" 等，默认 "ctrl"
+    pub number_key_shortcut: String,
 }
 
 impl Default for AppSettings {
@@ -195,6 +199,9 @@ impl Default for AppSettings {
             // 通用
             hotkey: "Alt+V".to_string(),
             auto_start: false,
+
+            // 快捷键设置
+            number_key_shortcut: "ctrl".to_string(),
         }
     }
 }

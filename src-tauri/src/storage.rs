@@ -111,6 +111,7 @@ impl Database {
             ("auto_sort", "false"),
             ("hotkey", "Alt+V"),
             ("auto_start", "false"),
+            ("number_key_shortcut", "ctrl"),
             ("app_initialized", "false"),
         ];
 
@@ -523,6 +524,7 @@ impl Database {
                         settings.auto_start = v;
                     }
                 }
+                "number_key_shortcut" => settings.number_key_shortcut = value,
                 // 忽略已移除的设置字段（保持向后兼容）
                 "window_width"
                 | "window_height"
@@ -585,6 +587,7 @@ impl Database {
             ("auto_sort", settings.auto_sort.to_string()),
             ("hotkey", settings.hotkey.clone()),
             ("auto_start", settings.auto_start.to_string()),
+            ("number_key_shortcut", settings.number_key_shortcut.clone()),
         ];
 
         for (key, value) in settings_to_save {
