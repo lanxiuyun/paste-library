@@ -558,7 +558,8 @@ const handleKeyDown = async (e: KeyboardEvent) => {
   }
 };
 
-let hasActivated = false;
+// 标记是否已经执行过智能激活（每次窗口打开时重置）
+const hasActivated = ref(false);
 
 onMounted(async () => {
   loadHistory(limit, 0);
@@ -572,14 +573,21 @@ onMounted(async () => {
   const appWindow = getCurrentWindow();
   const unlistenFocus = await appWindow.listen('tauri://focus', () => {
     // 只在首次激活时执行智能激活，避免频繁焦点切换导致 hover 失效
-    if (!hasActivated) {
-      hasActivated = true;
+    if (!hasActivated.value) {
+      hasActivated.value = true;
       handleSmartActivate();
     }
   });
   
+  // 监听窗口隐藏事件，重置激活标记
+  const unlistenBlur = await appWindow.listen('tauri://blur', () => {
+    // 窗口失去焦点时重置标记，下次打开时重新执行
+    hasActivated.value = false;
+  });
+  
   // 保存清理函数
   (window as any).__unlistenFocus = unlistenFocus;
+  (window as any).__unlistenBlur = unlistenBlur;
 });
 
 onUnmounted(() => {
@@ -588,8 +596,11 @@ onUnmounted(() => {
   if ((window as any).__unlistenFocus) {
     (window as any).__unlistenFocus();
   }
+  if ((window as any).__unlistenBlur) {
+    (window as any).__unlistenBlur();
+  }
   // 重置激活标记
-  hasActivated = false;
+  hasActivated.value = false;
 });
 
 // 滚动选中项到可视区域
