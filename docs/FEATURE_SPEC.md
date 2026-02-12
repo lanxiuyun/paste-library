@@ -18,7 +18,10 @@
 - 自动清除: boolean
 
 **内容设置**
-- 自动粘贴: off/single/double
+- 单击动作: copy/paste/none
+- 双击动作: copy/paste/none
+- 粘贴快捷键: ctrl_v/shift_insert
+- 复制后隐藏窗口: boolean
 - 图片OCR: boolean
 - 复制为纯文本: boolean
 - 粘贴为纯文本: boolean
@@ -101,9 +104,14 @@
 
 | 操作 | 行为 | 可配置 |
 |------|------|--------|
-| 左键单击 | 复制/粘贴 | ✅ 通过 `click_action` 设置 |
-| 双击 | 复制/粘贴 | ✅ 通过 `double_click_action` 设置 |
+| 左键单击 | 复制/粘贴/不操作 | ✅ 通过 `click_action` 设置 |
+| 双击 | 复制/粘贴/不操作 | ✅ 通过 `double_click_action` 设置 |
 | 右键 | 上下文菜单 | ❌ |
+
+**动作说明**
+- **复制**: 仅将数据写入系统剪贴板
+- **粘贴**: 复制数据 → 隐藏窗口 → 模拟快捷键粘贴到原焦点窗口
+- **不操作**: 仅选中该项，不执行复制或粘贴
 
 ### 上下文菜单项
 

@@ -383,8 +383,10 @@ const imageSrc = computed(() => {
 - **Click Actions**:
   - **Copy**: Copy data to clipboard only
   - **Paste**: Copy data → hide window → simulate paste shortcut at previous focus
-  - Configurable single/double click actions in settings
+  - **None**: Only select the item, no copy/paste action
+  - Configurable single/double click actions in settings (copy/paste/none)
   - **Paste Shortcut Mode**: User-selectable paste shortcut (Ctrl+V or Shift+Insert)
+  - **Hide Window After Copy**: Auto-hide clipboard window after copy action
 - **Interaction Experience Enhancements**:
   - **focus_search_on_activate**: Auto-focus search box on window activation
   - **Smart Activate Optimization**: Distinguish system clipboard vs internal copy
@@ -425,7 +427,7 @@ const imageSrc = computed(() => {
 
 **窗口设置**:
 - 窗口位置 (remember/center/cursor) ✅ 已实现
-- 智能激活 (5秒内复制则回到顶部/切换全部/聚焦搜索) ✅ 已实现
+- 智能激活 (5秒内复制则清空搜索/回到顶部/切换全部/聚焦搜索) ✅ 已实现
 
 **音效设置**:
 - 复制音效 (+ preview button) ⏳ 待实现（需音效文件资源）
@@ -436,12 +438,15 @@ const imageSrc = computed(() => {
 - **focus_search_on_activate** ✅ 已实现（激活窗口时自动聚焦搜索框）
 
 **内容设置**:
-- 自动粘贴 (off/single/double) ✅ 已实现
+- 单击动作 (copy/paste/none) ✅ 已实现
+- 双击动作 (copy/paste/none) ✅ 已实现
+- 粘贴快捷键 (Ctrl+V / Shift+Insert) ✅ 已实现
+- 复制后隐藏窗口 ✅ 已实现
 - 图片OCR ⏳ 待实现（需OCR库）
 - 复制为纯文本 ✅ 已实现
 - 粘贴为纯文本 ⏳ 待实现
 - 删除确认 ✅ 已实现
-- 自动排序 ✅ 已实现
+- 自动排序 ✅ 已实现（系统剪贴板复制置顶，内部复制保持位置）
 
 **历史记录设置**:
 - 最大历史记录数 (100-10000) ✅ 后端已实现

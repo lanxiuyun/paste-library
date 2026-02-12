@@ -501,6 +501,26 @@
     - 添加加载中状态和错误状态
     - 显示 loading 动画和错误提示
     - 修改文件：ClipboardItem.vue
+- 2026-02-13: **剪贴板功能优化**
+  - ✅ 文本标签页显示所有文本类型
+    - 点击"文本"标签显示 text/html/rtf 三种类型
+    - 修改文件：ClipboardList.vue
+  - ✅ 区分内部/外部复制逻辑
+    - 外部复制（系统剪贴板）：更新时间戳置顶
+    - 内部复制（应用内点击）：保持原有位置
+    - 添加 `is_internal_copy` 参数到后端命令
+    - 修改文件：storage.rs, clipboard.rs, lib.rs, useClipboard.ts
+  - ✅ 智能激活时清空搜索框
+    - 激活窗口时自动清空搜索文本
+    - 修改文件：ClipboardList.vue
+  - ✅ 单击/双击添加"不操作"选项
+    - `click_action` 和 `double_click_action` 支持 'none'
+    - 设置为不操作时仅选中该项
+    - 修改文件：types/index.ts, models.rs, useSettings.ts, SettingsPanel.vue, ClipboardList.vue
+  - ✅ 添加复制后隐藏窗口设置
+    - 新增 `hide_window_after_copy` 设置项
+    - 复制操作后自动隐藏剪贴板窗口
+    - 修改文件：types/index.ts, models.rs, storage.rs, useSettings.ts, SettingsPanel.vue, ClipboardList.vue
 - 2026-02-12: **悬浮窗口交互优化**
   - ✅ 修复滚动和hover失效问题
     - 添加 `accept_first_mouse(true)` 窗口配置
