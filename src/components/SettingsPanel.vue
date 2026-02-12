@@ -173,7 +173,7 @@
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-title">复制为纯文本</div>
-              <div class="setting-desc">富文本和HTML格式在复制时仅保留纯文本内容</div>
+              <div class="setting-desc">HTML格式在复制时仅保留纯文本内容</div>
             </div>
             <div class="setting-control">
               <label class="switch">
@@ -186,7 +186,7 @@
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-title">粘贴为纯文本</div>
-              <div class="setting-desc">富文本和HTML格式在粘贴时仅保留纯文本内容</div>
+              <div class="setting-desc">HTML格式在粘贴时仅保留纯文本内容</div>
             </div>
             <div class="setting-control">
               <label class="switch">
