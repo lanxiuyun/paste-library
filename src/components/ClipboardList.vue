@@ -31,7 +31,8 @@
           {{ tab.label }}
         </button>
       </div>
-      <div class="header-actions">
+      <!-- 右侧操作按钮（暂时隐藏） -->
+      <!-- <div class="header-actions">
         <button class="icon-btn" title="通知">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -45,11 +46,11 @@
             <path d="M2 12l10 5 10-5"/>
           </svg>
         </button>
-      </div>
+      </div> -->
     </div>
 
     <!-- 列表内容 -->
-    <div ref="listContainerRef" class="list-container" @scroll="handleScroll">
+    <div ref="listContainerRef" class="list-container" @scroll="handleScroll" tabindex="-1">
       <div v-if="filteredHistory.length === 0" class="empty-state">
         <div class="empty-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -71,7 +72,7 @@
           :is-selected="selectedIndex === index"
           @click="handleItemClick"
           @dblclick="handleItemDoubleClick"
-          @contextmenu="handleItemContextMenu"
+          @contextmenu="(event: MouseEvent) => handleItemContextMenu(event, item, index)"
           @quick-action="handleQuickAction"
         />
       </template>
@@ -105,11 +106,11 @@
       @action="handleContextMenuAction"
     />
 
-    <!-- 粘贴队列面板 -->
-    <PasteQueuePanel
+    <!-- 粘贴队列面板（暂时隐藏） -->
+    <!-- <PasteQueuePanel
       ref="pasteQueueRef"
       @paste="handleQueuePaste"
-    />
+    /> -->
 
     <!-- 抽屉编辑器 -->
     <DrawerEditor
@@ -145,14 +146,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import ClipboardItem from './ClipboardItem.vue';
 import ContextMenu from './ContextMenu.vue';
-import PasteQueuePanel from './PasteQueuePanel.vue';
+// import PasteQueuePanel from './PasteQueuePanel.vue';
 import DrawerEditor from './DrawerEditor.vue';
 import { useClipboard } from '@/composables/useClipboard';
 import { writeText } from 'tauri-plugin-clipboard-x-api';
-import { usePasteQueue } from '@/composables/usePasteQueue';
+// import { usePasteQueue } from '@/composables/usePasteQueue';
 import { useSettings } from '@/composables/useSettings';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -167,9 +168,9 @@ const {
   restoreToClipboard,
 } = useClipboard();
 
-const { addToQueue } = usePasteQueue();
+// const { addToQueue } = usePasteQueue();
 const { settings } = useSettings();
-const pasteQueueRef = ref<InstanceType<typeof PasteQueuePanel> | null>(null);
+// const pasteQueueRef = ref<InstanceType<typeof PasteQueuePanel> | null>(null);
 
 // Drawer editor state
 const drawerVisible = ref(false);
@@ -180,7 +181,6 @@ const tabs = [
   { key: 'text', label: '文本' },
   { key: 'image', label: '图片' },
   { key: 'file', label: '文件' },
-  { key: 'favorite', label: '收藏' },
 ];
 
 const activeTab = ref('all');
@@ -206,36 +206,39 @@ const itemToDelete = ref<ClipboardItemType | null>(null);
 // 智能激活逻辑
 const handleSmartActivate = () => {
   // 检查智能激活是否开启
-  if (!settings.value.smart_activate) return;
-  
-  const timeDiff = Date.now() - lastCopyTime.value;
-  
-  // 如果距离上次复制 < 5秒，执行智能激活
-  if (timeDiff < 5000) {
-    // 1. 滚动到顶部
-    if (listContainerRef.value) {
-      listContainerRef.value.scrollTop = 0;
+  if (settings.value.smart_activate) {
+    const timeDiff = Date.now() - lastCopyTime.value;
+    
+    // 如果距离上次复制 < 5秒，执行智能激活
+    if (timeDiff < 5000) {
+      // 1. 滚动到顶部
+      if (listContainerRef.value) {
+        listContainerRef.value.scrollTop = 0;
+      }
+      
+      // 2. 切换到"全部"标签
+      activeTab.value = 'all';
+      
+      // 3. 聚焦搜索框（不自动滚动，避免影响列表）
+      searchInputRef.value?.focus({ preventScroll: true } as FocusOptions);
+      
+      // 智能激活完成后不再执行 focus_search_on_activate
+      return;
     }
-    
-    // 2. 切换到"全部"标签
-    activeTab.value = 'all';
-    
-    // 3. 聚焦搜索框
-    searchInputRef.value?.focus();
+  }
+  
+  // 独立的「激活时聚焦搜索框」设置（与 smart_activate 独立工作）
+  if (settings.value.focus_search_on_activate) {
+    searchInputRef.value?.focus({ preventScroll: true } as FocusOptions);
   }
 };
 
 const filteredHistory = computed(() => {
   let result = history.value;
 
-  // 按标签过滤
+  // 按类型过滤
   if (activeTab.value !== 'all') {
-    if (activeTab.value === 'favorite') {
-      // 过滤带"收藏"标签的项目
-      result = result.filter(item => item.tags?.includes('收藏'));
-    } else {
-      result = result.filter(item => item.content_type === activeTab.value);
-    }
+    result = result.filter(item => item.content_type === activeTab.value);
   }
 
   return result;
@@ -247,6 +250,17 @@ const handleSearch = async () => {
   } else {
     await loadHistory();
   }
+  
+  // 搜索完成后，滚动到顶部并重置选中项（使用 nextTick 确保 DOM 更新）
+  nextTick(() => {
+    if (listContainerRef.value) {
+      listContainerRef.value.scrollTop = 0;
+    }
+    // 重置选中项到第一项
+    if (filteredHistory.value.length > 0) {
+      selectedIndex.value = 0;
+    }
+  });
 };
 
 const handleItemClick = async (item: ClipboardItemType) => {
@@ -277,10 +291,13 @@ const handleItemDoubleClick = async (item: ClipboardItemType) => {
   }
 };
 
-const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType) => {
+const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType, index: number) => {
   contextMenuPosition.value = { x: event.clientX, y: event.clientY };
   contextMenuItem.value = item;
   contextMenuVisible.value = true;
+  
+  // 右键点击时，高亮该Item（设置选中索引）
+  selectedIndex.value = index;
 };
 
 const handleQuickAction = async (action: string, item: ClipboardItemType) => {
@@ -296,14 +313,14 @@ const handleQuickAction = async (action: string, item: ClipboardItemType) => {
     case 'delete':
       await handleDelete(item);
       break;
-    case 'tag':
-      // 打开标签管理弹窗
-      showTagManager(item);
-      break;
-    case 'queue':
-      // 添加到粘贴队列
-      addToQueue(item);
-      break;
+    // case 'tag':
+    //   // 打开标签管理弹窗
+    //   showTagManager(item);
+    //   break;
+    // case 'queue':
+    //   // 添加到粘贴队列
+    //   addToQueue(item);
+    //   break;
   }
 };
 
@@ -334,22 +351,22 @@ const cancelDelete = () => {
   deleteConfirmVisible.value = false;
 };
 
-const showTagManager = (item: ClipboardItemType) => {
-  // TODO: 实现标签管理弹窗
-  console.log('Tag manager for item:', item.id);
-};
+// const showTagManager = (item: ClipboardItemType) => {
+//   // TODO: 实现标签管理弹窗
+//   console.log('Tag manager for item:', item.id);
+// };
 
-const handleQueuePaste = async (content: string) => {
-  // 将合并后的内容写入剪贴板并粘贴
-  try {
-    const { writeText } = await import('tauri-plugin-clipboard-x-api');
-    await writeText(content);
-    // TODO: 模拟粘贴操作
-    console.log('Queue pasted:', content.substring(0, 100) + '...');
-  } catch (error) {
-    console.error('Failed to paste queue:', error);
-  }
-};
+// const handleQueuePaste = async (content: string) => {
+//   // 将合并后的内容写入剪贴板并粘贴
+//   try {
+//     const { writeText } = await import('tauri-plugin-clipboard-x-api');
+//     await writeText(content);
+//     // TODO: 模拟粘贴操作
+//     console.log('Queue pasted:', content.substring(0, 100) + '...');
+//   } catch (error) {
+//     console.error('Failed to paste queue:', error);
+//   }
+// };
 
 // Drawer handlers
 const handleDrawerCopy = async (item: ClipboardItemType) => {
@@ -424,10 +441,10 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
       await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       await simulatePaste();
       break;
-    case 'tag':
-      // 打开标签管理器
-      showTagManager(item);
-      break;
+    // case 'tag':
+    //   // 打开标签管理器
+    //   // showTagManager(item);
+    //   break;
     case 'copyPlain':
       // 复制为纯文本
       await restoreToClipboard({
@@ -506,6 +523,9 @@ const handleKeyDown = async (e: KeyboardEvent) => {
 
     if (newIndex >= 0 && newIndex < filteredHistory.value.length) {
       selectedIndex.value = newIndex;
+      
+      // 自动滚动到可视区域
+      scrollSelectedItemIntoView();
     }
     return;
   }
@@ -538,6 +558,8 @@ const handleKeyDown = async (e: KeyboardEvent) => {
   }
 };
 
+let hasActivated = false;
+
 onMounted(async () => {
   loadHistory(limit, 0);
   window.addEventListener('keydown', handleKeyDown);
@@ -549,8 +571,11 @@ onMounted(async () => {
   // 使用 Tauri 窗口监听 focus 事件（智能激活）
   const appWindow = getCurrentWindow();
   const unlistenFocus = await appWindow.listen('tauri://focus', () => {
-    // 窗口获得焦点时执行智能激活
-    handleSmartActivate();
+    // 只在首次激活时执行智能激活，避免频繁焦点切换导致 hover 失效
+    if (!hasActivated) {
+      hasActivated = true;
+      handleSmartActivate();
+    }
   });
   
   // 保存清理函数
@@ -563,10 +588,23 @@ onUnmounted(() => {
   if ((window as any).__unlistenFocus) {
     (window as any).__unlistenFocus();
   }
+  // 重置激活标记
+  hasActivated = false;
 });
 
+// 滚动选中项到可视区域
+const scrollSelectedItemIntoView = () => {
+  if (selectedIndex.value < 0 || !listContainerRef.value) return;
+  
+  const container = listContainerRef.value;
+  const itemElement = container.children[selectedIndex.value] as HTMLElement;
+  
+  if (itemElement) {
+    itemElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+};
+
 // 监听过滤变化，重置选中状态
-import { watch } from 'vue';
 watch(filteredHistory, () => {
   if (selectedIndex.value >= filteredHistory.value.length) {
     selectedIndex.value = filteredHistory.value.length > 0 ? 0 : -1;

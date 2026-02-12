@@ -15,6 +15,8 @@ import type { ClipboardItem, ClipboardContentType, ClipboardMetadata, GetHistory
 const history = ref<ClipboardItem[]>([]);
 const isListening = ref(false);
 const lastCopyTime = ref<number>(Date.now());
+// 标记是否是应用内复制（用于区分系统剪贴板变化和应用内复制）
+const isInternalCopy = ref(false);
 
 export function useClipboard() {
   const loadHistory = async (limit = 100, offset = 0): Promise<void> => {
@@ -67,6 +69,9 @@ export function useClipboard() {
 
   const handleClipboardChange = async (result: ReadClipboard): Promise<void> => {
     try {
+      // 检查是否是应用内复制（如果是，跳过智能激活的时间记录）
+      const wasInternalCopy = isInternalCopy.value;
+      
       // 优先级: files > image > html > rtf > text
       if (result.files) {
         // 文件类型
@@ -113,8 +118,13 @@ export function useClipboard() {
         });
       }
 
-      // 记录上次复制时间
-      lastCopyTime.value = Date.now();
+      // 只有在不是应用内复制的情况下，才更新 lastCopyTime（用于智能激活）
+      if (!wasInternalCopy) {
+        lastCopyTime.value = Date.now();
+      }
+      
+      // 重置内部复制标志
+      isInternalCopy.value = false;
       
       await loadHistory();
     } catch (error) {
@@ -175,6 +185,9 @@ export function useClipboard() {
 
   const restoreToClipboard = async (item: ClipboardItem, options?: { copyAsPlainText?: boolean }): Promise<void> => {
     try {
+      // 标记为应用内复制（这样 handleClipboardChange 就不会更新 lastCopyTime）
+      isInternalCopy.value = true;
+      
       // 如果需要复制为纯文本，去除 HTML 标签
       let content = item.content;
       if (options?.copyAsPlainText && (item.content_type === 'html' || item.content_type === 'rtf')) {
