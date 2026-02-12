@@ -255,9 +255,9 @@ const filteredHistory = computed(() => {
 
 const handleSearch = async () => {
   if (searchQuery.value) {
-    await searchHistory(searchQuery.value);
+    await searchHistory(searchQuery.value, settings.value.max_history_count);
   } else {
-    await loadHistory();
+    await loadHistory(settings.value.max_history_count);
   }
   
   // 搜索完成后，滚动到顶部并重置选中项（使用 nextTick 确保 DOM 更新）
@@ -601,7 +601,7 @@ const handleKeyDown = async (e: KeyboardEvent) => {
 const hasActivated = ref(false);
 
 onMounted(async () => {
-  loadHistory(limit, 0);
+  loadHistory(settings.value.max_history_count, 0);
   window.addEventListener('keydown', handleKeyDown);
   // 初始化选中第一项
   if (filteredHistory.value.length > 0) {
