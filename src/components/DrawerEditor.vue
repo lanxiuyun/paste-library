@@ -66,6 +66,7 @@
                 v-model="editedContent"
                 class="text-editor"
                 placeholder="输入内容..."
+                @keydown.stop
               />
               <div v-else class="text-preview" v-html="previewContent" />
             </template>
@@ -236,7 +237,7 @@ const formattedTime = computed(() => {
 const previewContent = computed(() => {
   if (!props.item) return '';
   if (props.item.content_type === 'html') {
-    return props.item.content;
+    return editedContent.value;
   }
   return editedContent.value.replace(/\n/g, '<br>');
 });
