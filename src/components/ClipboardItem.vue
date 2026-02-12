@@ -25,18 +25,22 @@
               v-if="item.thumbnail_path" 
               :src="imageSrc" 
               :alt="'图片 ' + (item.metadata?.width || 0) + 'x' + (item.metadata?.height || 0)"
+              @error="handleImageError"
             />
+            <div v-if="imageLoadError" class="image-error">图片加载失败</div>
           </div>
           
           <!-- 单个图片文件预览（显示预览图+路径） -->
           <div v-else-if="isSingleImageFile" class="single-image-file-preview">
             <div class="image-file-row">
               <img 
-                v-if="singleImageSrc" 
+                v-if="singleImageSrc && !imageLoadError" 
                 :src="singleImageSrc" 
                 :alt="getFileName(item.file_paths![0])"
                 class="file-thumbnail"
+                @error="handleImageError"
               />
+              <div v-if="imageLoadError" class="file-thumbnail-error">📄</div>
               <span class="file-path">{{ item.file_paths![0] }}</span>
             </div>
           </div>
@@ -175,6 +179,13 @@ const emit = defineEmits<{
 }>();
 
 const isHovered = ref(false);
+const imageLoadError = ref(false);
+
+// 处理图片加载错误
+const handleImageError = () => {
+  imageLoadError.value = true;
+  console.error('Failed to load image:', props.item.thumbnail_path);
+};
 
 // 用于区分单击和双击
 let clickTimer: ReturnType<typeof setTimeout> | null = null;
@@ -460,6 +471,15 @@ const handleDragEnd = (event: DragEvent) => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.image-error {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #ff4d4f;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 4px;
+}
+
 /* 单个图片文件预览 */
 .single-image-file-preview {
   display: flex;
@@ -479,6 +499,18 @@ const handleDragEnd = (event: DragEvent) => {
   object-fit: cover;
   border-radius: 4px;
   background: var(--bg-hover, #f5f5f5);
+  flex-shrink: 0;
+}
+
+.file-thumbnail-error {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: var(--bg-hover, #f5f5f5);
+  border-radius: 4px;
   flex-shrink: 0;
 }
 
