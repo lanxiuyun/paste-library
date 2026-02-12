@@ -151,6 +151,7 @@ import ContextMenu from './ContextMenu.vue';
 import PasteQueuePanel from './PasteQueuePanel.vue';
 import DrawerEditor from './DrawerEditor.vue';
 import { useClipboard } from '@/composables/useClipboard';
+import { writeText } from 'tauri-plugin-clipboard-x-api';
 import { usePasteQueue } from '@/composables/usePasteQueue';
 import { useSettings } from '@/composables/useSettings';
 import { invoke } from '@tauri-apps/api/core';
@@ -366,15 +367,36 @@ const simulatePaste = async (): Promise<void> => {
   try {
     // 隐藏窗口，让用户看到粘贴效果
     await invoke('hide_clipboard_window');
-    
+
     // 等待窗口完全隐藏
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // 调用后端模拟粘贴命令，传入用户设置的快捷键模式
     await invoke('simulate_paste', { pasteShortcut: settings.value.paste_shortcut });
   } catch (error) {
     // 如果后端命令不存在，静默失败
     console.log('Paste simulation not available yet');
+  }
+};
+
+// 复制文件路径到剪贴板
+const copyFilePath = async (item: ClipboardItemType): Promise<void> => {
+  try {
+    let pathToCopy = '';
+
+    if (item.file_paths && item.file_paths.length > 0) {
+      // 多文件时复制所有路径，用换行符分隔（Windows风格 \r\n）
+      pathToCopy = item.file_paths.join('\r\n') + '\r\n';
+    } else if (item.content) {
+      // 使用 content 字段（文件夹类型），末尾添加换行符
+      pathToCopy = item.content + '\r\n';
+    }
+
+    if (pathToCopy) {
+      await writeText(pathToCopy);
+    }
+  } catch (error) {
+    console.error('Failed to copy file path:', error);
   }
 };
 
@@ -394,11 +416,13 @@ const handleSaveAsNew = async (content: string, type: string) => {
 const handleContextMenuAction = async (action: string, item: ClipboardItemType) => {
   switch (action) {
     case 'copy':
+      // 右键菜单复制：仅复制到剪贴板（与单击/双击的复制行为一致）
       await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       break;
     case 'paste':
+      // 右键菜单粘贴：复制到剪贴板并执行粘贴（与单击/双击的粘贴行为一致）
       await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
-      // TODO: 实现模拟粘贴功能
+      await simulatePaste();
       break;
     case 'queue':
       addToQueue(item);
@@ -432,6 +456,10 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
       } else if (item.thumbnail_path) {
         await invoke('show_in_folder', { path: item.thumbnail_path });
       }
+      break;
+    case 'copyFilePath':
+      // 复制文件路径到剪贴板
+      await copyFilePath(item);
       break;
   }
 };

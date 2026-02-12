@@ -100,6 +100,12 @@ const menuItems: MenuItem[] = [
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>',
     visibleFor: ['image', 'file', 'folder'],
   },
+  {
+    key: 'copyFilePath',
+    label: '复制文件路径',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+    visibleFor: ['file', 'folder', 'files'],
+  },
   { key: 'divider3', type: 'divider', label: '' },
   {
     key: 'favorite',
