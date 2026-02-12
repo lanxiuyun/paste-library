@@ -460,6 +460,7 @@ const imageSrc = computed(() => {
 - **No linter/prettier config**: Follow existing code patterns (Vue template formatting, semicolons-optional style)
 - **Never run tauri dev**: I will run by my self
 - **Never run cargo check**: I will run by my self
+- **Never read src-tauri/Cargo.toml **: It's a auto generated file by tauri, you should not read it
 - **No test framework yet**: Run type checks with `pnpm run build` (includes `vue-tsc`)
 - **Type strictness is critical**: The project has `strict: true` and `noUnusedLocals`; zero tolerance for `any` types
 - **Settings panel**: Normal window with title bar (decorations: true)
