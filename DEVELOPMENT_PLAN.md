@@ -504,7 +504,7 @@
 - 2026-02-12: **悬浮窗口交互优化**
   - ✅ 修复滚动和hover失效问题
     - 添加 `accept_first_mouse(true)` 窗口配置
-    - 增加失去焦点延迟（50ms -> 300ms）
+    - 增加失去焦点延迟（50ms -> 100ms）
     - 只在首次激活时聚焦搜索框（避免频繁焦点切换）
     - 禁用 ClipboardItem 的拖拽功能（与Tauri窗口拖拽冲突）
     - 添加缺失的拖拽权限 `core:window:allow-start-dragging`
