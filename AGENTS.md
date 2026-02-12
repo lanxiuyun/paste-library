@@ -12,7 +12,7 @@
   - tauri-plugin-global-shortcut (global hotkey Alt+V)
   - tauri-plugin-tray (system tray integration)
   - tauri-plugin-autostart (auto start on boot)
-- **Status**: In development — P0/P1 features complete (~95%), P2 optimization pending
+- **Status**: In development — P0/P1 features complete (~98%), P3 optimization complete, hover interaction improvements in progress
 
 ---
 
@@ -385,9 +385,21 @@ const imageSrc = computed(() => {
   - **Paste**: Copy data → hide window → simulate paste shortcut at previous focus
   - Configurable single/double click actions in settings
   - **Paste Shortcut Mode**: User-selectable paste shortcut (Ctrl+V or Shift+Insert)
+- **Interaction Experience Enhancements**:
+  - **focus_search_on_activate**: Auto-focus search box on window activation
+  - **Smart Activate Optimization**: Distinguish system clipboard vs internal copy
+  - **Search auto-scroll to top**: Auto scroll to top on search text change
+  - **Right-click item highlight**: Show selected state on right-click context menu
+  - **Keyboard navigation auto-scroll**: Auto scroll to keep selected item visible
+- **UI Polish**:
+  - Hidden unfinished features (paste queue, tags) for cleaner UI
+  - Simplified quick action buttons (detail/delete only)
+  - Image loading retry mechanism (5 retries with loading states)
+  - Fixed hover/scroll issues in floating window
 
 ### In Progress ⏳
 - ItemList virtual scrolling (performance optimization)
+- Hover interaction stability improvements
 
 ### Planned 📋
 - Cross-device sync architecture
@@ -421,6 +433,7 @@ const imageSrc = computed(() => {
 **搜索设置**:
 - 搜索框位置 (top/bottom) ✅ 已实现
 - 默认聚焦 ✅ 已实现（合并到智能激活）
+- **focus_search_on_activate** ✅ 已实现（激活窗口时自动聚焦搜索框）
 
 **内容设置**:
 - 自动粘贴 (off/single/double) ✅ 已实现
