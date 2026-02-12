@@ -95,6 +95,8 @@ impl Database {
             ("max_history_count", "5000"),
             ("auto_cleanup_days", "30"),
             ("window_position", "remember"),
+            ("window_pos_x", ""),
+            ("window_pos_y", ""),
             ("smart_activate", "true"),
             ("copy_sound", "false"),
             ("search_position", "bottom"),
@@ -451,6 +453,20 @@ impl Database {
                     }
                 }
                 "window_position" => settings.window_position = value,
+                "window_pos_x" => {
+                    if !value.is_empty() {
+                        if let Ok(v) = value.parse() {
+                            settings.window_pos_x = Some(v);
+                        }
+                    }
+                }
+                "window_pos_y" => {
+                    if !value.is_empty() {
+                        if let Ok(v) = value.parse() {
+                            settings.window_pos_y = Some(v);
+                        }
+                    }
+                }
                 "smart_activate" => {
                     if let Ok(v) = value.parse() {
                         settings.smart_activate = v;
@@ -526,6 +542,20 @@ impl Database {
             ("max_history_count", settings.max_history_count.to_string()),
             ("auto_cleanup_days", settings.auto_cleanup_days.to_string()),
             ("window_position", settings.window_position.clone()),
+            (
+                "window_pos_x",
+                settings
+                    .window_pos_x
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+            ),
+            (
+                "window_pos_y",
+                settings
+                    .window_pos_y
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+            ),
             ("smart_activate", settings.smart_activate.to_string()),
             ("copy_sound", settings.copy_sound.to_string()),
             ("search_position", settings.search_position.clone()),
