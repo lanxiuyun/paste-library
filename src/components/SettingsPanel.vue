@@ -437,88 +437,169 @@
       </div>
 
       <!-- 关于 -->
-      <div v-if="activeMenu === 'about'" class="settings-section">
-        <h2 class="section-title">关于</h2>
+      <div v-if="activeMenu === 'about'" class="settings-section about-section">
+        <div class="about-header">
+          <h2 class="section-title">关于</h2>
+        </div>
         
-        <div class="about-content">
-          <div class="app-info">
-            <h3>Paste Library</h3>
-            <p>版本 {{ currentVersion }}</p>
-            <p class="app-desc">现代化的剪贴板管理工具</p>
+        <div class="about-grid">
+          <!-- 应用信息卡片 -->
+          <div class="about-card app-card">
+            <div class="app-logo">
+              <svg viewBox="0 0 48 48" fill="none">
+                <rect width="48" height="48" rx="12" fill="#262626"/>
+                <path d="M14 14h8v8h-8v-8zm12 0h8v8h-8v-8zm-12 12h8v12h-8V26zm12 0h8v12h-8V26z" fill="#fff"/>
+              </svg>
+            </div>
+            <div class="app-details">
+              <h3 class="app-name">Paste Library</h3>
+              <p class="app-version">版本 {{ currentVersion }}</p>
+              <p class="app-tagline">现代化的剪贴板管理工具</p>
+            </div>
           </div>
 
-          <!-- 更新检查区域 -->
-          <div class="update-section">
-            <div v-if="updateStatus === 'checking'" class="update-status checking">
-              <div class="update-spinner"></div>
-              <span>正在检查更新...</span>
-            </div>
-
-            <div v-else-if="updateStatus === 'available'" class="update-status available">
-              <div class="update-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          <!-- 更新卡片 -->
+          <div class="about-card update-card">
+            <div class="card-header">
+              <div class="card-title">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
                 </svg>
+                <span>检查更新</span>
               </div>
-              <div class="update-info">
-                <div class="update-title">发现新版本 v{{ latestVersion }}</div>
-                <div class="update-date">发布于 {{ formatUpdateDate(updateDate) }}</div>
-                <div class="update-notes">{{ updateNotes }}</div>
+              <span class="version-badge" v-if="updateStatus === 'uptodate'">已是最新</span>
+              <span class="version-badge update-available" v-else-if="updateStatus === 'available'">有新版本</span>
+            </div>
+            
+            <div class="update-content">
+              <!-- 检查中状态 -->
+              <div v-if="updateStatus === 'checking'" class="update-state checking">
+                <div class="state-icon checking">
+                  <div class="spinner"></div>
+                </div>
+                <div class="state-text">
+                  <p class="state-title">正在检查更新...</p>
+                  <p class="state-desc">正在获取最新版本信息</p>
+                </div>
+              </div>
 
+              <!-- 有可用更新 -->
+              <div v-else-if="updateStatus === 'available'" class="update-state available">
+                <div class="state-icon available">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                </div>
+                <div class="state-text">
+                  <p class="state-title">发现新版本 <strong>v{{ latestVersion }}</strong></p>
+                  <p class="state-desc">{{ formatUpdateDate(updateDate) }}</p>
+                </div>
+                <div class="update-notes-preview" v-if="updateNotes">
+                  <p>{{ truncateNotes(updateNotes) }}</p>
+                </div>
+                
                 <!-- 下载进度 -->
                 <div v-if="isDownloading" class="download-progress">
+                  <div class="progress-header">
+                    <span>正在下载更新...</span>
+                    <span class="progress-percent">{{ downloadProgress }}%</span>
+                  </div>
                   <div class="progress-bar">
                     <div class="progress-fill" :style="{ width: downloadProgress + '%' }"></div>
                   </div>
-                  <div class="progress-text">{{ downloadProgress }}%</div>
                 </div>
 
                 <div class="update-actions">
-                  <button class="btn-primary" @click="downloadUpdate" :disabled="isDownloading">
-                    {{ isDownloading ? '正在下载...' : '立即更新' }}
+                  <button class="btn-primary btn-large" @click="downloadUpdate" :disabled="isDownloading">
+                    <svg v-if="!isDownloading" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                    <div v-else class="btn-spinner"></div>
+                    {{ isDownloading ? '正在下载...' : '下载并安装' }}
                   </button>
-                  <button v-if="!isDownloading" class="btn-secondary" @click="skipUpdate">稍后再说</button>
+                  <button class="btn-ghost" @click="skipUpdate" v-if="!isDownloading">暂不更新</button>
                 </div>
               </div>
-            </div>
 
-            <div v-else-if="updateStatus === 'uptodate'" class="update-status uptodate">
-              <div class="update-icon success">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 6L9 17l-5-5"/>
-                </svg>
+              <!-- 已是最新 -->
+              <div v-else-if="updateStatus === 'uptodate'" class="update-state success">
+                <div class="state-icon success">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="state-text">
+                  <p class="state-title">当前已是最新版本</p>
+                  <p class="state-desc">您正在使用最新功能</p>
+                </div>
+                <button class="btn-ghost btn-small" @click="checkForUpdates">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+                  </svg>
+                  重新检查
+                </button>
               </div>
-              <span>当前已是最新版本</span>
-            </div>
 
-            <div v-else-if="updateStatus === 'error'" class="update-status error">
-              <div class="update-icon error">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 8v4M12 16h.01"/>
-                </svg>
+              <!-- 检查失败 -->
+              <div v-else-if="updateStatus === 'error'" class="update-state error">
+                <div class="state-icon error">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+                <div class="state-text">
+                  <p class="state-title">检查更新失败</p>
+                  <p class="state-desc">请检查网络连接后重试</p>
+                </div>
+                <button class="btn-ghost btn-small" @click="checkForUpdates">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+                  </svg>
+                  重试
+                </button>
               </div>
-              <span>检查更新失败，请稍后重试</span>
-            </div>
 
-            <div v-else class="update-status idle">
-              <button class="btn-secondary" @click="checkForUpdates">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-                </svg>
-                检查更新
-              </button>
+              <!-- 初始状态 -->
+              <div v-else class="update-state idle">
+                <div class="state-icon idle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                </div>
+                <div class="state-text">
+                  <p class="state-title">检查更新</p>
+                  <p class="state-desc">获取最新版本信息</p>
+                </div>
+                <button class="btn-primary btn-large" @click="checkForUpdates">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+                  </svg>
+                  检查更新
+                </button>
+              </div>
             </div>
           </div>
-          
-          <div class="about-actions">
-            <button class="open-clipboard-btn" @click="openClipboardWindow">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-              </svg>
-              打开剪贴板
-            </button>
+
+          <!-- 系统信息卡片 -->
+          <div class="about-card info-card full-width">
+            <div class="card-header">
+              <div class="card-title">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+                <span>系统信息</span>
+              </div>
+            </div>
+            <div class="info-list">
+              <div class="info-item">
+                <span class="info-label">数据目录</span>
+                <span class="info-value">{{ storagePaths.data_dir || '加载中...' }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">日志目录</span>
+                <span class="info-value">{{ storagePaths.log_dir || '加载中...' }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -534,7 +615,6 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, onUnmounted, watch } from 'vue';
 import { useSettings } from '@/composables/useSettings';
-import { useWindow } from '@/composables/useWindow';
 import { useClipboard } from '@/composables/useClipboard';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -543,7 +623,6 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import type { AppSettings } from '@/types';
 
 const { settings, loadSettings, saveSettings } = useSettings();
-const { openClipboardWindow } = useWindow();
 const { loadHistory } = useClipboard();
 
 const activeMenu = ref('clipboard');
@@ -963,6 +1042,12 @@ const formatUpdateDate = (dateStr: string | undefined): string => {
   } catch {
     return dateStr;
   }
+};
+
+// 截断更新说明
+const truncateNotes = (notes: string, maxLength = 100): string => {
+  if (notes.length <= maxLength) return notes;
+  return notes.substring(0, maxLength) + '...';
 };
 
 // 下载并安装更新
@@ -1390,216 +1475,344 @@ input:checked + .slider:before {
   white-space: nowrap;
 }
 
-/* 关于页面 */
-.about-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
+/* 关于页面 - 新布局 */
+.about-section {
+  padding: 20px 24px !important;
 }
 
-.app-info h3 {
-  font-size: 24px;
+.about-header {
+  margin-bottom: 20px;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.about-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid #f0f0f0;
+}
+
+.about-card.app-card,
+.about-card.update-card,
+.about-card.info-card {
+  grid-column: span 2;
+}
+
+.about-card.app-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 28px;
+}
+
+.app-logo {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.app-logo svg {
+  width: 100%;
+  height: 100%;
+}
+
+.app-details {
+  flex: 1;
+}
+
+.app-name {
+  font-size: 22px;
   font-weight: 600;
   color: #262626;
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
 }
 
-.app-info p {
-  font-size: 14px;
+.app-version {
+  font-size: 13px;
   color: #8c8c8c;
+  margin: 0 0 4px 0;
+}
+
+.app-tagline {
+  font-size: 14px;
+  color: #595959;
   margin: 0;
 }
 
-.app-desc {
-  margin-top: 8px;
-  font-size: 13px;
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
-.about-actions {
-  margin-top: 32px;
-}
-
-.open-clipboard-btn {
+.card-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 24px;
-  background: #262626;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
   font-size: 14px;
-  cursor: pointer;
-  transition: background 0.2s;
+  font-weight: 600;
+  color: #262626;
 }
 
-.open-clipboard-btn:hover {
-  background: #404040;
-}
-
-.open-clipboard-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-/* 更新检查区域 */
-.update-section {
-  margin: 24px 0;
-  width: 100%;
-  max-width: 400px;
-}
-
-.update-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 16px 20px;
-  border-radius: 8px;
-  font-size: 14px;
+.card-title svg {
+  width: 18px;
+  height: 18px;
   color: #595959;
 }
 
-.update-status.checking {
-  background: #f6ffed;
-  color: #52c41a;
+.version-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: #f5f5f5;
+  color: #8c8c8c;
+  font-weight: 500;
 }
 
-.update-status.available {
-  flex-direction: column;
+.version-badge.update-available {
   background: #e6f7ff;
   color: #1890ff;
-  text-align: left;
-  align-items: flex-start;
+}
+
+/* 更新卡片 */
+.update-card {
+  grid-column: span 2;
+}
+
+.update-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.update-state {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.update-status.uptodate {
+.update-state.checking,
+.update-state.success,
+.update-state.error {
+  flex-direction: row;
+  align-items: center;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.state-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.state-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.state-icon.checking {
+  background: #e6f7ff;
+}
+
+.state-icon.checking .spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #1890ff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.state-icon.available {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.state-icon.success {
   background: #f6ffed;
   color: #52c41a;
 }
 
-.update-status.error {
+.state-icon.error {
   background: #fff2f0;
   color: #ff4d4f;
 }
 
-.update-status.idle {
-  background: transparent;
-  padding: 0;
+.state-icon.idle {
+  background: #f5f5f5;
+  color: #8c8c8c;
 }
 
-.update-status.idle button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.update-status.idle button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.update-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #52c41a;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.update-icon {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.update-icon svg {
-  width: 24px;
-  height: 24px;
-}
-
-.update-icon.success {
-  color: #52c41a;
-}
-
-.update-icon.error {
-  color: #ff4d4f;
-}
-
-.update-info {
+.state-text {
   flex: 1;
-  width: 100%;
 }
 
-.update-title {
-  font-size: 16px;
-  font-weight: 600;
+.state-title {
+  font-size: 14px;
+  font-weight: 500;
   color: #262626;
-  margin-bottom: 4px;
+  margin: 0 0 2px 0;
 }
 
-.update-date {
+.state-title strong {
+  color: #1890ff;
+}
+
+.state-desc {
   font-size: 12px;
   color: #8c8c8c;
-  margin-bottom: 8px;
+  margin: 0;
 }
 
-.update-notes {
-  font-size: 13px;
+.update-notes-preview {
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 6px;
+  font-size: 12px;
   color: #595959;
-  margin-bottom: 16px;
   line-height: 1.5;
-  white-space: pre-wrap;
 }
 
 .update-actions {
   display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.btn-large {
+  padding: 10px 20px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-large svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-ghost {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #595959;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-ghost:hover {
+  border-color: #262626;
+  color: #262626;
+}
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* 下载进度 */
+.download-progress {
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #595959;
+  margin-bottom: 8px;
+}
+
+.progress-percent {
+  font-weight: 500;
+  color: #1890ff;
+}
+
+.download-progress .progress-bar {
+  height: 6px;
+}
+
+.download-progress .progress-fill {
+  background: linear-gradient(90deg, #1890ff, #40a9ff);
+}
+
+/* 系统信息卡片 */
+.info-card .info-list {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.update-actions button {
-  flex: 1;
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fafafa;
+  border-radius: 6px;
 }
 
-/* 下载进度条 */
-.download-progress {
-  margin: 16px 0;
+.info-label {
+  font-size: 12px;
+  color: #8c8c8c;
 }
 
-.progress-bar {
-  width: 100%;
-  height: 8px;
-  background: #f0f0f0;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #52c41a, #73d13d);
-  border-radius: 4px;
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  text-align: center;
+.info-value {
   font-size: 12px;
   color: #595959;
-  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 响应式 */
+@media (max-width: 600px) {
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .about-card.app-card,
+  .about-card.update-card {
+    grid-column: span 1;
+  }
 }
 
 /* 底部操作栏 */
