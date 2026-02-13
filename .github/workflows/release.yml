@@ -71,23 +71,23 @@ jobs:
         run: pnpm install
 
       - uses: tauri-apps/tauri-action@v0
-        id: tauri-action
+        id: tauri-action # 添加 id 以便后续引用
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__
+          tagName: v__VERSION__ # the action automatically replaces \__VERSION\_\_ with the app version.
           releaseName: "v__VERSION__"
           releaseBody: "See the assets to download this version and install."
-          releaseDraft: false
-          prerelease: false
+          releaseDraft: false # 不创建草稿版本
+          prerelease: false # 不作为预发布版本
           args: ${{ matrix.args }}
 
   upgradeLink-upload:
     needs:
       - get-version
-      - publish-tauri
+      - publish-tauri # 依赖于 publish-tauri作业完成
     permissions:
       contents: write
     runs-on: ubuntu-latest
