@@ -108,7 +108,7 @@
             </div>
             <div class="setting-control">
               <label class="switch">
-                <input type="checkbox" v-model="form.auto_focus_search" />
+                <input type="checkbox" v-model="form.focus_search_on_activate" />
                 <span class="slider"></span>
               </label>
             </div>
@@ -128,6 +128,7 @@
               <select v-model="form.click_action" class="select-input">
                 <option value="copy">复制</option>
                 <option value="paste">粘贴</option>
+                <option value="none">不操作</option>
               </select>
             </div>
           </div>
@@ -141,7 +142,21 @@
               <select v-model="form.double_click_action" class="select-input">
                 <option value="copy">复制</option>
                 <option value="paste">粘贴</option>
+                <option value="none">不操作</option>
               </select>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">复制后隐藏窗口</div>
+              <div class="setting-desc">复制后自动隐藏剪贴板窗口</div>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input type="checkbox" v-model="form.hide_window_after_copy" />
+                <span class="slider"></span>
+              </label>
             </div>
           </div>
 
@@ -305,7 +320,7 @@
             <div class="setting-info">
               <div class="setting-title">唤醒快捷键</div>
               <div class="setting-desc">按下此快捷键可快速打开或关闭剪贴板窗口</div>
-              <div class="setting-note">点击下方按钮开始录制，然后按下想要的快捷键组合</div>
+              <div class="setting-note">点击右边按钮开始录制，然后按下想要的快捷键组合</div>
               <div class="setting-warning">修改快捷键后需要重启应用才能生效</div>
               <div v-if="shortcutError" class="error-message">{{ shortcutError }}</div>
             </div>
@@ -316,6 +331,23 @@
                 @click="toggleHotkeyRecording"
               >
                 {{ isRecordingHotkey ? '请按下快捷键...' : (form.hotkey || '点击录制') }}
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">数字键快捷粘贴</div>
+              <div class="setting-desc">按下 1-9 数字键粘贴对应位置剪贴板内容时需要同时按住的修饰键</div>
+              <div class="setting-note">点击右边按钮开始录制，然后按下想要的修饰键组合（如 Ctrl、Ctrl+Shift、Alt 等）</div>
+            </div>
+            <div class="setting-control">
+              <button
+                class="hotkey-record-btn small"
+                :class="{ 'recording': isRecordingNumberKeyShortcut, 'has-value': form.number_key_shortcut && !isRecordingNumberKeyShortcut }"
+                @click="toggleNumberKeyShortcutRecording"
+              >
+                {{ isRecordingNumberKeyShortcut ? '请按下修饰键...' : (formatNumberKeyShortcut(form.number_key_shortcut) || '点击录制') }}
               </button>
             </div>
           </div>
@@ -430,7 +462,6 @@
       <!-- 底部操作栏 -->
       <div v-if="activeMenu !== 'about'" class="settings-footer">
         <button class="btn-secondary" @click="resetSettings">恢复默认设置</button>
-        <span class="save-hint">设置会自动保存</span>
       </div>
     </div>
   </div>
@@ -467,10 +498,11 @@ const form = reactive<AppSettings>({
   smart_activate: true,
   copy_sound: false,
   search_position: 'bottom',
-  auto_focus_search: true,
+  focus_search_on_activate: false,
   click_action: 'copy',
   double_click_action: 'paste',
   paste_shortcut: 'ctrl_v',
+  hide_window_after_copy: false,
   image_ocr: false,
   copy_as_plain_text: false,
   paste_as_plain_text: true,
@@ -478,16 +510,83 @@ const form = reactive<AppSettings>({
   auto_sort: false,
   hotkey: 'Alt+V',
   auto_start: false,
+  number_key_shortcut: 'ctrl',
 });
 
 const shortcutError = ref('');
 const isRecordingHotkey = ref(false);
+const isRecordingNumberKeyShortcut = ref(false);
 const storagePaths = ref<Record<string, string>>({
   data_dir: '',
   log_dir: '',
 });
 let unlistenShortcutError: UnlistenFn | null = null;
 let isInitializing = true;
+
+// 格式化数字键修饰键显示
+const formatNumberKeyShortcut = (shortcut: string): string => {
+  if (!shortcut || shortcut === 'none') return '直接按数字键';
+  return shortcut.split('+').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('+') + '+数字键';
+};
+
+// 录制数字键修饰键
+const toggleNumberKeyShortcutRecording = () => {
+  if (isRecordingNumberKeyShortcut.value) {
+    // 停止录制
+    isRecordingNumberKeyShortcut.value = false;
+    window.removeEventListener('keydown', handleNumberKeyShortcutRecord);
+  } else {
+    // 开始录制
+    isRecordingNumberKeyShortcut.value = true;
+    window.addEventListener('keydown', handleNumberKeyShortcutRecord, { capture: true });
+  }
+};
+
+const handleNumberKeyShortcutRecord = (e: KeyboardEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const modifiers: string[] = [];
+  if (e.ctrlKey) modifiers.push('ctrl');
+  if (e.altKey) modifiers.push('alt');
+  if (e.shiftKey) modifiers.push('shift');
+  if (e.metaKey) modifiers.push('meta');
+
+  // 获取按键
+  let key = e.key.toLowerCase();
+
+  // 如果是数字键，使用当前的修饰键组合
+  if (key >= '1' && key <= '9') {
+    // 如果只按了数字键没有修饰键，设置为 "none"
+    if (modifiers.length === 0) {
+      form.number_key_shortcut = 'none';
+    } else {
+      form.number_key_shortcut = modifiers.join('+');
+    }
+
+    // 停止录制
+    isRecordingNumberKeyShortcut.value = false;
+    window.removeEventListener('keydown', handleNumberKeyShortcutRecord, { capture: true });
+    return;
+  }
+
+  // 如果按下了其他键（非数字键），则记录修饰键组合
+  // 忽略单独的修饰键
+  if (key === 'control' || key === 'alt' || key === 'shift' || key === 'meta') {
+    return;
+  }
+
+  // 按其他键也停止录制并保存当前修饰键状态
+  if (modifiers.length === 0) {
+    form.number_key_shortcut = 'none';
+  } else {
+    form.number_key_shortcut = modifiers.join('+');
+  }
+
+  // 停止录制
+  isRecordingNumberKeyShortcut.value = false;
+  window.removeEventListener('keydown', handleNumberKeyShortcutRecord, { capture: true });
+};
 
 // 录制快捷键
 const toggleHotkeyRecording = () => {
@@ -566,6 +665,9 @@ onUnmounted(() => {
   if (isRecordingHotkey.value) {
     window.removeEventListener('keydown', handleHotkeyRecord, { capture: true });
   }
+  if (isRecordingNumberKeyShortcut.value) {
+    window.removeEventListener('keydown', handleNumberKeyShortcutRecord, { capture: true });
+  }
 });
 
 const syncFromSettings = () => {
@@ -587,31 +689,33 @@ const resetSettings = async () => {
   if (confirm('确定要恢复默认设置吗？')) {
     // 先标记为初始化中，避免重复保存
     isInitializing = true;
-    
+
     form.max_history_count = 5000;
     form.auto_cleanup_days = 30;
     form.window_position = 'remember';
     form.smart_activate = true;
     form.copy_sound = false;
     form.search_position = 'top';
-    form.auto_focus_search = true;
-    form.click_action = 'copy';
-    form.double_click_action = 'paste';
+    form.focus_search_on_activate = false;
+    form.click_action = 'copy'; // 'copy' | 'paste' | 'none'
+    form.double_click_action = 'paste'; // 'copy' | 'paste' | 'none'
     form.paste_shortcut = 'ctrl_v';
+    form.hide_window_after_copy = false;
     form.image_ocr = false;
     form.copy_as_plain_text = false;
     form.paste_as_plain_text = true;
     form.confirm_delete = true;
     form.auto_sort = false;
     form.auto_start = false;
-    
+    form.number_key_shortcut = 'ctrl';
+
     // 立即保存
     try {
       await saveSettings({ ...form });
     } catch (error) {
       console.error('保存默认设置失败:', error);
     }
-    
+
     // 恢复监听
     isInitializing = false;
   }
@@ -890,6 +994,12 @@ const validateHotkey = async () => {
   color: #52c41a;
 }
 
+.hotkey-record-btn.small {
+  min-width: 100px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
@@ -1152,11 +1262,10 @@ input:checked + .slider:before {
 /* 底部操作栏 */
 .settings-footer {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 32px;
+  align-items: flex-end;
+  justify-content: flex-end;
   background: #fff;
+  padding: 12px;
   border-top: 1px solid #e8e8e8;
 }
 

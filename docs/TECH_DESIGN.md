@@ -26,14 +26,15 @@ export interface AppSettings {
   clear_search_on_activate: boolean;
 
   // 内容设置
-  auto_paste: 'off' | 'single' | 'double';
+  click_action: 'copy' | 'paste' | 'none';
+  double_click_action: 'copy' | 'paste' | 'none';
+  paste_shortcut: 'ctrl_v' | 'shift_insert';
+  hide_window_after_copy: boolean;
   image_ocr: boolean;
   copy_as_plain_text: boolean;
   paste_as_plain_text: boolean;
-  auto_favorite: boolean;
   confirm_delete: boolean;
   auto_sort: boolean;
-  left_click_action: 'copy' | 'paste';  // 新增
 
   // 应用设置
   auto_start: boolean;
@@ -250,8 +251,10 @@ const handleHotkeyRecord = (e) => {
 ## Tauri 命令列表
 
 ### 剪贴板操作
-- `add_clipboard_item()` - 添加文本/HTML记录 ✅
-- `add_clipboard_item_extended()` - 添加图片/文件记录 ✅
+- `add_clipboard_item(text, html, is_internal_copy?)` - 添加文本/HTML记录 ✅
+  - `is_internal_copy`: 是否是内部复制（true=应用内复制，false=系统剪贴板复制）
+- `add_clipboard_item_extended(content_type, content, file_paths?, thumbnail_path?, metadata?, is_internal_copy?)` - 添加图片/文件记录 ✅
+  - `is_internal_copy`: 是否是内部复制（true=应用内复制，false=系统剪贴板复制）
 - `get_clipboard_history()` - 获取历史 ✅
 - `search_clipboard_history()` - 搜索 ✅
 - `delete_clipboard_item()` - 删除单条 ✅

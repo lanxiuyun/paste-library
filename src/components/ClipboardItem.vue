@@ -2,14 +2,11 @@
   <div 
     class="clipboard-item" 
     :class="{ 'is-hovered': isHovered, 'is-selected': isSelected }"
-    draggable="true"
     @click="handleClick"
     @dblclick="handleDoubleClick"
     @contextmenu.prevent="handleContextMenu"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
-    @dragstart="handleDragStart"
-    @dragend="handleDragEnd"
   >
     <div class="item-row" :class="{ 'has-tags': item.tags && item.tags.length > 0 }">
       <!-- 内容包装器 -->
@@ -21,26 +18,50 @@
         <div class="content-area">
           <!-- 图片预览 -->
           <div v-if="item.content_type === 'image'" class="image-preview">
+            <div v-if="imageLoading && !imageLoadError" class="image-loading">
+              <svg class="loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
+              </svg>
+              <span>加载中...</span>
+            </div>
             <img 
-              v-if="item.thumbnail_path" 
+              v-if="item.thumbnail_path && !imageLoadError" 
+              :key="imageSrcKey"
               :src="imageSrc" 
               :alt="'图片 ' + (item.metadata?.width || 0) + 'x' + (item.metadata?.height || 0)"
               @error="handleImageError"
+              @load="handleImageLoad"
+              :class="{ 'image-loading-hidden': imageLoading }"
             />
-            <div v-if="imageLoadError" class="image-error">图片加载失败</div>
+            <div v-if="imageLoadError" class="image-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <span>图片加载失败</span>
+            </div>
           </div>
           
           <!-- 单个图片文件预览（显示预览图+路径） -->
           <div v-else-if="isSingleImageFile" class="single-image-file-preview">
             <div class="image-file-row">
+              <div v-if="fileImageLoading && !fileImageLoadError" class="file-thumbnail-loading">
+                <svg class="loading-spinner-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
+                </svg>
+              </div>
               <img 
-                v-if="singleImageSrc && !imageLoadError" 
+                v-if="singleImageSrc && !fileImageLoadError" 
+                :key="fileImageSrcKey"
                 :src="singleImageSrc" 
                 :alt="getFileName(item.file_paths![0])"
                 class="file-thumbnail"
-                @error="handleImageError"
+                @error="handleFileImageError"
+                @load="handleFileImageLoad"
+                :class="{ 'image-loading-hidden': fileImageLoading }"
               />
-              <div v-if="imageLoadError" class="file-thumbnail-error">📄</div>
+              <div v-if="fileImageLoadError" class="file-thumbnail-error">📄</div>
               <span class="file-path">{{ item.file_paths![0] }}</span>
             </div>
           </div>
@@ -91,37 +112,6 @@
               </svg>
             </button>
             <button 
-              class="action-btn" 
-              title="添加到队列" 
-              @click="handleQuickAction('queue')"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                <path d="M2 17l10 5 10-5"/>
-                <path d="M2 12l10 5 10-5"/>
-              </svg>
-            </button>
-            <button 
-              class="action-btn" 
-              title="复制" 
-              @click="handleQuickAction('copy')"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
-            </button>
-            <button 
-              class="action-btn" 
-              title="标签" 
-              @click="handleQuickAction('tag')"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                <line x1="7" y1="7" x2="7.01" y2="7"/>
-              </svg>
-            </button>
-            <button 
               class="action-btn danger" 
               title="删除" 
               @click="handleQuickAction('delete')"
@@ -140,8 +130,8 @@
       <span v-else class="item-index subdued">{{ index + 1 }}</span>
     </div>
 
-    <!-- 标签区域 -->
-    <div v-if="item.tags && item.tags.length > 0" class="tags-row">
+    <!-- 标签区域（暂时隐藏） -->
+    <!-- <div v-if="item.tags && item.tags.length > 0" class="tags-row">
       <span 
         v-for="tag in item.tags.slice(0, 3)" 
         :key="tag"
@@ -151,12 +141,12 @@
         {{ tag }}
       </span>
       <span v-if="item.tags.length > 3" class="tag-more">+{{ item.tags.length - 3 }}</span>
-    </div>
+    </div> -->
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import type { ClipboardItem } from '@/types';
 
@@ -169,8 +159,8 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  click: [item: ClipboardItem];
-  dblclick: [item: ClipboardItem];
+  click: [item: ClipboardItem, index: number];
+  dblclick: [item: ClipboardItem, index: number];
   contextmenu: [event: MouseEvent, item: ClipboardItem];
   delete: [id: number];
   copy: [item: ClipboardItem];
@@ -180,11 +170,84 @@ const emit = defineEmits<{
 
 const isHovered = ref(false);
 const imageLoadError = ref(false);
+const imageLoading = ref(true);
+const retryCount = ref(0);
+const MAX_RETRY = 5;
+const RETRY_DELAY = 200; // 毫秒
 
-// 处理图片加载错误
+// 处理图片加载错误 - 添加重试机制
 const handleImageError = () => {
-  imageLoadError.value = true;
-  console.error('Failed to load image:', props.item.thumbnail_path);
+  if (retryCount.value < MAX_RETRY) {
+    retryCount.value++;
+    imageLoading.value = true;
+    console.log(`Image load failed, retrying... (${retryCount.value}/${MAX_RETRY})`);
+    
+    // 延迟后重置 loading 状态，触发重新加载
+    setTimeout(() => {
+      imageLoadError.value = false;
+      // 强制刷新 computed 属性
+      imageSrcKey.value++;
+    }, RETRY_DELAY);
+  } else {
+    imageLoadError.value = true;
+    imageLoading.value = false;
+    console.error('Failed to load image after retries:', props.item.thumbnail_path);
+  }
+};
+
+// 处理图片加载成功
+const handleImageLoad = () => {
+  imageLoading.value = false;
+  imageLoadError.value = false;
+  retryCount.value = 0;
+};
+
+// 用于强制刷新图片 src
+const imageSrcKey = ref(0);
+
+// 监听 item 变化，重置图片状态
+watch(() => props.item.id, () => {
+  retryCount.value = 0;
+  imageLoadError.value = false;
+  imageLoading.value = true;
+  imageSrcKey.value++;
+  
+  // 重置文件图片状态
+  fileRetryCount.value = 0;
+  fileImageLoadError.value = false;
+  fileImageLoading.value = true;
+  fileImageSrcKey.value++;
+});
+
+// 文件图片加载状态
+const fileImageLoading = ref(true);
+const fileImageLoadError = ref(false);
+const fileRetryCount = ref(0);
+const fileImageSrcKey = ref(0);
+
+// 处理文件图片加载错误
+const handleFileImageError = () => {
+  if (fileRetryCount.value < MAX_RETRY) {
+    fileRetryCount.value++;
+    fileImageLoading.value = true;
+    console.log(`File image load failed, retrying... (${fileRetryCount.value}/${MAX_RETRY})`);
+    
+    setTimeout(() => {
+      fileImageLoadError.value = false;
+      fileImageSrcKey.value++;
+    }, RETRY_DELAY);
+  } else {
+    fileImageLoadError.value = true;
+    fileImageLoading.value = false;
+    console.error('Failed to load file image after retries:', props.item.file_paths?.[0]);
+  }
+};
+
+// 处理文件图片加载成功
+const handleFileImageLoad = () => {
+  fileImageLoading.value = false;
+  fileImageLoadError.value = false;
+  fileRetryCount.value = 0;
 };
 
 // 用于区分单击和双击
@@ -192,20 +255,20 @@ let clickTimer: ReturnType<typeof setTimeout> | null = null;
 let clickCount = 0;
 const DOUBLE_CLICK_DELAY = 250;
 
-// 预设标签颜色
-const tagColors: Record<string, string> = {
-  '收藏': '#faad14',
-  '工作': '#1890ff',
-  '个人': '#52c41a',
-  '待办': '#ff4d4f',
-  '灵感': '#722ed1',
-  '重要': '#ff4d4f',
-  '稍后': '#8c8c8c',
-};
+// 预设标签颜色（暂时隐藏）
+// const tagColors: Record<string, string> = {
+//   '收藏': '#faad14',
+//   '工作': '#1890ff',
+//   '个人': '#52c41a',
+//   '待办': '#ff4d4f',
+//   '灵感': '#722ed1',
+//   '重要': '#ff4d4f',
+//   '稍后': '#8c8c8c',
+// };
 
-const getTagColor = (tag: string): string => {
-  return tagColors[tag] || '#595959';
-};
+// const getTagColor = (tag: string): string => {
+//   return tagColors[tag] || '#595959';
+// };
 
 const typeLabel = computed(() => {
   switch (props.item.content_type) {
@@ -270,11 +333,11 @@ const singleImageSrc = computed(() => {
 
 const handleClick = () => {
   clickCount++;
-  
+
   if (clickCount === 1) {
     clickTimer = setTimeout(() => {
       // 单击逻辑
-      emit('click', props.item);
+      emit('click', props.item, props.index);
       clickCount = 0;
     }, DOUBLE_CLICK_DELAY);
   }
@@ -288,7 +351,7 @@ const handleDoubleClick = () => {
   }
   clickCount = 0;
   // 双击逻辑
-  emit('dblclick', props.item);
+  emit('dblclick', props.item, props.index);
 };
 
 const handleContextMenu = (event: MouseEvent) => {
@@ -299,51 +362,52 @@ const handleQuickAction = (action: string) => {
   emit('quickAction', action, props.item);
 };
 
-const handleDragStart = (event: DragEvent) => {
-  if (!event.dataTransfer) return;
-  
-  // 设置拖拽效果
-  event.dataTransfer.effectAllowed = 'copy';
-  
-  // 根据内容类型设置不同的拖拽数据
-  switch (props.item.content_type) {
-    case 'text':
-    case 'html':
-      event.dataTransfer.setData('text/plain', props.item.content);
-      if (props.item.content_type === 'html') {
-        event.dataTransfer.setData('text/html', props.item.content);
-      }
-      break;
-    case 'image':
-      // 图片拖拽：设置图片 URL
-      if (props.item.thumbnail_path) {
-        event.dataTransfer.setData('text/uri-list', props.item.thumbnail_path);
-      }
-      break;
-    case 'file':
-    case 'folder':
-    case 'files':
-      // 文件拖拽：设置文件路径
-      if (props.item.file_paths && props.item.file_paths.length > 0) {
-        event.dataTransfer.setData('text/uri-list', props.item.file_paths.join('\n'));
-      } else {
-        event.dataTransfer.setData('text/plain', props.item.content);
-      }
-      break;
-    default:
-      event.dataTransfer.setData('text/plain', props.item.content);
-  }
-  
-  // 设置拖拽图像
-  const dragImage = new Image();
-  dragImage.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Crect x="9" y="9" width="13" height="13" rx="2" ry="2"/%3E%3Cpath d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/%3E%3C/svg%3E';
-  event.dataTransfer.setDragImage(dragImage, 12, 12);
-};
+// 拖拽功能暂时禁用（与 Tauri 窗口拖拽冲突）
+// const handleDragStart = (event: DragEvent) => {
+//   if (!event.dataTransfer) return;
+//   
+//   // 设置拖拽效果
+//   event.dataTransfer.effectAllowed = 'copy';
+//   
+//   // 根据内容类型设置不同的拖拽数据
+//   switch (props.item.content_type) {
+//     case 'text':
+//     case 'html':
+//       event.dataTransfer.setData('text/plain', props.item.content);
+//       if (props.item.content_type === 'html') {
+//         event.dataTransfer.setData('text/html', props.item.content);
+//       }
+//       break;
+//     case 'image':
+//       // 图片拖拽：设置图片 URL
+//       if (props.item.thumbnail_path) {
+//         event.dataTransfer.setData('text/uri-list', props.item.thumbnail_path);
+//       }
+//       break;
+//     case 'file':
+//     case 'folder':
+//     case 'files':
+//       // 文件拖拽：设置文件路径
+//       if (props.item.file_paths && props.item.file_paths.length > 0) {
+//         event.dataTransfer.setData('text/uri-list', props.item.file_paths.join('\n'));
+//       } else {
+//         event.dataTransfer.setData('text/plain', props.item.content);
+//       }
+//       break;
+//     default:
+//       event.dataTransfer.setData('text/plain', props.item.content);
+//   }
+//   
+//   // 设置拖拽图像
+//   const dragImage = new Image();
+//   dragImage.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Crect x="9" y="9" width="13" height="13" rx="2" ry="2"/%3E%3Cpath d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/%3E%3C/svg%3E';
+//   event.dataTransfer.setDragImage(dragImage, 12, 12);
+// };
 
-const handleDragEnd = (event: DragEvent) => {
-  if (!event.dataTransfer) return;
-  event.dataTransfer.dropEffect = 'none';
-};
+// const handleDragEnd = (event: DragEvent) => {
+//   if (!event.dataTransfer) return;
+//   event.dataTransfer.dropEffect = 'none';
+// };
 </script>
 
 <style scoped>
@@ -458,6 +522,7 @@ const handleDragEnd = (event: DragEvent) => {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  min-height: 60px;
 }
 
 .image-preview img {
@@ -471,13 +536,60 @@ const handleDragEnd = (event: DragEvent) => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.image-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 24px;
+  color: #8c8c8c;
+  font-size: 12px;
+  gap: 8px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  min-width: 80px;
+  min-height: 80px;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.image-loading-hidden {
+  opacity: 0;
+  position: absolute;
+}
+
 .image-error {
-  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
   font-size: 12px;
   color: #ff4d4f;
   background: #fff2f0;
   border: 1px solid #ffccc7;
-  border-radius: 4px;
+  border-radius: 6px;
+  gap: 4px;
+  min-width: 80px;
+  min-height: 60px;
+}
+
+.image-error svg {
+  width: 24px;
+  height: 24px;
 }
 
 /* 单个图片文件预览 */
@@ -500,6 +612,24 @@ const handleDragEnd = (event: DragEvent) => {
   border-radius: 4px;
   background: var(--bg-hover, #f5f5f5);
   flex-shrink: 0;
+}
+
+.file-thumbnail-loading {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover, #f5f5f5);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.loading-spinner-small {
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+  color: #8c8c8c;
 }
 
 .file-thumbnail-error {
@@ -588,22 +718,22 @@ const handleDragEnd = (event: DragEvent) => {
   transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 4px;
+  gap: 6px;
+  padding: 4px 8px;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 4px;
+  border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 10;
 }
 
 .action-btn {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -621,8 +751,8 @@ const handleDragEnd = (event: DragEvent) => {
 }
 
 .action-btn svg {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
 }
 
 /* 序号 */

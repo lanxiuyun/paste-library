@@ -18,7 +18,10 @@
 - 自动清除: boolean
 
 **内容设置**
-- 自动粘贴: off/single/double
+- 单击动作: copy/paste/none
+- 双击动作: copy/paste/none
+- 粘贴快捷键: ctrl_v/shift_insert
+- 复制后隐藏窗口: boolean
 - 图片OCR: boolean
 - 复制为纯文本: boolean
 - 粘贴为纯文本: boolean
@@ -55,7 +58,11 @@
   - 支持: 特殊键 Space, Enter, Escape, Tab, Backspace, Delete, 方向键
   - 修改后需重启应用生效
 - 打开偏好设置窗口: string (可配置)
-- 快速粘贴: boolean + modifier
+- 数字键快捷粘贴: 按键录制按钮 (仅捕获修饰键)
+  - 支持: Ctrl, Alt, Shift, Meta 修饰键组合
+  - 可设置为直接按数字键（无修饰键）
+  - 默认: Ctrl+1~9 粘贴对应位置内容
+  - 实时生效，无需重启
 - 粘贴为纯文本: string
 
 ### 5. 数据备份
@@ -97,9 +104,14 @@
 
 | 操作 | 行为 | 可配置 |
 |------|------|--------|
-| 左键单击 | 复制/粘贴 | ✅ 通过 `click_action` 设置 |
-| 双击 | 复制/粘贴 | ✅ 通过 `double_click_action` 设置 |
+| 左键单击 | 复制/粘贴/不操作 | ✅ 通过 `click_action` 设置 |
+| 双击 | 复制/粘贴/不操作 | ✅ 通过 `double_click_action` 设置 |
 | 右键 | 上下文菜单 | ❌ |
+
+**动作说明**
+- **复制**: 仅将数据写入系统剪贴板
+- **粘贴**: 复制数据 → 隐藏窗口 → 模拟快捷键粘贴到原焦点窗口
+- **不操作**: 仅选中该项，不执行复制或粘贴
 
 ### 上下文菜单项
 

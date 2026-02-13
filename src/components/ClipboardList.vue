@@ -31,7 +31,8 @@
           {{ tab.label }}
         </button>
       </div>
-      <div class="header-actions">
+      <!-- 右侧操作按钮（暂时隐藏） -->
+      <!-- <div class="header-actions">
         <button class="icon-btn" title="通知">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -45,11 +46,11 @@
             <path d="M2 12l10 5 10-5"/>
           </svg>
         </button>
-      </div>
+      </div> -->
     </div>
 
     <!-- 列表内容 -->
-    <div ref="listContainerRef" class="list-container" @scroll="handleScroll">
+    <div ref="listContainerRef" class="list-container" @scroll="handleScroll" tabindex="-1">
       <div v-if="filteredHistory.length === 0" class="empty-state">
         <div class="empty-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -71,7 +72,7 @@
           :is-selected="selectedIndex === index"
           @click="handleItemClick"
           @dblclick="handleItemDoubleClick"
-          @contextmenu="handleItemContextMenu"
+          @contextmenu="(event: MouseEvent) => handleItemContextMenu(event, item, index)"
           @quick-action="handleQuickAction"
         />
       </template>
@@ -105,11 +106,11 @@
       @action="handleContextMenuAction"
     />
 
-    <!-- 粘贴队列面板 -->
-    <PasteQueuePanel
+    <!-- 粘贴队列面板（暂时隐藏） -->
+    <!-- <PasteQueuePanel
       ref="pasteQueueRef"
       @paste="handleQueuePaste"
-    />
+    /> -->
 
     <!-- 抽屉编辑器 -->
     <DrawerEditor
@@ -145,14 +146,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import ClipboardItem from './ClipboardItem.vue';
 import ContextMenu from './ContextMenu.vue';
-import PasteQueuePanel from './PasteQueuePanel.vue';
+// import PasteQueuePanel from './PasteQueuePanel.vue';
 import DrawerEditor from './DrawerEditor.vue';
 import { useClipboard } from '@/composables/useClipboard';
 import { writeText } from 'tauri-plugin-clipboard-x-api';
-import { usePasteQueue } from '@/composables/usePasteQueue';
+// import { usePasteQueue } from '@/composables/usePasteQueue';
 import { useSettings } from '@/composables/useSettings';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -167,9 +168,9 @@ const {
   restoreToClipboard,
 } = useClipboard();
 
-const { addToQueue } = usePasteQueue();
+// const { addToQueue } = usePasteQueue();
 const { settings } = useSettings();
-const pasteQueueRef = ref<InstanceType<typeof PasteQueuePanel> | null>(null);
+// const pasteQueueRef = ref<InstanceType<typeof PasteQueuePanel> | null>(null);
 
 // Drawer editor state
 const drawerVisible = ref(false);
@@ -180,7 +181,6 @@ const tabs = [
   { key: 'text', label: '文本' },
   { key: 'image', label: '图片' },
   { key: 'file', label: '文件' },
-  { key: 'favorite', label: '收藏' },
 ];
 
 const activeTab = ref('all');
@@ -204,35 +204,58 @@ const deleteConfirmVisible = ref(false);
 const itemToDelete = ref<ClipboardItemType | null>(null);
 
 // 智能激活逻辑
-const handleSmartActivate = () => {
+const handleSmartActivate = async () => {
   // 检查智能激活是否开启
-  if (!settings.value.smart_activate) return;
-  
-  const timeDiff = Date.now() - lastCopyTime.value;
-  
-  // 如果距离上次复制 < 5秒，执行智能激活
-  if (timeDiff < 5000) {
-    // 1. 滚动到顶部
-    if (listContainerRef.value) {
-      listContainerRef.value.scrollTop = 0;
+  if (settings.value.smart_activate) {
+    const timeDiff = Date.now() - lastCopyTime.value;
+
+    // 如果距离上次复制 < 5秒，执行智能激活
+    if (timeDiff < 5000) {
+      // 1. 清空搜索框
+      searchQuery.value = '';
+      await handleSearch();
+
+      // 2. 滚动到顶部
+      if (listContainerRef.value) {
+        listContainerRef.value.scrollTop = 0;
+      }
+
+      // 3. 切换到"全部"标签
+      activeTab.value = 'all';
+
+      // 4. 聚焦搜索框（不自动滚动，避免影响列表）
+      searchInputRef.value?.focus({ preventScroll: true } as FocusOptions);
+
+      // 智能激活完成后不再执行 focus_search_on_activate
+      return;
     }
-    
-    // 2. 切换到"全部"标签
-    activeTab.value = 'all';
-    
-    // 3. 聚焦搜索框
-    searchInputRef.value?.focus();
+  }
+
+  // 独立的「激活时聚焦搜索框」设置（与 smart_activate 独立工作）
+  if (settings.value.focus_search_on_activate) {
+    searchInputRef.value?.focus({ preventScroll: true } as FocusOptions);
   }
 };
 
 const filteredHistory = computed(() => {
   let result = history.value;
 
-  // 按标签过滤
+  // 按类型过滤
   if (activeTab.value !== 'all') {
-    if (activeTab.value === 'favorite') {
-      // 过滤带"收藏"标签的项目
-      result = result.filter(item => item.tags?.includes('收藏'));
+    if (activeTab.value === 'file') {
+      // 文件标签页显示所有文件相关类型：单个文件、多文件、文件夹
+      result = result.filter(item =>
+        item.content_type === 'file' ||
+        item.content_type === 'files' ||
+        item.content_type === 'folder'
+      );
+    } else if (activeTab.value === 'text') {
+      // 文本标签页显示所有文本相关类型：纯文本、HTML、RTF
+      result = result.filter(item =>
+        item.content_type === 'text' ||
+        item.content_type === 'html' ||
+        item.content_type === 'rtf'
+      );
     } else {
       result = result.filter(item => item.content_type === activeTab.value);
     }
@@ -243,15 +266,35 @@ const filteredHistory = computed(() => {
 
 const handleSearch = async () => {
   if (searchQuery.value) {
-    await searchHistory(searchQuery.value);
+    await searchHistory(searchQuery.value, settings.value.max_history_count);
   } else {
-    await loadHistory();
+    await loadHistory(settings.value.max_history_count);
   }
+  
+  // 搜索完成后，滚动到顶部并重置选中项（使用 nextTick 确保 DOM 更新）
+  nextTick(() => {
+    if (listContainerRef.value) {
+      listContainerRef.value.scrollTop = 0;
+    }
+    // 重置选中项到第一项
+    if (filteredHistory.value.length > 0) {
+      selectedIndex.value = 0;
+    }
+  });
 };
 
-const handleItemClick = async (item: ClipboardItemType) => {
-  // 单击：根据 click_action 设置执行复制或粘贴
+const handleItemClick = async (item: ClipboardItemType, index: number) => {
+  // 单击时选中该项
+  selectedIndex.value = index;
+
+  // 单击：根据 click_action 设置执行复制、粘贴或不操作
   const clickAction = settings.value.click_action;
+
+  // 如果设置为不操作，仅选中该项
+  if (clickAction === 'none') {
+    return;
+  }
+
   const copyAsPlainText = settings.value.copy_as_plain_text;
 
   // 先复制到剪贴板
@@ -260,12 +303,24 @@ const handleItemClick = async (item: ClipboardItemType) => {
   // 如果设置为粘贴，则执行粘贴动作
   if (clickAction === 'paste') {
     await simulatePaste();
+  } else if (settings.value.hide_window_after_copy) {
+    // 如果设置了复制后隐藏窗口（且不是粘贴操作，因为粘贴已经会隐藏窗口）
+    await invoke('hide_clipboard_window');
   }
 };
 
-const handleItemDoubleClick = async (item: ClipboardItemType) => {
-  // 双击：根据 double_click_action 设置执行复制或粘贴
+const handleItemDoubleClick = async (item: ClipboardItemType, index: number) => {
+  // 双击时选中该项
+  selectedIndex.value = index;
+
+  // 双击：根据 double_click_action 设置执行复制、粘贴或不操作
   const doubleClickAction = settings.value.double_click_action;
+
+  // 如果设置为不操作，仅选中该项
+  if (doubleClickAction === 'none') {
+    return;
+  }
+
   const copyAsPlainText = settings.value.copy_as_plain_text;
 
   // 先复制到剪贴板
@@ -274,13 +329,19 @@ const handleItemDoubleClick = async (item: ClipboardItemType) => {
   // 如果设置为粘贴，则执行粘贴动作
   if (doubleClickAction === 'paste') {
     await simulatePaste();
+  } else if (settings.value.hide_window_after_copy) {
+    // 如果设置了复制后隐藏窗口（且不是粘贴操作，因为粘贴已经会隐藏窗口）
+    await invoke('hide_clipboard_window');
   }
 };
 
-const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType) => {
+const handleItemContextMenu = (event: MouseEvent, item: ClipboardItemType, index: number) => {
   contextMenuPosition.value = { x: event.clientX, y: event.clientY };
   contextMenuItem.value = item;
   contextMenuVisible.value = true;
+  
+  // 右键点击时，高亮该Item（设置选中索引）
+  selectedIndex.value = index;
 };
 
 const handleQuickAction = async (action: string, item: ClipboardItemType) => {
@@ -296,14 +357,14 @@ const handleQuickAction = async (action: string, item: ClipboardItemType) => {
     case 'delete':
       await handleDelete(item);
       break;
-    case 'tag':
-      // 打开标签管理弹窗
-      showTagManager(item);
-      break;
-    case 'queue':
-      // 添加到粘贴队列
-      addToQueue(item);
-      break;
+    // case 'tag':
+    //   // 打开标签管理弹窗
+    //   showTagManager(item);
+    //   break;
+    // case 'queue':
+    //   // 添加到粘贴队列
+    //   addToQueue(item);
+    //   break;
   }
 };
 
@@ -334,26 +395,30 @@ const cancelDelete = () => {
   deleteConfirmVisible.value = false;
 };
 
-const showTagManager = (item: ClipboardItemType) => {
-  // TODO: 实现标签管理弹窗
-  console.log('Tag manager for item:', item.id);
-};
+// const showTagManager = (item: ClipboardItemType) => {
+//   // TODO: 实现标签管理弹窗
+//   console.log('Tag manager for item:', item.id);
+// };
 
-const handleQueuePaste = async (content: string) => {
-  // 将合并后的内容写入剪贴板并粘贴
-  try {
-    const { writeText } = await import('tauri-plugin-clipboard-x-api');
-    await writeText(content);
-    // TODO: 模拟粘贴操作
-    console.log('Queue pasted:', content.substring(0, 100) + '...');
-  } catch (error) {
-    console.error('Failed to paste queue:', error);
-  }
-};
+// const handleQueuePaste = async (content: string) => {
+//   // 将合并后的内容写入剪贴板并粘贴
+//   try {
+//     const { writeText } = await import('tauri-plugin-clipboard-x-api');
+//     await writeText(content);
+//     // TODO: 模拟粘贴操作
+//     console.log('Queue pasted:', content.substring(0, 100) + '...');
+//   } catch (error) {
+//     console.error('Failed to paste queue:', error);
+//   }
+// };
 
 // Drawer handlers
 const handleDrawerCopy = async (item: ClipboardItemType) => {
   await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+  // 如果设置了复制后隐藏窗口
+  if (settings.value.hide_window_after_copy) {
+    await invoke('hide_clipboard_window');
+  }
 };
 
 const handleDrawerPaste = async (item: ClipboardItemType) => {
@@ -418,16 +483,20 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
     case 'copy':
       // 右键菜单复制：仅复制到剪贴板（与单击/双击的复制行为一致）
       await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+      // 如果设置了复制后隐藏窗口
+      if (settings.value.hide_window_after_copy) {
+        await invoke('hide_clipboard_window');
+      }
       break;
     case 'paste':
       // 右键菜单粘贴：复制到剪贴板并执行粘贴（与单击/双击的粘贴行为一致）
       await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       await simulatePaste();
       break;
-    case 'tag':
-      // 打开标签管理器
-      showTagManager(item);
-      break;
+    // case 'tag':
+    //   // 打开标签管理器
+    //   // showTagManager(item);
+    //   break;
     case 'copyPlain':
       // 复制为纯文本
       await restoreToClipboard({
@@ -435,6 +504,10 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
         content_type: 'text',
         content: item.content.replace(/<[^>]*>/g, ''),
       });
+      // 如果设置了复制后隐藏窗口
+      if (settings.value.hide_window_after_copy) {
+        await invoke('hide_clipboard_window');
+      }
       break;
     case 'pastePlain':
       // 粘贴为纯文本：复制纯文本到剪贴板并执行粘贴
@@ -506,6 +579,9 @@ const handleKeyDown = async (e: KeyboardEvent) => {
 
     if (newIndex >= 0 && newIndex < filteredHistory.value.length) {
       selectedIndex.value = newIndex;
+      
+      // 自动滚动到可视区域
+      scrollSelectedItemIntoView();
     }
     return;
   }
@@ -524,22 +600,49 @@ const handleKeyDown = async (e: KeyboardEvent) => {
 
   // 数字键 1-9 快速粘贴
   if (e.key >= '1' && e.key <= '9') {
-    const index = parseInt(e.key) - 1;
-    if (index < filteredHistory.value.length) {
-      e.preventDefault();
-      const item = filteredHistory.value[index];
-      if (item) {
-        await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
-        // 模拟粘贴
-        await simulatePaste();
+    // 根据设置判断是否需要修饰键
+    const shortcut = settings.value.number_key_shortcut || 'ctrl';
+    let shouldTrigger = false;
+
+    if (shortcut === 'none') {
+      // 直接按数字键即可触发
+      shouldTrigger = !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+    } else {
+      // 解析用户设置的修饰键组合（如 "ctrl", "ctrl+shift", "alt+shift" 等）
+      const requiredModifiers = shortcut.toLowerCase().split('+').map(s => s.trim());
+      const actualModifiers: string[] = [];
+      if (e.ctrlKey) actualModifiers.push('ctrl');
+      if (e.altKey) actualModifiers.push('alt');
+      if (e.shiftKey) actualModifiers.push('shift');
+      if (e.metaKey) actualModifiers.push('meta');
+
+      // 检查是否完全匹配（修饰键种类和数量都相同）
+      const allRequiredPressed = requiredModifiers.every(mod => actualModifiers.includes(mod));
+      const noExtraModifiers = actualModifiers.every(mod => requiredModifiers.includes(mod));
+      shouldTrigger = allRequiredPressed && noExtraModifiers;
+    }
+
+    if (shouldTrigger) {
+      const index = parseInt(e.key) - 1;
+      if (index < filteredHistory.value.length) {
+        e.preventDefault();
+        const item = filteredHistory.value[index];
+        if (item) {
+          await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
+          // 模拟粘贴
+          await simulatePaste();
+        }
       }
     }
     return;
   }
 };
 
+// 标记是否已经执行过智能激活（每次窗口打开时重置）
+const hasActivated = ref(false);
+
 onMounted(async () => {
-  loadHistory(limit, 0);
+  loadHistory(settings.value.max_history_count, 0);
   window.addEventListener('keydown', handleKeyDown);
   // 初始化选中第一项
   if (filteredHistory.value.length > 0) {
@@ -549,12 +652,22 @@ onMounted(async () => {
   // 使用 Tauri 窗口监听 focus 事件（智能激活）
   const appWindow = getCurrentWindow();
   const unlistenFocus = await appWindow.listen('tauri://focus', () => {
-    // 窗口获得焦点时执行智能激活
-    handleSmartActivate();
+    // 只在首次激活时执行智能激活，避免频繁焦点切换导致 hover 失效
+    if (!hasActivated.value) {
+      hasActivated.value = true;
+      handleSmartActivate();
+    }
+  });
+  
+  // 监听窗口隐藏事件，重置激活标记
+  const unlistenBlur = await appWindow.listen('tauri://blur', () => {
+    // 窗口失去焦点时重置标记，下次打开时重新执行
+    hasActivated.value = false;
   });
   
   // 保存清理函数
   (window as any).__unlistenFocus = unlistenFocus;
+  (window as any).__unlistenBlur = unlistenBlur;
 });
 
 onUnmounted(() => {
@@ -563,10 +676,26 @@ onUnmounted(() => {
   if ((window as any).__unlistenFocus) {
     (window as any).__unlistenFocus();
   }
+  if ((window as any).__unlistenBlur) {
+    (window as any).__unlistenBlur();
+  }
+  // 重置激活标记
+  hasActivated.value = false;
 });
 
+// 滚动选中项到可视区域
+const scrollSelectedItemIntoView = () => {
+  if (selectedIndex.value < 0 || !listContainerRef.value) return;
+  
+  const container = listContainerRef.value;
+  const itemElement = container.children[selectedIndex.value] as HTMLElement;
+  
+  if (itemElement) {
+    itemElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+};
+
 // 监听过滤变化，重置选中状态
-import { watch } from 'vue';
 watch(filteredHistory, () => {
   if (selectedIndex.value >= filteredHistory.value.length) {
     selectedIndex.value = filteredHistory.value.length > 0 ? 0 : -1;

@@ -61,16 +61,39 @@
 - **实现说明**: 智能激活功能已包含聚焦搜索框的逻辑，当5秒内复制过内容时自动聚焦
 - **涉及文件**: `src/components/ClipboardList.vue`
 
-#### 6. 自动粘贴 (auto_paste)
+#### 6. 单击动作 (click_action) / 双击动作 (double_click_action)
 - **当前状态**: ✅ **已实现**
-- **设置类型**: select - off/single/double
+- **设置类型**: select - copy/paste/none
 - **应实现功能**: 
-  - off: 单击只复制
-  - single: 单击复制并粘贴
-  - double: 双击复制并粘贴（当前行为）
+  - copy: 仅复制到剪贴板
+  - paste: 复制并执行粘贴（隐藏窗口 + 模拟快捷键）
+  - none: 不执行任何操作，仅选中该项
 - **涉及文件**: 
   - `src/components/ClipboardList.vue` - handleItemClick/handleItemDoubleClick
-  - 需要实现模拟粘贴功能（可能需要Rust后端支持）
+  - `src/types/index.ts` - 类型定义
+  - `src-tauri/src/models.rs` - Rust模型
+
+#### 6.5 粘贴快捷键 (paste_shortcut)
+- **当前状态**: ✅ **已实现**
+- **设置类型**: select - ctrl_v/shift_insert
+- **应实现功能**: 执行粘贴动作时使用的快捷键
+  - ctrl_v: 使用 Ctrl+V（默认）
+  - shift_insert: 使用 Shift+Insert（推荐用于终端）
+- **涉及文件**: 
+  - `src-tauri/src/lib.rs` - simulate_paste 命令
+  - `src/components/ClipboardList.vue` - 调用 simulatePaste
+
+#### 6.6 复制后隐藏窗口 (hide_window_after_copy)
+- **当前状态**: ✅ **已实现** (2026-02-13)
+- **设置类型**: boolean
+- **应实现功能**: 复制操作完成后自动隐藏剪贴板窗口
+  - 适用于：单击复制、双击复制、右键菜单复制、抽屉编辑器复制
+  - 粘贴操作不受此设置影响（粘贴本身就会隐藏窗口）
+- **涉及文件**: 
+  - `src/components/ClipboardList.vue` - 各复制操作后检查设置
+  - `src/types/index.ts` - 类型定义
+  - `src-tauri/src/models.rs` - Rust模型
+  - `src-tauri/src/storage.rs` - 数据库存储
 
 #### 7. 图片OCR (image_ocr)
 - **当前状态**: ❌ 未实现
@@ -104,10 +127,14 @@
 #### 11. 自动排序 (auto_sort)
 - **当前状态**: ✅ **已实现**
 - **设置类型**: boolean
-- **应实现功能**: 复制已存在的内容时，将其排列到列表最前面
+- **应实现功能**: 
+  - 复制已存在的内容时，将其排列到列表最前面
+  - **系统剪贴板复制（外部）**: 总是更新时间戳置顶（文件类型始终置顶，其他类型根据auto_sort设置）
+  - **应用内复制（内部）**: 不更新时间戳，保持原有位置
 - **涉及文件**: 
   - 后端 `src-tauri/src/storage.rs` - add_clipboard_item
-  - 目前实现是更新时间，但列表顺序没有变化
+  - `src-tauri/src/clipboard.rs` - 传递 is_internal_copy 参数
+  - `src/composables/useClipboard.ts` - 标记内部复制状态
 
 ---
 
@@ -148,6 +175,29 @@
 - **当前行为**: 只在应用启动时注册一次
 - **改进建议**: 修改后需要提示用户重启应用生效
 
+#### 16. 数字键快捷粘贴修饰键 (number_key_shortcut)
+- **当前状态**: ✅ **已实现** (2026-02-12)
+- **设置类型**: string (如 "ctrl", "ctrl+shift", "alt", "none")
+- **默认行为**: "ctrl" (Ctrl+1~9 粘贴对应位置的剪贴板内容)
+- **实现功能**: 
+  - 支持用户自定义 1-9 数字键的修饰键组合
+  - 可选项：
+    - "none": 直接按数字键即可粘贴
+    - "ctrl": Ctrl+数字键
+    - "alt": Alt+数字键
+    - "shift": Shift+数字键
+    - "ctrl+shift": Ctrl+Shift+数字键
+    - "ctrl+alt": Ctrl+Alt+数字键
+    - "alt+shift": Alt+Shift+数字键
+    - 其他任意组合
+- **涉及文件**: 
+  - `src/types/index.ts` - 类型定义
+  - `src-tauri/src/models.rs` - Rust模型
+  - `src-tauri/src/storage.rs` - 存储读写
+  - `src/composables/useSettings.ts` - 默认值
+  - `src/components/SettingsPanel.vue` - 设置UI（录制按钮）
+  - `src/components/ClipboardList.vue` - 键盘事件处理
+
 ---
 
 ## ❌ 已移除的功能
@@ -170,13 +220,13 @@
 
 | 类别 | 总数 | 已实现 | 未实现 | 已移除 |
 |------|------|--------|--------|--------|
-| 剪贴板设置 | 11 | 7 | 3 | 4 |
+| 剪贴板设置 | 12 | 10 | 2 | 4 |
 | 历史记录设置 | 2 | 2 | 0 | 0 |
 | 通用设置 | 1 | 1 | 0 | 1 |
 | 快捷键设置 | 1 | 1 | 0 | 0 |
-| **总计** | **15** | **11** | **3** | **7** |
+| **总计** | **16** | **14** | **2** | **7** |
 
-**实现进度**: 73% (11/15)
+**实现进度**: 88% (14/16)
 
 ---
 
@@ -184,13 +234,15 @@
 
 ### ✅ 已实现
 1. **smart_activate** - 智能激活 (2026-02-07)
-2. **auto_paste** - 自动粘贴行为（单击/双击）
-3. **window_position** - 窗口位置（remember/center/cursor）
-4. **search_position** - 搜索框位置（top/bottom）
-5. **confirm_delete** - 删除确认对话框
-6. **copy_as_plain_text** - 复制为纯文本
-7. **auto_sort** - 自动排序（重复内容置顶）
-8. **auto_start** - 开机自启
+2. **click_action** / **double_click_action** - 单击/双击动作（复制/粘贴/不操作）(2026-02-13)
+3. **paste_shortcut** - 粘贴快捷键（Ctrl+V / Shift+Insert）
+4. **hide_window_after_copy** - 复制后隐藏窗口 (2026-02-13)
+5. **window_position** - 窗口位置（remember/center/cursor）
+6. **search_position** - 搜索框位置（top/bottom）
+7. **confirm_delete** - 删除确认对话框
+8. **copy_as_plain_text** - 复制为纯文本
+9. **auto_sort** - 自动排序（重复内容置顶）
+10. **auto_start** - 开机自启
 
 ### ⏳ 待实现
 
@@ -212,11 +264,17 @@
 当剪贴板窗口被激活（显示）时：
 1. 获取当前时间和上次复制时间的时间差
 2. 如果 time_diff < 5秒：
+   - **清空搜索框**（2026-02-13新增）
    - 滚动列表到顶部
    - 切换 activeTab 到 'all'
    - 聚焦搜索框（如果 search_position 是 top/bottom）
 3. 如果 time_diff >= 5秒：
    - 保持当前状态不变
+
+### 实现说明
+- **触发条件**: 仅在系统剪贴板复制后5秒内激活窗口时触发
+- **应用内复制不触发**: 用户点击项目复制不会触发智能激活
+- **清空搜索**: 智能激活时自动清空搜索文本，显示完整历史记录
 
 ### 实现方案
 

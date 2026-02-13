@@ -5,6 +5,7 @@ mod window_manager;
 mod shortcut_manager;
 mod tray_manager;
 mod fuzzy_search;
+mod prevent_default;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -40,9 +41,12 @@ async fn add_clipboard_item(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     text: String,
     html: Option<String>,
+    is_internal_copy: Option<bool>,
 ) -> Result<Option<ClipboardItem>, String> {
     let state = state.lock().await;
-    state.clipboard_manager.handle_clipboard_change(text, html).await
+    // 默认认为是外部复制（来自系统剪贴板）
+    let is_internal = is_internal_copy.unwrap_or(false);
+    state.clipboard_manager.handle_clipboard_change(text, html, is_internal).await
 }
 
 #[tauri::command]
@@ -53,14 +57,18 @@ async fn add_clipboard_item_extended(
     file_paths: Option<Vec<String>>,
     thumbnail_path: Option<String>,
     metadata: Option<ClipboardMetadata>,
+    is_internal_copy: Option<bool>,
 ) -> Result<Option<ClipboardItem>, String> {
     let state = state.lock().await;
+    // 默认认为是外部复制（来自系统剪贴板）
+    let is_internal = is_internal_copy.unwrap_or(false);
     state.clipboard_manager.handle_clipboard_change_extended(
         content_type,
         content,
         file_paths,
         thumbnail_path,
         metadata,
+        is_internal,
     ).await
 }
 
@@ -427,6 +435,9 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        // 禁用 webview 的默认行为（阻止系统菜单、快捷键等）
+        // https://github.com/ferreira-tb/tauri-plugin-prevent-default
+        .plugin(prevent_default::init())
         .setup(|app| {
             let app_dir = app
                 .path()

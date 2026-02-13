@@ -12,7 +12,7 @@
   - tauri-plugin-global-shortcut (global hotkey Alt+V)
   - tauri-plugin-tray (system tray integration)
   - tauri-plugin-autostart (auto start on boot)
-- **Status**: In development — P0/P1 features complete (~95%), P2 optimization pending
+- **Status**: In development — P0/P1 features complete (~98%), P3 optimization complete, hover interaction improvements in progress
 
 ---
 
@@ -383,11 +383,25 @@ const imageSrc = computed(() => {
 - **Click Actions**:
   - **Copy**: Copy data to clipboard only
   - **Paste**: Copy data → hide window → simulate paste shortcut at previous focus
-  - Configurable single/double click actions in settings
+  - **None**: Only select the item, no copy/paste action
+  - Configurable single/double click actions in settings (copy/paste/none)
   - **Paste Shortcut Mode**: User-selectable paste shortcut (Ctrl+V or Shift+Insert)
+  - **Hide Window After Copy**: Auto-hide clipboard window after copy action
+- **Interaction Experience Enhancements**:
+  - **focus_search_on_activate**: Auto-focus search box on window activation
+  - **Smart Activate Optimization**: Distinguish system clipboard vs internal copy
+  - **Search auto-scroll to top**: Auto scroll to top on search text change
+  - **Right-click item highlight**: Show selected state on right-click context menu
+  - **Keyboard navigation auto-scroll**: Auto scroll to keep selected item visible
+- **UI Polish**:
+  - Hidden unfinished features (paste queue, tags) for cleaner UI
+  - Simplified quick action buttons (detail/delete only)
+  - Image loading retry mechanism (5 retries with loading states)
+  - Fixed hover/scroll issues in floating window
 
 ### In Progress ⏳
 - ItemList virtual scrolling (performance optimization)
+- Hover interaction stability improvements
 
 ### Planned 📋
 - Cross-device sync architecture
@@ -413,7 +427,7 @@ const imageSrc = computed(() => {
 
 **窗口设置**:
 - 窗口位置 (remember/center/cursor) ✅ 已实现
-- 智能激活 (5秒内复制则回到顶部/切换全部/聚焦搜索) ✅ 已实现
+- 智能激活 (5秒内复制则清空搜索/回到顶部/切换全部/聚焦搜索) ✅ 已实现
 
 **音效设置**:
 - 复制音效 (+ preview button) ⏳ 待实现（需音效文件资源）
@@ -421,14 +435,18 @@ const imageSrc = computed(() => {
 **搜索设置**:
 - 搜索框位置 (top/bottom) ✅ 已实现
 - 默认聚焦 ✅ 已实现（合并到智能激活）
+- **focus_search_on_activate** ✅ 已实现（激活窗口时自动聚焦搜索框）
 
 **内容设置**:
-- 自动粘贴 (off/single/double) ✅ 已实现
+- 单击动作 (copy/paste/none) ✅ 已实现
+- 双击动作 (copy/paste/none) ✅ 已实现
+- 粘贴快捷键 (Ctrl+V / Shift+Insert) ✅ 已实现
+- 复制后隐藏窗口 ✅ 已实现
 - 图片OCR ⏳ 待实现（需OCR库）
 - 复制为纯文本 ✅ 已实现
 - 粘贴为纯文本 ⏳ 待实现
 - 删除确认 ✅ 已实现
-- 自动排序 ✅ 已实现
+- 自动排序 ✅ 已实现（系统剪贴板复制置顶，内部复制保持位置）
 
 **历史记录设置**:
 - 最大历史记录数 (100-10000) ✅ 后端已实现
@@ -447,6 +465,7 @@ const imageSrc = computed(() => {
 - **No linter/prettier config**: Follow existing code patterns (Vue template formatting, semicolons-optional style)
 - **Never run tauri dev**: I will run by my self
 - **Never run cargo check**: I will run by my self
+- **Never read src-tauri/Cargo.toml **: It's a auto generated file by tauri, you should not read it
 - **No test framework yet**: Run type checks with `pnpm run build` (includes `vue-tsc`)
 - **Type strictness is critical**: The project has `strict: true` and `noUnusedLocals`; zero tolerance for `any` types
 - **Settings panel**: Normal window with title bar (decorations: true)

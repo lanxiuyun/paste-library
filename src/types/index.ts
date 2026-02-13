@@ -110,12 +110,14 @@ export interface AppSettings {
 
   // 搜索设置
   search_position: 'top' | 'bottom';
-  auto_focus_search: boolean;
+  /** 激活窗口时自动聚焦搜索框（与smart_activate独立） */
+  focus_search_on_activate: boolean;
 
   // 内容设置
-  click_action: 'copy' | 'paste';
-  double_click_action: 'copy' | 'paste';
+  click_action: 'copy' | 'paste' | 'none';
+  double_click_action: 'copy' | 'paste' | 'none';
   paste_shortcut: 'ctrl_v' | 'shift_insert';
+  hide_window_after_copy: boolean;
   image_ocr: boolean;
   copy_as_plain_text: boolean;
   paste_as_plain_text: boolean;
@@ -125,4 +127,8 @@ export interface AppSettings {
   // 通用设置
   hotkey: string;
   auto_start: boolean;
+
+  // 快捷键设置
+  /** 数字键 1-9 快速粘贴修饰键组合，如 "ctrl", "ctrl+shift", "alt", "none" 等 */
+  number_key_shortcut: string;
 }
