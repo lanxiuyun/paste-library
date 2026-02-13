@@ -8,9 +8,22 @@ on:
 # This workflow will trigger on each push to the `release` branch to create or update a GitHub release, build your app, and upload the artifacts to the release.
 
 jobs:
-  publish-tauri:
+  get-version:
+    runs-on: ubuntu-latest
     outputs:
-      appVersion: ${{ steps.set_output.outputs.appVersion }}
+      appVersion: ${{ steps.get_version.outputs.appVersion }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get app version from tauri.conf.json
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          echo "appVersion=$VERSION" >> $GITHUB_OUTPUT
+          echo "App version: $VERSION"
+
+  publish-tauri:
+    needs: get-version
     permissions:
       contents: write
     strategy:
@@ -58,39 +71,23 @@ jobs:
         run: pnpm install
 
       - uses: tauri-apps/tauri-action@v0
-        id: tauri-action # 添加 id 以便后续引用
+        id: tauri-action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          tagName: v__VERSION__
           releaseName: "v__VERSION__"
           releaseBody: "See the assets to download this version and install."
-          releaseDraft: false # 不创建草稿版本
-          prerelease: false # 不作为预发布版本
+          releaseDraft: false
+          prerelease: false
           args: ${{ matrix.args }}
 
-      # 增加获取版本号
-      - name: Generate release tag
-        id: save_tag
-        if: matrix.platform == 'macos-latest'
-        run: |
-          # 调试输出
-          echo ${{ steps.tauri-action.outputs.appVersion }}
-          # 输出到步骤级
-          echo "appVersion=${{ steps.tauri-action.outputs.appVersion }}" >> $GITHUB_OUTPUT
-
-      # 设置作业级输出
-      - name: Set job output
-        id: set_output
-        if: matrix.platform == 'macos-latest'
-        run: |
-          # 注意：这里引用的是 save_tag 步骤的 tag_name 输出
-          echo "appVersion=${{ steps.save_tag.outputs.appVersion }}" >> $GITHUB_OUTPUT
-
   upgradeLink-upload:
-    needs: publish-tauri # 依赖于 publish-tauri作业完成
+    needs:
+      - get-version
+      - publish-tauri
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -106,6 +103,6 @@ jobs:
               "app_type": "tauri",
               "request": {
                 "app_key": "${{ secrets.UPGRADE_LINK_APP_KEY }}",
-                "latest_json_url": "https://github.com/lanxiuyun/paste-library/releases/download/v${{ needs.publish-tauri.outputs.appVersion }}/latest.json"
+                "latest_json_url": "https://github.com/lanxiuyun/paste-library/releases/download/v${{ needs.get-version.outputs.appVersion }}/latest.json"
               }
             }
