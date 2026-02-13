@@ -237,13 +237,12 @@ impl WindowManager {
         .title("剪贴板历史")
         .inner_size(width, height)
         .decorations(false)
-        .transparent(false)
         .resizable(true)
         .skip_taskbar(true)
         .always_on_top(true)
         .accept_first_mouse(true)
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e: tauri::Error| e.to_string())?;
 
         // 根据设置定位窗口
         self.position_window(&window).await?;

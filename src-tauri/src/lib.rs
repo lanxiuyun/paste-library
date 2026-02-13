@@ -313,6 +313,11 @@ fn import_clipboard_data(
 }
 
 #[tauri::command]
+fn get_app_version() -> Result<String, String> {
+    Ok(env!("CARGO_PKG_VERSION").to_string())
+}
+
+#[tauri::command]
 fn get_storage_paths(app: tauri::AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
     let mut paths = std::collections::HashMap::new();
     
@@ -340,10 +345,9 @@ fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
     // 等待窗口隐藏并焦点回到原窗口
     thread::sleep(Duration::from_millis(200));
 
-    let use_shift_insert = paste_shortcut == "shift_insert";
-
     #[cfg(target_os = "windows")]
     {
+        let use_shift_insert = paste_shortcut == "shift_insert";
         use winapi::um::winuser::{keybd_event, VK_SHIFT, VK_INSERT, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, KEYEVENTF_EXTENDEDKEY};
 
         unsafe {
@@ -435,6 +439,8 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         // 禁用 webview 的默认行为（阻止系统菜单、快捷键等）
         // https://github.com/ferreira-tb/tauri-plugin-prevent-default
         .plugin(prevent_default::init())
@@ -570,6 +576,7 @@ pub fn run() {
             import_clipboard_data,
             get_storage_paths,
             simulate_paste,
+            get_app_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

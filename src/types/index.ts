@@ -132,3 +132,26 @@ export interface AppSettings {
   /** 数字键 1-9 快速粘贴修饰键组合，如 "ctrl", "ctrl+shift", "alt", "none" 等 */
   number_key_shortcut: string;
 }
+
+/**
+ * 更新信息
+ */
+export interface UpdateInfo {
+  version: string;
+  notes: string;
+  pub_date: string;
+  platforms: Record<string, {
+    signature: string;
+    url: string;
+  }>;
+}
+
+/**
+ * 更新检查结果
+ */
+export interface CheckUpdateResult {
+  has_update: boolean;
+  current_version: string;
+  latest_version?: string;
+  update_info?: UpdateInfo;
+}

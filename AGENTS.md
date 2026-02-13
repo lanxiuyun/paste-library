@@ -474,6 +474,23 @@ const imageSrc = computed(() => {
 - **Desktop-first UX**: Consider Windows/macOS/Linux platform differences in UI
 - **Global shortcut**: Configurable via key recording in settings (restart required to apply changes)
 
+### 📦 Release Version Bump
+
+When releasing a new version, update ALL three files:
+
+```bash
+# 1. package.json
+"version": "0.2.0"
+
+# 2. src-tauri/tauri.conf.json
+"version": "0.2.0"
+
+# 3. src-tauri/Cargo.toml
+version = "0.2.0"
+```
+
+Then commit and push to `release` branch to trigger the release workflow.
+
 ## Project Documentation
 
 ### 📁 文档目录结构
