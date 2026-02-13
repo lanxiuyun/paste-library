@@ -106,6 +106,6 @@ jobs:
               "app_type": "tauri",
               "request": {
                 "app_key": "${{ secrets.UPGRADE_LINK_APP_KEY }}",
-                "latest_json_url": "https://github.com/lanxiuyun/paste-library/releases/download/${{ github.ref_name }}/latest.json"
+                "latest_json_url": "https://github.com/lanxiuyun/paste-library/releases/download/v${{ needs.publish-tauri.outputs.appVersion }}/latest.json"
               }
             }
