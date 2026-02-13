@@ -922,7 +922,10 @@ const checkForUpdates = async () => {
   updateStatus.value = 'checking';
   try {
     const update = await check({
-      timeout: 10000,
+      headers: {
+        "X-AccessKey": "9SzxzOb3pQgkOB-LU-QU1Q",
+      },
+      timeout: 5000,
     });
 
     if (update) {
