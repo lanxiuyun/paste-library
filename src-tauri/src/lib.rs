@@ -345,10 +345,9 @@ fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
     // 等待窗口隐藏并焦点回到原窗口
     thread::sleep(Duration::from_millis(200));
 
-    let use_shift_insert = paste_shortcut == "shift_insert";
-
     #[cfg(target_os = "windows")]
     {
+        let use_shift_insert = paste_shortcut == "shift_insert";
         use winapi::um::winuser::{keybd_event, VK_SHIFT, VK_INSERT, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, KEYEVENTF_EXTENDEDKEY};
 
         unsafe {

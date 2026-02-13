@@ -88,7 +88,7 @@ fn show_settings_window(app: &tauri::AppHandle) {
         let _ = window.unminimize();
     } else {
         // 重新创建设置窗口
-        let window = tauri::webview::WebviewWindowBuilder::new(
+        let window_result = tauri::webview::WebviewWindowBuilder::new(
             app,
             "main",
             tauri::WebviewUrl::App("/".into()),
@@ -96,7 +96,6 @@ fn show_settings_window(app: &tauri::AppHandle) {
         .title("Paste Library - 设置")
         .inner_size(600.0, 700.0)
         .decorations(true)
-        .transparent(false)
         .center()
         .resizable(true)
         .minimizable(true)
@@ -106,9 +105,9 @@ fn show_settings_window(app: &tauri::AppHandle) {
         .build();
 
         // 添加关闭事件处理，关闭时隐藏窗口而非退出应用
-        if let Ok(window) = window {
+        if let Ok(window) = window_result {
             let app_handle = app.clone();
-            window.on_window_event(move |event| {
+            window.on_window_event(move |event: &tauri::WindowEvent| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     // 阻止默认关闭行为
                     api.prevent_close();
