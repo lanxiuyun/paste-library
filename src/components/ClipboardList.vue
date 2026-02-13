@@ -70,10 +70,12 @@
           :item="item"
           :index="index"
           :is-selected="selectedIndex === index"
+          :show-tags="true"
           @click="handleItemClick"
           @dblclick="handleItemDoubleClick"
           @contextmenu="(event: MouseEvent) => handleItemContextMenu(event, item, index)"
           @quick-action="handleQuickAction"
+          @remove-tag="handleRemoveTag"
         />
       </template>
 
@@ -121,6 +123,13 @@
       @saveAsNew="handleSaveAsNew"
     />
 
+    <!-- 标签管理器 -->
+    <TagManager
+      v-model:visible="tagManagerVisible"
+      :item="tagManagerItem"
+      @save="handleTagManagerSave"
+    />
+
     <!-- 删除确认对话框 -->
     <div v-if="deleteConfirmVisible" class="confirm-dialog-overlay" @click="cancelDelete">
       <div class="confirm-dialog" @click.stop>
@@ -151,6 +160,7 @@ import ClipboardItem from './ClipboardItem.vue';
 import ContextMenu from './ContextMenu.vue';
 // import PasteQueuePanel from './PasteQueuePanel.vue';
 import DrawerEditor from './DrawerEditor.vue';
+import TagManager from './TagManager.vue';
 import { useClipboard } from '@/composables/useClipboard';
 import { writeText } from 'tauri-plugin-clipboard-x-api';
 // import { usePasteQueue } from '@/composables/usePasteQueue';
@@ -175,6 +185,10 @@ const { settings } = useSettings();
 // Drawer editor state
 const drawerVisible = ref(false);
 const drawerItem = ref<ClipboardItemType | null>(null);
+
+// Tag manager state
+const tagManagerVisible = ref(false);
+const tagManagerItem = ref<ClipboardItemType | null>(null);
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -357,10 +371,11 @@ const handleQuickAction = async (action: string, item: ClipboardItemType) => {
     case 'delete':
       await handleDelete(item);
       break;
-    // case 'tag':
-    //   // 打开标签管理弹窗
-    //   showTagManager(item);
-    //   break;
+    case 'tag':
+      // 打开标签管理器
+      tagManagerItem.value = item;
+      tagManagerVisible.value = true;
+      break;
     // case 'queue':
     //   // 添加到粘贴队列
     //   addToQueue(item);
@@ -478,6 +493,34 @@ const handleSaveAsNew = async (content: string, type: string) => {
   }
 };
 
+// 处理标签管理器保存
+const handleTagManagerSave = async (itemId: number, tags: string[]) => {
+  // 更新本地数据
+  const item = history.value.find(h => h.id === itemId);
+  if (item) {
+    item.tags = tags.length > 0 ? tags : undefined;
+  }
+};
+
+// 处理删除单个标签
+const handleRemoveTag = async (item: ClipboardItemType, tag: string) => {
+  try {
+    // 从标签列表中移除该标签
+    const newTags = (item.tags || []).filter(t => t !== tag);
+
+    // 调用后端更新标签
+    await invoke('update_tags', {
+      id: item.id,
+      tags: newTags.length > 0 ? newTags : null,
+    });
+
+    // 更新本地数据
+    item.tags = newTags.length > 0 ? newTags : undefined;
+  } catch (error) {
+    console.error('Failed to remove tag:', error);
+  }
+};
+
 const handleContextMenuAction = async (action: string, item: ClipboardItemType) => {
   switch (action) {
     case 'copy':
@@ -493,10 +536,11 @@ const handleContextMenuAction = async (action: string, item: ClipboardItemType) 
       await restoreToClipboard(item, { copyAsPlainText: settings.value.copy_as_plain_text });
       await simulatePaste();
       break;
-    // case 'tag':
-    //   // 打开标签管理器
-    //   // showTagManager(item);
-    //   break;
+    case 'tag':
+      // 打开标签管理器
+      tagManagerItem.value = item;
+      tagManagerVisible.value = true;
+      break;
     case 'copyPlain':
       // 复制为纯文本
       await restoreToClipboard({
