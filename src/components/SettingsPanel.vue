@@ -443,8 +443,72 @@
         <div class="about-content">
           <div class="app-info">
             <h3>Paste Library</h3>
-            <p>版本 0.1.0</p>
+            <p>版本 {{ currentVersion }}</p>
             <p class="app-desc">现代化的剪贴板管理工具</p>
+          </div>
+
+          <!-- 更新检查区域 -->
+          <div class="update-section">
+            <div v-if="updateStatus === 'checking'" class="update-status checking">
+              <div class="update-spinner"></div>
+              <span>正在检查更新...</span>
+            </div>
+
+            <div v-else-if="updateStatus === 'available'" class="update-status available">
+              <div class="update-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </div>
+              <div class="update-info">
+                <div class="update-title">发现新版本 v{{ latestVersion }}</div>
+                <div class="update-date">发布于 {{ formatUpdateDate(updateDate) }}</div>
+                <div class="update-notes">{{ updateNotes }}</div>
+
+                <!-- 下载进度 -->
+                <div v-if="isDownloading" class="download-progress">
+                  <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: downloadProgress + '%' }"></div>
+                  </div>
+                  <div class="progress-text">{{ downloadProgress }}%</div>
+                </div>
+
+                <div class="update-actions">
+                  <button class="btn-primary" @click="downloadUpdate" :disabled="isDownloading">
+                    {{ isDownloading ? '正在下载...' : '立即更新' }}
+                  </button>
+                  <button v-if="!isDownloading" class="btn-secondary" @click="skipUpdate">稍后再说</button>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="updateStatus === 'uptodate'" class="update-status uptodate">
+              <div class="update-icon success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+              </div>
+              <span>当前已是最新版本</span>
+            </div>
+
+            <div v-else-if="updateStatus === 'error'" class="update-status error">
+              <div class="update-icon error">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 8v4M12 16h.01"/>
+                </svg>
+              </div>
+              <span>检查更新失败，请稍后重试</span>
+            </div>
+
+            <div v-else class="update-status idle">
+              <button class="btn-secondary" @click="checkForUpdates">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+                检查更新
+              </button>
+            </div>
           </div>
           
           <div class="about-actions">
@@ -474,6 +538,8 @@ import { useWindow } from '@/composables/useWindow';
 import { useClipboard } from '@/composables/useClipboard';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { check, type Update } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 import type { AppSettings } from '@/types';
 
 const { settings, loadSettings, saveSettings } = useSettings();
@@ -648,6 +714,13 @@ onMounted(async () => {
     console.error('Failed to load storage paths:', error);
   }
 
+  // 加载版本号并自动检查更新
+  await loadAppVersion();
+  // 延迟检查更新，避免影响页面加载速度
+  setTimeout(() => {
+    checkForUpdates();
+  }, 1000);
+
   // 监听快捷键注册失败事件
   unlistenShortcutError = await listen<string>('shortcut-registration-failed', (event) => {
     shortcutError.value = `快捷键 "${event.payload}" 已被其他程序占用，请使用备用快捷键 Ctrl+Shift+V，或修改快捷键后重启应用`;
@@ -819,6 +892,116 @@ const validateHotkey = async () => {
     // 恢复到默认值
     form.hotkey = 'Alt+V';
   }
+};
+
+// 更新检查相关状态
+const currentVersion = ref('0.1.0');
+const updateStatus = ref<'idle' | 'checking' | 'available' | 'uptodate' | 'error'>('idle');
+const latestVersion = ref('');
+const updateNotes = ref('');
+const updateDate = ref('');
+const isDownloading = ref(false);
+const skippedVersion = ref<string | null>(null);
+const downloadProgress = ref(0);
+const downloadedBytes = ref(0);
+const totalBytes = ref(0);
+let updateInstance: Update | null = null;
+
+// 获取当前版本号
+const loadAppVersion = async () => {
+  try {
+    const version = await invoke<string>('get_app_version');
+    currentVersion.value = version;
+  } catch (error) {
+    console.error('获取版本号失败:', error);
+  }
+};
+
+// 检查更新
+const checkForUpdates = async () => {
+  updateStatus.value = 'checking';
+  try {
+    const update = await check({
+      timeout: 10000,
+    });
+
+    if (update) {
+      console.log(`发现新版本 ${update.version}，发布于 ${update.date}`);
+
+      // 检查是否已跳过此版本
+      if (skippedVersion.value === update.version) {
+        updateStatus.value = 'uptodate';
+      } else {
+        updateInstance = update;
+        latestVersion.value = update.version;
+        updateDate.value = update.date || '';
+        updateNotes.value = update.body || '';
+        updateStatus.value = 'available';
+      }
+    } else {
+      updateStatus.value = 'uptodate';
+    }
+  } catch (error) {
+    console.error('检查更新失败:', error);
+    updateStatus.value = 'error';
+  }
+};
+
+// 格式化更新日期
+const formatUpdateDate = (dateStr: string | undefined): string => {
+  if (!dateStr) return '';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
+// 下载并安装更新
+const downloadUpdate = async () => {
+  if (!updateInstance) return;
+
+  isDownloading.value = true;
+  downloadProgress.value = 0;
+  downloadedBytes.value = 0;
+  totalBytes.value = 0;
+
+  try {
+    await updateInstance.downloadAndInstall((event) => {
+      switch (event.event) {
+        case 'Started':
+          totalBytes.value = event.data.contentLength || 0;
+          break;
+        case 'Progress':
+          downloadedBytes.value += event.data.chunkLength;
+          if (totalBytes.value > 0) {
+            downloadProgress.value = Math.round((downloadedBytes.value / totalBytes.value) * 100);
+          }
+          break;
+        case 'Finished':
+          console.log('下载完成');
+          break;
+      }
+    });
+
+    console.log('更新已安装，准备重启应用');
+    await relaunch();
+  } catch (error) {
+    console.error('安装更新失败:', error);
+    alert('安装更新失败，请稍后重试');
+    isDownloading.value = false;
+  }
+};
+
+// 跳过此版本
+const skipUpdate = () => {
+  skippedVersion.value = latestVersion.value;
+  updateStatus.value = 'uptodate';
 };
 </script>
 
@@ -1257,6 +1440,163 @@ input:checked + .slider:before {
 .open-clipboard-btn svg {
   width: 16px;
   height: 16px;
+}
+
+/* 更新检查区域 */
+.update-section {
+  margin: 24px 0;
+  width: 100%;
+  max-width: 400px;
+}
+
+.update-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #595959;
+}
+
+.update-status.checking {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.update-status.available {
+  flex-direction: column;
+  background: #e6f7ff;
+  color: #1890ff;
+  text-align: left;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.update-status.uptodate {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.update-status.error {
+  background: #fff2f0;
+  color: #ff4d4f;
+}
+
+.update-status.idle {
+  background: transparent;
+  padding: 0;
+}
+
+.update-status.idle button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-status.idle button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.update-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #52c41a;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.update-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.update-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.update-icon.success {
+  color: #52c41a;
+}
+
+.update-icon.error {
+  color: #ff4d4f;
+}
+
+.update-info {
+  flex: 1;
+  width: 100%;
+}
+
+.update-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+  margin-bottom: 4px;
+}
+
+.update-date {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 8px;
+}
+
+.update-notes {
+  font-size: 13px;
+  color: #595959;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.update-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.update-actions button {
+  flex: 1;
+}
+
+/* 下载进度条 */
+.download-progress {
+  margin: 16px 0;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #52c41a, #73d13d);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  text-align: center;
+  font-size: 12px;
+  color: #595959;
+  margin-top: 8px;
 }
 
 /* 底部操作栏 */

@@ -45,5 +45,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "endpoints": [
+        "https://api.upgradelink.cn/api/upgrade/tauri/C35buW3bHIOtdaVl3hym7g/latest.json"
+      ],
+      "pubkey": ""
+    }
   }
 }
