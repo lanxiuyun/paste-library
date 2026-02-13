@@ -94,7 +94,7 @@
           </div>
           
           <!-- 文本预览 -->
-          <p v-else class="content-text">{{ contentPreview }}</p>
+          <p v-else class="content-text" v-html="highlightedContent"></p>
         </div>
 
         <!-- Hover 快捷按钮 - 绝对定位，不影响布局 -->
@@ -148,6 +148,9 @@
         :key="tag"
         class="tag-item"
         :style="getTagStyle(tag)"
+        :class="{ clickable: true }"
+        @click.stop="handleTagClick(tag)"
+        title="点击筛选此标签"
       >
         {{ tag }}
         <button
@@ -177,10 +180,12 @@ interface Props {
   index: number;
   isSelected?: boolean;
   showTags?: boolean;
+  highlightKeywords?: string[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showTags: true,
+  highlightKeywords: () => [],
 });
 
 const emit = defineEmits<{
@@ -192,6 +197,7 @@ const emit = defineEmits<{
   tag: [item: ClipboardItem];
   quickAction: [action: string, item: ClipboardItem];
   removeTag: [item: ClipboardItem, tag: string];
+  tagClick: [tag: string];
 }>();
 
 const isHovered = ref(false);
@@ -311,6 +317,46 @@ const contentPreview = computed(() => {
   return text || '(空内容)';
 });
 
+// 高亮匹配的关键词
+const highlightedContent = computed(() => {
+  let text = contentPreview.value;
+  
+  if (!props.highlightKeywords || props.highlightKeywords.length === 0) {
+    // 转义HTML特殊字符
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+  
+  // 先转义HTML特殊字符
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  
+  // 按长度降序排序，优先匹配长词
+  const sortedKeywords = [...props.highlightKeywords]
+    .filter(k => k.trim())
+    .sort((a, b) => b.length - a.length);
+  
+  for (const keyword of sortedKeywords) {
+    if (!keyword.trim()) continue;
+    
+    // 转义正则特殊字符
+    const escapedKeyword = keyword
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // 创建正则表达式（忽略大小写）
+    const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+    
+    // 替换为高亮标记
+    escaped = escaped.replace(regex, '<mark class="search-highlight">$1</mark>');
+  }
+  
+  return escaped;
+});
+
 // 处理图片路径 - 使用 convertFileSrc 转换
 const imageSrc = computed(() => {
   if (!props.item.thumbnail_path) return '';
@@ -381,6 +427,10 @@ const handleRemoveTag = (tag: string) => {
 
 const handleShowTagManager = () => {
   emit('quickAction', 'tag', props.item);
+};
+
+const handleTagClick = (tag: string) => {
+  emit('tagClick', tag);
 };
 
 // 拖拽功能暂时禁用（与 Tauri 窗口拖拽冲突）
@@ -868,5 +918,39 @@ const handleShowTagManager = () => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 搜索高亮样式 */
+:deep(.search-highlight) {
+  background: #ffeb3b;
+  color: #262626;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+/* 可点击标签样式 */
+.tag-item.clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+.tag-item.clickable::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px dashed currentColor;
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.tag-item.clickable:hover::after {
+  opacity: 0.3;
+}
+
+.tag-item.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 </style>

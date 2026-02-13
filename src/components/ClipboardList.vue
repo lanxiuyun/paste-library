@@ -2,20 +2,15 @@
   <div class="clipboard-list">
     <!-- 搜索栏 - 顶部位置 -->
     <div v-if="settings.search_position === 'top'" class="search-bar search-bar-top">
-      <div class="search-input-wrapper">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <path d="M21 21l-4.35-4.35"/>
-        </svg>
-        <input
-          ref="searchInputRef"
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索剪贴板..."
-          @input="handleSearch"
-        />
-        <kbd class="shortcut-key">Ctrl+F</kbd>
-      </div>
+      <SmartSearch
+        ref="smartSearchRef"
+        v-model="searchQuery"
+        :history="searchHistory"
+        :items="history"
+        @search="handleSmartSearch"
+        @clear-history="removeSearchHistory"
+        @clear-all-history="clearAllSearchHistory"
+      />
     </div>
 
     <!-- 标签栏 -->
@@ -71,11 +66,13 @@
           :index="index"
           :is-selected="selectedIndex === index"
           :show-tags="true"
+          :highlight-keywords="parsedQuery.keywords"
           @click="handleItemClick"
           @dblclick="handleItemDoubleClick"
           @contextmenu="(event: MouseEvent) => handleItemContextMenu(event, item, index)"
           @quick-action="handleQuickAction"
           @remove-tag="handleRemoveTag"
+          @tag-click="handleTagClick"
         />
       </template>
 
@@ -84,20 +81,15 @@
 
     <!-- 搜索栏 - 底部位置（默认） -->
     <div v-if="settings.search_position !== 'top'" class="search-bar search-bar-bottom">
-      <div class="search-input-wrapper">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <path d="M21 21l-4.35-4.35"/>
-        </svg>
-        <input
-          ref="searchInputRef"
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索剪贴板..."
-          @input="handleSearch"
-        />
-        <kbd class="shortcut-key">Ctrl+F</kbd>
-      </div>
+      <SmartSearch
+        ref="smartSearchRef"
+        v-model="searchQuery"
+        :history="searchHistory"
+        :items="history"
+        @search="handleSmartSearch"
+        @clear-history="removeSearchHistory"
+        @clear-all-history="clearAllSearchHistory"
+      />
     </div>
 
     <!-- 右键上下文菜单 -->
@@ -161,6 +153,7 @@ import ContextMenu from './ContextMenu.vue';
 // import PasteQueuePanel from './PasteQueuePanel.vue';
 import DrawerEditor from './DrawerEditor.vue';
 import TagManager from './TagManager.vue';
+import SmartSearch from './SmartSearch.vue';
 import { useClipboard } from '@/composables/useClipboard';
 import { writeText } from 'tauri-plugin-clipboard-x-api';
 // import { usePasteQueue } from '@/composables/usePasteQueue';
@@ -168,15 +161,45 @@ import { useSettings } from '@/composables/useSettings';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { ClipboardItem as ClipboardItemType } from '@/types';
+import { 
+  parseSearchQuery, 
+  matchItemWithQuery, 
+  getSearchHistory, 
+  addSearchHistory, 
+  removeSearchHistory as removeSearchHistoryItem,
+  clearSearchHistory,
+  type ParsedQuery 
+} from '@/composables/useSmartSearch';
 
 const {
   history,
   lastCopyTime,
   loadHistory,
-  searchHistory,
   deleteItem,
   restoreToClipboard,
 } = useClipboard();
+
+// 智能搜索
+const smartSearchRef = ref<InstanceType<typeof SmartSearch> | null>(null);
+const searchHistory = ref<string[]>([]);
+const parsedQuery = computed<ParsedQuery>(() => parseSearchQuery(searchQuery.value));
+
+// 加载搜索历史
+const loadSearchHistory = () => {
+  searchHistory.value = getSearchHistory();
+};
+
+// 移除搜索历史
+const removeSearchHistory = (query: string) => {
+  removeSearchHistoryItem(query);
+  loadSearchHistory();
+};
+
+// 清空所有搜索历史
+const clearAllSearchHistory = () => {
+  clearSearchHistory();
+  loadSearchHistory();
+};
 
 // const { addToQueue } = usePasteQueue();
 const { settings } = useSettings();
@@ -251,10 +274,34 @@ const handleSmartActivate = async () => {
   }
 };
 
+// 简单的模糊匹配函数
+const fuzzyMatch = (query: string, text: string): boolean => {
+  const queryLower = query.toLowerCase();
+  const textLower = text.toLowerCase();
+  
+  // 精确匹配
+  if (textLower.includes(queryLower)) {
+    return true;
+  }
+  
+  // 容错匹配（字符顺序匹配）
+  let queryIndex = 0;
+  let textIndex = 0;
+  
+  while (queryIndex < queryLower.length && textIndex < textLower.length) {
+    if (queryLower[queryIndex] === textLower[textIndex]) {
+      queryIndex++;
+    }
+    textIndex++;
+  }
+  
+  return queryIndex === queryLower.length;
+};
+
 const filteredHistory = computed(() => {
   let result = history.value;
 
-  // 按类型过滤
+  // 按类型过滤（Tab 切换）
   if (activeTab.value !== 'all') {
     if (activeTab.value === 'file') {
       // 文件标签页显示所有文件相关类型：单个文件、多文件、文件夹
@@ -275,26 +322,56 @@ const filteredHistory = computed(() => {
     }
   }
 
+  // 按智能搜索查询过滤
+  if (parsedQuery.value.isValid) {
+    result = result.filter(item => matchItemWithQuery(item, parsedQuery.value, fuzzyMatch));
+  }
+
   return result;
 });
 
-const handleSearch = async () => {
-  if (searchQuery.value) {
-    await searchHistory(searchQuery.value, settings.value.max_history_count);
-  } else {
-    await loadHistory(settings.value.max_history_count);
+// 智能搜索处理
+const handleSmartSearch = async (query: string) => {
+  searchQuery.value = query;
+  
+  // 如果有搜索词，添加到历史记录
+  if (query.trim()) {
+    addSearchHistory(query.trim());
+    loadSearchHistory();
   }
   
-  // 搜索完成后，滚动到顶部并重置选中项（使用 nextTick 确保 DOM 更新）
+  // 滚动到顶部并重置选中项
   nextTick(() => {
     if (listContainerRef.value) {
       listContainerRef.value.scrollTop = 0;
     }
-    // 重置选中项到第一项
     if (filteredHistory.value.length > 0) {
       selectedIndex.value = 0;
     }
   });
+};
+
+// 处理标签点击（从子组件传递上来的事件）
+const handleTagClick = (tag: string) => {
+  const tagQuery = `@${tag}`;
+  const current = searchQuery.value.trim();
+  
+  if (current.includes(tagQuery)) {
+    return;
+  }
+  
+  if (current) {
+    searchQuery.value = `${current} ${tagQuery}`;
+  } else {
+    searchQuery.value = tagQuery;
+  }
+  
+  handleSmartSearch(searchQuery.value);
+};
+
+// 保留旧的处理函数用于兼容
+const handleSearch = async () => {
+  await handleSmartSearch(searchQuery.value);
 };
 
 const handleItemClick = async (item: ClipboardItemType, index: number) => {
@@ -604,7 +681,7 @@ const handleKeyDown = async (e: KeyboardEvent) => {
   // Ctrl+F 聚焦搜索框
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
     e.preventDefault();
-    searchInputRef.value?.focus();
+    smartSearchRef.value?.focus();
     return;
   }
 
@@ -687,6 +764,7 @@ const hasActivated = ref(false);
 
 onMounted(async () => {
   loadHistory(settings.value.max_history_count, 0);
+  loadSearchHistory();
   window.addEventListener('keydown', handleKeyDown);
   // 初始化选中第一项
   if (filteredHistory.value.length > 0) {
