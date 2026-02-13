@@ -426,6 +426,32 @@ fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn open_external_link(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri_plugin_global_shortcut::ShortcutState;
@@ -577,6 +603,7 @@ pub fn run() {
             get_storage_paths,
             simulate_paste,
             get_app_version,
+            open_external_link,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
