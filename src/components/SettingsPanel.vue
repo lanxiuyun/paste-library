@@ -1265,6 +1265,7 @@ input:checked + .slider:before {
   align-items: flex-end;
   justify-content: flex-end;
   background: #fff;
+  padding: 12px;
   border-top: 1px solid #e8e8e8;
 }
 
