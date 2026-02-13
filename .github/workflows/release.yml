@@ -94,6 +94,7 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    environment: tauri
     steps:
       - name: Send a request to UpgradeLink
         uses: toolsetlink/upgradelink-action@3.0.2
