@@ -310,9 +310,21 @@ const typeLabel = computed(() => {
   }
 });
 
+/**
+ * 解码 HTML 实体
+ * 如: &#35843;&#25972; -> 调整, &amp; -> &, &lt; -> <
+ */
+const decodeHtmlEntities = (html: string): string => {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = html;
+  return textarea.value;
+};
+
 const contentPreview = computed(() => {
   let text = props.item.content;
   text = text.replace(/<[^>]*>/g, '');
+  // 解码 HTML 实体（如 &#35843;&#25972; -> 调整）
+  text = decodeHtmlEntities(text);
   text = text.trim();
   return text || '(空内容)';
 });

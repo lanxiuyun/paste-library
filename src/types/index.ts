@@ -155,3 +155,17 @@ export interface CheckUpdateResult {
   latest_version?: string;
   update_info?: UpdateInfo;
 }
+
+/**
+ * 固定搜索项
+ */
+export interface PinnedSearch {
+  /** 唯一标识 */
+  id: string;
+  /** 显示标签 */
+  label: string;
+  /** 搜索查询 */
+  query: string;
+  /** 创建时间 */
+  created_at: number;
+}

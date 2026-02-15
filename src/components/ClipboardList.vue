@@ -2,28 +2,52 @@
   <div class="clipboard-list">
     <!-- 搜索栏 - 顶部位置 -->
     <div v-if="settings.search_position === 'top'" class="search-bar search-bar-top">
-      <SmartSearch
-        ref="smartSearchRef"
-        v-model="searchQuery"
-        :history="searchHistory"
-        :items="history"
-        @search="handleSmartSearch"
-        @clear-history="removeSearchHistory"
-        @clear-all-history="clearAllSearchHistory"
-      />
+      <div class="search-wrapper">
+        <SmartSearch
+          ref="smartSearchRef"
+          v-model="searchQuery"
+          :history="searchHistory"
+          :items="history"
+          @search="handleSmartSearch"
+          @search-commit="handleSearchCommit"
+          @clear-history="removeSearchHistory"
+          @clear-all-history="clearAllHistory"
+        />
+        <button
+          v-if="canPinCurrentSearch"
+          class="pin-btn"
+          title="固定当前搜索"
+          @click="pinCurrentSearch"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a2 2 0 0 0-2 2v3.586l-3.707 3.707A1 1 0 0 0 6 12v2a1 1 0 0 0 1 1h3l2 7 2-7h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-.293-.707L14 7.586V4a2 2 0 0 0-2-2z"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- 标签栏 -->
     <div class="list-header">
       <div class="tabs">
-        <button 
-          v-for="tab in tabs" 
+        <button
+          v-for="(tab, index) in allTabs"
           :key="tab.key"
           class="tab-btn"
-          :class="{ active: activeTab === tab.key }"
-          @click="activeTab = tab.key"
+          :class="{ active: activeTab === tab.key, 'is-pinned': tab.isPinned, 'is-fixed': !tab.isPinned }"
+          :draggable="tab.isPinned"
+          @click="handleTabClick(tab.key)"
+          @dragstart="handleDragStart($event, index)"
+          @dragover="handleDragOver($event, index)"
+          @drop="handleDrop($event, index)"
+          @dragend="handleDragEnd"
         >
-          {{ tab.label }}
+          <span class="tab-label">{{ tab.label }}</span>
+          <span
+            v-if="tab.isPinned"
+            class="tab-close"
+            @click.stop="unpinSearch(tab.key)"
+            title="取消固定"
+          >×</span>
         </button>
       </div>
       <!-- 右侧操作按钮（暂时隐藏） -->
@@ -81,15 +105,28 @@
 
     <!-- 搜索栏 - 底部位置（默认） -->
     <div v-if="settings.search_position !== 'top'" class="search-bar search-bar-bottom">
-      <SmartSearch
-        ref="smartSearchRef"
-        v-model="searchQuery"
-        :history="searchHistory"
-        :items="history"
-        @search="handleSmartSearch"
-        @clear-history="removeSearchHistory"
-        @clear-all-history="clearAllSearchHistory"
-      />
+      <div class="search-wrapper">
+        <SmartSearch
+          ref="smartSearchRef"
+          v-model="searchQuery"
+          :history="searchHistory"
+          :items="history"
+          @search="handleSmartSearch"
+          @search-commit="handleSearchCommit"
+          @clear-history="removeSearchHistory"
+          @clear-all-history="clearAllHistory"
+        />
+        <button
+          v-if="canPinCurrentSearch"
+          class="pin-btn"
+          title="固定当前搜索"
+          @click="pinCurrentSearch"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a2 2 0 0 0-2 2v3.586l-3.707 3.707A1 1 0 0 0 6 12v2a1 1 0 0 0 1 1h3l2 7 2-7h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-.293-.707L14 7.586V4a2 2 0 0 0-2-2z"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- 右键上下文菜单 -->
@@ -160,7 +197,7 @@ import { writeText } from 'tauri-plugin-clipboard-x-api';
 import { useSettings } from '@/composables/useSettings';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { ClipboardItem as ClipboardItemType } from '@/types';
+import type { ClipboardItem as ClipboardItemType, PinnedSearch } from '@/types';
 import { 
   parseSearchQuery, 
   matchItemWithQuery, 
@@ -196,10 +233,11 @@ const removeSearchHistory = (query: string) => {
 };
 
 // 清空所有搜索历史
-const clearAllSearchHistory = () => {
+const clearAllHistory = () => {
   clearSearchHistory();
   loadSearchHistory();
 };
+
 
 // const { addToQueue } = usePasteQueue();
 const { settings } = useSettings();
@@ -213,12 +251,169 @@ const drawerItem = ref<ClipboardItemType | null>(null);
 const tagManagerVisible = ref(false);
 const tagManagerItem = ref<ClipboardItemType | null>(null);
 
-const tabs = [
+// 固定标签（不可拖拽）
+const FIXED_TABS = [
   { key: 'all', label: '全部' },
   { key: 'text', label: '文本' },
   { key: 'image', label: '图片' },
   { key: 'file', label: '文件' },
 ];
+
+// 固定搜索列表
+const pinnedSearches = ref<PinnedSearch[]>([]);
+const PINNED_SEARCH_STORAGE_KEY = 'paste_library_pinned_searches';
+
+// 加载固定搜索
+const loadPinnedSearches = () => {
+  try {
+    const stored = localStorage.getItem(PINNED_SEARCH_STORAGE_KEY);
+    if (stored) {
+      pinnedSearches.value = JSON.parse(stored);
+    }
+  } catch {
+    pinnedSearches.value = [];
+  }
+};
+
+// 保存固定搜索
+const savePinnedSearches = () => {
+  try {
+    localStorage.setItem(PINNED_SEARCH_STORAGE_KEY, JSON.stringify(pinnedSearches.value));
+  } catch {
+    // 忽略存储错误
+  }
+};
+
+// 计算所有标签（固定 + 钉住的搜索）
+const allTabs = computed(() => {
+  const fixedTabs = FIXED_TABS.map(tab => ({ ...tab, isPinned: false }));
+  const pinnedTabs = pinnedSearches.value.map(ps => ({
+    key: ps.id,
+    label: ps.label,
+    isPinned: true,
+    query: ps.query,
+  }));
+  return [...fixedTabs, ...pinnedTabs];
+});
+
+// 判断当前搜索是否可以固定
+const canPinCurrentSearch = computed(() => {
+  const query = searchQuery.value.trim();
+  if (!query) return false;
+  // 检查是否已存在相同的固定搜索
+  return !pinnedSearches.value.some(ps => ps.query === query);
+});
+
+// 固定当前搜索
+const pinCurrentSearch = () => {
+  const query = searchQuery.value.trim();
+  if (!query) return;
+
+  // 生成标签（简化显示）
+  let label = query;
+  if (query.length > 10) {
+    label = query.slice(0, 10) + '...';
+  }
+
+  const newPinned: PinnedSearch = {
+    id: `pinned_${Date.now()}`,
+    label,
+    query,
+    created_at: Date.now(),
+  };
+
+  pinnedSearches.value.push(newPinned);
+  savePinnedSearches();
+
+  // 切换到新固定的标签
+  activeTab.value = newPinned.id;
+};
+
+// 取消固定搜索
+const unpinSearch = (id: string) => {
+  const index = pinnedSearches.value.findIndex(ps => ps.id === id);
+  if (index > -1) {
+    pinnedSearches.value.splice(index, 1);
+    savePinnedSearches();
+
+    // 如果当前激活的是被取消固定的标签，切换到全部
+    if (activeTab.value === id) {
+      activeTab.value = 'all';
+      searchQuery.value = '';
+    }
+  }
+};
+
+// 拖拽相关状态
+const dragIndex = ref<number | null>(null);
+
+// 处理拖拽开始
+const handleDragStart = (event: DragEvent, index: number) => {
+  // 不允许拖拽固定标签（前4个）
+  if (index < FIXED_TABS.length) {
+    event.preventDefault();
+    return;
+  }
+  dragIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+  }
+};
+
+// 处理拖拽经过
+const handleDragOver = (event: DragEvent, _index: number) => {
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+};
+
+// 处理放置
+const handleDrop = (event: DragEvent, dropIndex: number) => {
+  event.preventDefault();
+  if (dragIndex.value === null) return;
+
+  const fromIndex = dragIndex.value;
+  const toIndex = dropIndex;
+
+  // 不允许放置到固定标签区域（前4个）
+  if (toIndex < FIXED_TABS.length) return;
+  // 不允许从固定标签区域拖拽
+  if (fromIndex < FIXED_TABS.length) return;
+
+  // 计算在 pinnedSearches 数组中的索引
+  const pinnedFromIndex = fromIndex - FIXED_TABS.length;
+  const pinnedToIndex = toIndex - FIXED_TABS.length;
+
+  // 交换位置
+  const item = pinnedSearches.value.splice(pinnedFromIndex, 1)[0];
+  pinnedSearches.value.splice(pinnedToIndex, 0, item);
+
+  savePinnedSearches();
+  dragIndex.value = null;
+};
+
+// 处理拖拽结束
+const handleDragEnd = () => {
+  dragIndex.value = null;
+};
+
+// 处理标签点击
+const handleTabClick = (key: string) => {
+  activeTab.value = key;
+
+  // 如果是固定搜索标签，设置搜索查询
+  const pinned = pinnedSearches.value.find(ps => ps.id === key);
+  if (pinned) {
+    searchQuery.value = pinned.query;
+  } else if (key !== 'all') {
+    // 固定标签（text/image/file）
+    searchQuery.value = '';
+  } else {
+    // 全部
+    searchQuery.value = '';
+  }
+};
 
 const activeTab = ref('all');
 const searchQuery = ref('');
@@ -301,8 +496,16 @@ const fuzzyMatch = (query: string, text: string): boolean => {
 const filteredHistory = computed(() => {
   let result = history.value;
 
-  // 按类型过滤（Tab 切换）
-  if (activeTab.value !== 'all') {
+  // 检查是否是固定搜索标签
+  const pinnedSearch = pinnedSearches.value.find(ps => ps.id === activeTab.value);
+  if (pinnedSearch) {
+    // 固定搜索标签：使用其 query 进行过滤
+    const pinnedQuery = parseSearchQuery(pinnedSearch.query);
+    if (pinnedQuery.isValid) {
+      result = result.filter(item => matchItemWithQuery(item, pinnedQuery, fuzzyMatch));
+    }
+  } else if (activeTab.value !== 'all') {
+    // 按类型过滤（Tab 切换）
     if (activeTab.value === 'file') {
       // 文件标签页显示所有文件相关类型：单个文件、多文件、文件夹
       result = result.filter(item =>
@@ -322,24 +525,18 @@ const filteredHistory = computed(() => {
     }
   }
 
-  // 按智能搜索查询过滤
-  if (parsedQuery.value.isValid) {
+  // 按智能搜索查询过滤（当不是固定搜索标签时）
+  if (!pinnedSearch && parsedQuery.value.isValid) {
     result = result.filter(item => matchItemWithQuery(item, parsedQuery.value, fuzzyMatch));
   }
 
   return result;
 });
 
-// 智能搜索处理
+// 智能搜索处理（实时过滤，不保存历史）
 const handleSmartSearch = async (query: string) => {
   searchQuery.value = query;
-  
-  // 如果有搜索词，添加到历史记录
-  if (query.trim()) {
-    addSearchHistory(query.trim());
-    loadSearchHistory();
-  }
-  
+
   // 滚动到顶部并重置选中项
   nextTick(() => {
     if (listContainerRef.value) {
@@ -349,6 +546,14 @@ const handleSmartSearch = async (query: string) => {
       selectedIndex.value = 0;
     }
   });
+};
+
+// 搜索提交处理（保存到历史记录）
+const handleSearchCommit = (query: string) => {
+  if (query.trim()) {
+    addSearchHistory(query.trim());
+    loadSearchHistory();
+  }
 };
 
 // 处理标签点击（从子组件传递上来的事件）
@@ -765,6 +970,7 @@ const hasActivated = ref(false);
 onMounted(async () => {
   loadHistory(settings.value.max_history_count, 0);
   loadSearchHistory();
+  loadPinnedSearches();
   window.addEventListener('keydown', handleKeyDown);
   // 初始化选中第一项
   if (filteredHistory.value.length > 0) {
@@ -847,6 +1053,38 @@ watch(filteredHistory, () => {
   app-region: no-drag;
 }
 
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pin-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #8c8c8c;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.pin-btn:hover {
+  background: #e6f7ff;
+  border-color: #91d5ff;
+  color: #1890ff;
+}
+
+.pin-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 .tabs {
   display: flex;
   gap: 4px;
@@ -861,6 +1099,9 @@ watch(filteredHistory, () => {
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .tab-btn:hover {
@@ -871,6 +1112,60 @@ watch(filteredHistory, () => {
 .tab-btn.active {
   color: #fff;
   background: #262626;
+}
+
+.tab-btn.is-pinned {
+  background: #e6f7ff;
+  color: #1890ff;
+  border: 1px solid #91d5ff;
+}
+
+.tab-btn.is-pinned:hover {
+  background: #bae7ff;
+}
+
+.tab-btn.is-pinned.active {
+  background: #1890ff;
+  color: #fff;
+}
+
+.tab-btn.is-fixed {
+  cursor: default;
+}
+
+.tab-btn.is-fixed:hover {
+  background: transparent;
+}
+
+.tab-btn.is-fixed.active:hover {
+  background: #262626;
+}
+
+.tab-label {
+  pointer-events: none;
+}
+
+.tab-close {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  margin-left: 2px;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.tab-btn.is-pinned.active .tab-close:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .header-actions {

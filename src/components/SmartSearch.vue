@@ -41,13 +41,16 @@
           <line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
+
+      <!-- 快捷键提示 -->
+      <span v-else class="shortcut-hint">Ctrl + F</span>
     </div>
 
     <!-- @补全面板 -->
     <div v-if="showMentionPanel" class="search-dropdown" @mousedown.prevent>
       <div class="dropdown-header">
         <span>{{ mentionFilter ? `匹配 "${mentionFilter}"` : '选择标签或类型' }}</span>
-        <span class="hint">↑↓←→ 选择 · Enter 确认 · Esc 关闭 · Ctrl+Shift+H 历史</span>
+        <span class="hint">↑↓←→ 选择 · Enter 确认 · Esc 关闭</span>
       </div>
       <div class="mention-grid" v-if="filteredMentionOptions.length > 0">
         <div
@@ -70,8 +73,8 @@
       <div v-else class="dropdown-empty">未找到匹配项</div>
     </div>
 
-    <!-- 历史记录面板 -->
-    <div v-else-if="showHistory" class="search-dropdown" @mousedown.prevent>
+    <!-- 历史记录面板 (已屏蔽) -->
+    <!-- <div v-else-if="showHistory" class="search-dropdown" @mousedown.prevent>
       <div class="dropdown-header">
         <span>最近搜索</span>
         <button v-if="props.history.length" class="clear-btn-text" @click="clearAllHistory">清空</button>
@@ -90,12 +93,12 @@
         </div>
         <div v-if="!props.history.length" class="dropdown-empty">暂无搜索历史</div>
       </div>
-    </div>
+    </div> -->
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onUnmounted } from 'vue';
+import { ref, computed, nextTick, onUnmounted, watch } from 'vue';
 import { getTagStyle } from '@/utils/tagColors';
 import type { ClipboardItem } from '@/types';
 
@@ -110,6 +113,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [string];
   search: [query: string];
+  'search-commit': [query: string];
   'clear-history': [string];
   'clear-all-history': [];
 }>();
@@ -197,16 +201,29 @@ const focusInput = () => {
 
 const handleFocus = () => {
   isFocused.value = true;
+  // 检查是否需要显示@补全面板
   checkMention();
-  // 如果没有触发@补全，且有历史记录，则显示历史记录
-  if (!showMentionPanel.value && props.history.length > 0) {
-    showHistory.value = true;
-  }
+  // 历史记录功能已屏蔽
+  // if (!showMentionPanel.value && props.history.length > 0) {
+  //   showHistory.value = true;
+  //   selectedHistoryIndex.value = -1;
+  // }
 };
+
+// Track last committed query to avoid duplicate history entries
+const lastCommittedQuery = ref('');
 
 let blurTimer: number | null = null;
 
 const handleBlur = () => {
+  // Commit search on blur if content changed
+  const fullQuery = selectedTags.value.map(t => `@${t.value}`).join(' ') +
+    (selectedTags.value.length && inputText.value ? ' ' : '') + inputText.value;
+  if (fullQuery.trim() && fullQuery !== lastCommittedQuery.value) {
+    lastCommittedQuery.value = fullQuery;
+    emit('search-commit', fullQuery);
+  }
+
   blurTimer = window.setTimeout(() => {
     isFocused.value = false;
     showMentionPanel.value = false;
@@ -224,25 +241,36 @@ const clearBlurTimer = () => {
 const checkMention = () => {
   const text = inputText.value;
   const lastAt = text.lastIndexOf('@');
-  
+
   if (lastAt === -1) {
+    // 没有@符号时，关闭补全面板
     showMentionPanel.value = false;
+    // 历史记录功能已屏蔽
+    // if (!text.trim() && props.history.length > 0 && isFocused.value) {
+    //   showHistory.value = true;
+    // }
     return;
   }
-  
+
   // Check if there's a space after @ (meaning user finished typing)
   const afterAt = text.slice(lastAt + 1);
   if (afterAt.includes(' ')) {
     showMentionPanel.value = false;
+    // 历史记录功能已屏蔽
+    // const beforeAt = text.slice(0, lastAt).trim();
+    // if (!beforeAt && props.history.length > 0 && isFocused.value) {
+    //   showHistory.value = true;
+    // }
     return;
   }
-  
+
   // Check @ is at start or after space
   if (lastAt > 0 && text[lastAt - 1] !== ' ') {
     showMentionPanel.value = false;
     return;
   }
-  
+
+  // 显示@补全面板，隐藏历史记录
   mentionFilter.value = afterAt;
   showMentionPanel.value = true;
   showHistory.value = false;
@@ -253,34 +281,45 @@ const handleInput = () => {
   if (isComposing.value) return;
   checkMention();
   updateSearchQuery();
+  // 如果有输入内容（非@标签），关闭历史记录
+  const text = inputText.value.trim();
+  if (text && !showMentionPanel.value) {
+    showHistory.value = false;
+  }
 };
 
 const handleCompositionEnd = () => {
   isComposing.value = false;
   checkMention();
   updateSearchQuery();
+  // 如果有输入内容（非@标签），关闭历史记录
+  const text = inputText.value.trim();
+  if (text && !showMentionPanel.value) {
+    showHistory.value = false;
+  }
 };
 
 const selectMention = (item: { value: string; category: 'type' | 'tag' }) => {
   clearBlurTimer();
-  
+
   // Remove the @ and filter text from input
   const text = inputText.value;
   const lastAt = text.lastIndexOf('@');
   inputText.value = text.slice(0, lastAt);
-  
+
   // Add to selected tags
   selectedTags.value.push({
     value: item.value,
     type: item.category
   });
-  
+
   // Record usage
   mentionUsageCount.value[item.value] = (mentionUsageCount.value[item.value] || 0) + 1;
-  
+
   showMentionPanel.value = false;
-  updateSearchQuery();
-  
+  // Commit search when selecting a mention
+  updateSearchQuery(true);
+
   nextTick(() => {
     inputRef.value?.focus();
   });
@@ -294,12 +333,12 @@ const removeTag = (index: number) => {
 
 const selectHistory = (h: string) => {
   clearBlurTimer();
-  
+
   // Parse history to extract tags and text
   const parts = h.split(/\s+/);
   const newTags: { value: string; type: 'type' | 'tag' }[] = [];
   let remainingText = '';
-  
+
   parts.forEach(part => {
     if (part.startsWith('@')) {
       const value = part.slice(1);
@@ -312,20 +351,23 @@ const selectHistory = (h: string) => {
       remainingText += (remainingText ? ' ' : '') + part;
     }
   });
-  
+
   selectedTags.value = newTags;
   inputText.value = remainingText;
   showHistory.value = false;
-  updateSearchQuery();
-  
+
+  // 如果有剩余文本，需要检查是否有新的@需要补全
   nextTick(() => {
+    checkMention();
+    updateSearchQuery();
     inputRef.value?.focus();
   });
 };
 
-const clearAllHistory = () => {
-  emit('clear-all-history');
-};
+// 历史记录功能已屏蔽
+// const clearAllHistory = () => {
+//   emit('clear-all-history');
+// };
 
 const clearAll = () => {
   selectedTags.value = [];
@@ -334,11 +376,14 @@ const clearAll = () => {
   inputRef.value?.focus();
 };
 
-const updateSearchQuery = () => {
+const updateSearchQuery = (shouldCommit = false) => {
   const tags = selectedTags.value.map(t => `@${t.value}`).join(' ');
   const fullQuery = tags + (tags && inputText.value ? ' ' : '') + inputText.value;
   emit('update:modelValue', fullQuery);
   emit('search', fullQuery);
+  if (shouldCommit && fullQuery.trim()) {
+    emit('search-commit', fullQuery);
+  }
 };
 
 // Grid navigation
@@ -372,17 +417,22 @@ const navigateGrid = (direction: 'up' | 'down' | 'left' | 'right') => {
 };
 
 const handleKeyDown = (e: KeyboardEvent) => {
-  // 快捷键：Ctrl+Shift+H 显示历史记录
-  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
-    e.preventDefault();
-    e.stopPropagation();
-    if (props.history.length > 0) {
-      showMentionPanel.value = false;
-      showHistory.value = true;
-      selectedHistoryIndex.value = 0;
-    }
-    return;
-  }
+  // 快捷键：Ctrl+Shift+H 切换历史记录显示（已屏蔽）
+  // if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
+  //   e.preventDefault();
+  //   e.stopPropagation();
+  //   if (props.history.length > 0) {
+  //     if (showMentionPanel.value || showHistory.value) {
+  //       showMentionPanel.value = false;
+  //       showHistory.value = false;
+  //     } else {
+  //       showMentionPanel.value = false;
+  //       showHistory.value = true;
+  //       selectedHistoryIndex.value = 0;
+  //     }
+  //   }
+  //   return;
+  // }
   
   // Mention panel navigation
   if (showMentionPanel.value) {
@@ -448,7 +498,43 @@ const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Backspace' && !inputText.value && selectedTags.value.length > 0) {
     removeTag(selectedTags.value.length - 1);
   }
+
+  // 普通输入模式下按 Enter，提交搜索
+  if (e.key === 'Enter' && !showMentionPanel.value && !showHistory.value) {
+    const fullQuery = selectedTags.value.map(t => `@${t.value}`).join(' ') +
+      (selectedTags.value.length && inputText.value ? ' ' : '') + inputText.value;
+    if (fullQuery.trim()) {
+      emit('search-commit', fullQuery);
+    }
+    showHistory.value = false;
+  }
 };
+
+// 监听 modelValue 变化，同步更新内部状态（用于外部如标签点击时更新）
+watch(() => props.modelValue, (newValue) => {
+  // 解析 query 为 tags 和 inputText
+  const parts = newValue.split(/\s+/);
+  const newTags: { value: string; type: 'type' | 'tag' }[] = [];
+  let remainingText = '';
+
+  parts.forEach(part => {
+    if (part.startsWith('@')) {
+      const value = part.slice(1);
+      // 忽略只有 @ 没有内容的情况（用户正在输入）
+      if (!value) return;
+      const isType = TYPE_OPTIONS.includes(value);
+      newTags.push({
+        value,
+        type: isType ? 'type' : 'tag'
+      });
+    } else {
+      remainingText += (remainingText ? ' ' : '') + part;
+    }
+  });
+
+  selectedTags.value = newTags;
+  inputText.value = remainingText;
+}, { immediate: true });
 
 onUnmounted(() => {
   if (blurTimer) clearTimeout(blurTimer);
@@ -578,6 +664,21 @@ input::placeholder {
   height: 12px;
 }
 
+/* Shortcut hint */
+.shortcut-hint {
+  font-size: 11px;
+  color: #595959;
+  background: #e6f7ff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #91d5ff;
+  flex-shrink: 0;
+  margin-left: 8px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
 /* Dropdown */
 .search-dropdown {
   position: absolute;
@@ -696,7 +797,7 @@ input::placeholder {
 
 /* History list */
 .history-list {
-  max-height: 240px;
+  max-height: 180px;
   overflow-y: auto;
 }
 
