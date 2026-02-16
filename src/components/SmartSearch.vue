@@ -216,9 +216,17 @@ const lastCommittedQuery = ref('');
 let blurTimer: number | null = null;
 
 const handleBlur = () => {
-  // Commit search on blur if content changed
+  // Clean up: if input is only "@" (incomplete tag), clear it
+  // Also handle "@ " which can happen when user types space after @
+  const trimmedInput = inputText.value.trim();
+  let cleanedText = inputText.value;
+  if (trimmedInput === '@' || trimmedInput === '') {
+    cleanedText = '';
+  }
+  
+  // Commit search on blur if there's actual content
   const fullQuery = selectedTags.value.map(t => `@${t.value}`).join(' ') +
-    (selectedTags.value.length && inputText.value ? ' ' : '') + inputText.value;
+    (selectedTags.value.length && cleanedText ? ' ' : '') + cleanedText;
   if (fullQuery.trim() && fullQuery !== lastCommittedQuery.value) {
     lastCommittedQuery.value = fullQuery;
     emit('search-commit', fullQuery);
@@ -379,9 +387,18 @@ const clearAll = () => {
 const updateSearchQuery = (shouldCommit = false) => {
   const tags = selectedTags.value.map(t => `@${t.value}`).join(' ');
   const fullQuery = tags + (tags && inputText.value ? ' ' : '') + inputText.value;
+  
+  // Skip search when input is incomplete @ tag: starts with @ and no space after
+  // This handles "@", "@a", "@ab" etc while allowing "@tag " (completed)
+  const trimmedInput = inputText.value.trim();
+  const isIncompleteAtTag = trimmedInput.startsWith('@') && !trimmedInput.includes(' ');
+  const hasContent = fullQuery.trim() && !isIncompleteAtTag;
+  
   emit('update:modelValue', fullQuery);
-  emit('search', fullQuery);
-  if (shouldCommit && fullQuery.trim()) {
+  if (hasContent) {
+    emit('search', fullQuery);
+  }
+  if (shouldCommit && hasContent) {
     emit('search-commit', fullQuery);
   }
 };
@@ -501,9 +518,12 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
   // 普通输入模式下按 Enter，提交搜索
   if (e.key === 'Enter' && !showMentionPanel.value && !showHistory.value) {
+    // Skip if input is incomplete @ tag (starts with @ and no space)
+    const trimmedInput = inputText.value.trim();
+    const isIncompleteAtTag = trimmedInput.startsWith('@') && !trimmedInput.includes(' ');
     const fullQuery = selectedTags.value.map(t => `@${t.value}`).join(' ') +
       (selectedTags.value.length && inputText.value ? ' ' : '') + inputText.value;
-    if (fullQuery.trim()) {
+    if (fullQuery.trim() && !isIncompleteAtTag) {
       emit('search-commit', fullQuery);
     }
     showHistory.value = false;

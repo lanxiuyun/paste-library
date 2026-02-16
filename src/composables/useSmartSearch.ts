@@ -50,7 +50,8 @@ const TYPE_ALIASES: Record<string, ClipboardContentType[]> = {
 export function parseSearchQuery(query: string): ParsedQuery {
   const trimmed = query.trim();
   
-  if (!trimmed) {
+  // 单独的 @ 符号视为无效查询（用户正在输入标签）
+  if (!trimmed || trimmed === '@') {
     return {
       keywords: [],
       tags: [],
