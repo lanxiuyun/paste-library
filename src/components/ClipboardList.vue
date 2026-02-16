@@ -469,28 +469,13 @@ const handleSmartActivate = async () => {
   }
 };
 
-// 简单的模糊匹配函数
+// 精确匹配函数
 const fuzzyMatch = (query: string, text: string): boolean => {
   const queryLower = query.toLowerCase();
   const textLower = text.toLowerCase();
   
   // 精确匹配
-  if (textLower.includes(queryLower)) {
-    return true;
-  }
-  
-  // 容错匹配（字符顺序匹配）
-  let queryIndex = 0;
-  let textIndex = 0;
-  
-  while (queryIndex < queryLower.length && textIndex < textLower.length) {
-    if (queryLower[queryIndex] === textLower[textIndex]) {
-      queryIndex++;
-    }
-    textIndex++;
-  }
-  
-  return queryIndex === queryLower.length;
+  return textLower.includes(queryLower);
 };
 
 const filteredHistory = computed(() => {

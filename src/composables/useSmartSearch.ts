@@ -168,16 +168,20 @@ export function matchItemWithQuery(
 
     // 所有关键词都必须匹配
     const allKeywordsMatch = query.keywords.every(keyword => {
-      // 在内容中搜索
-      if (fuzzyMatch(keyword, searchText)) {
+      // 在内容中搜索（文本、HTML类型）
+      if (searchText && fuzzyMatch(keyword, searchText)) {
         return true;
       }
-      // 在文件路径中搜索
-      if (item.file_paths) {
+      // 在文件路径中搜索（文件、多文件、文件夹类型）
+      if (item.file_paths && item.file_paths.length > 0) {
         const pathText = item.file_paths.join(' ');
         if (fuzzyMatch(keyword, pathText)) {
           return true;
         }
+      }
+      // 在缩略图路径中搜索（图片类型）
+      if (item.thumbnail_path && fuzzyMatch(keyword, item.thumbnail_path)) {
+        return true;
       }
       return false;
     });
