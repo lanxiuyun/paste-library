@@ -137,8 +137,17 @@ impl ClipboardManager {
     }
 
     pub fn get_history(&self, request: GetHistoryRequest) -> Result<Vec<ClipboardItem>, String> {
-        let limit = request.limit.unwrap_or(100);
         let offset = request.offset.unwrap_or(0);
+
+        // 如果没有提供limit，使用设置中的max_history_count
+        let limit = match request.limit {
+            Some(l) => l,
+            None => {
+                // 同步获取设置
+                let settings = self.settings.blocking_lock();
+                settings.max_history_count
+            }
+        };
 
         self.database
             .get_history(limit, offset)

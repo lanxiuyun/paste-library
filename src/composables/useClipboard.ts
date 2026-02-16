@@ -19,9 +19,9 @@ const lastCopyTime = ref<number>(Date.now());
 const isInternalCopy = ref(false);
 
 export function useClipboard() {
-  const loadHistory = async (limit = 100, offset = 0): Promise<void> => {
+  const loadHistory = async (limit?: number, offset = 0): Promise<void> => {
     try {
-      const request: GetHistoryRequest = { limit, offset };
+      const request: GetHistoryRequest = limit ? { limit, offset } : { offset };
       const result = await invoke<ClipboardItem[]>('get_clipboard_history', { request });
       history.value = result;
     } catch (error) {

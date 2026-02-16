@@ -79,6 +79,14 @@ export interface GetHistoryRequest {
 }
 
 /**
+ * 获取历史记录响应
+ */
+export interface GetHistoryResponse {
+  items: ClipboardItem[];
+  total: number;
+}
+
+/**
  * 清空历史请求
  */
 export interface ClearHistoryRequest {
