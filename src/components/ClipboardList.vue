@@ -1,7 +1,7 @@
 <template>
   <div class="clipboard-list">
-    <!-- 搜索栏 - 顶部位置 -->
-    <div v-if="settings.search_position === 'top'" class="search-bar search-bar-top">
+    <!-- 搜索栏 - 固定在顶部 -->
+    <div class="search-bar search-bar-top">
       <div class="search-wrapper">
         <SmartSearch
           ref="smartSearchRef"
@@ -103,7 +103,8 @@
       <div v-if="loading" class="loading-more">加载中...</div>
     </div>
 
-    <!-- 搜索栏 - 底部位置（默认） -->
+    <!-- 搜索栏 - 底部位置（暂时注释掉，搜索框固定在顶部） -->
+    <!--
     <div v-if="settings.search_position !== 'top'" class="search-bar search-bar-bottom">
       <div class="search-wrapper">
         <SmartSearch
@@ -128,6 +129,7 @@
         </button>
       </div>
     </div>
+    -->
 
     <!-- 右键上下文菜单 -->
     <ContextMenu
