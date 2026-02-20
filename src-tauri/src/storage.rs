@@ -2,17 +2,15 @@ use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::models::{
-    AppSettings, ClearHistoryRequest, ClipboardContentType, ClipboardItem, ClipboardMetadata,
-};
+use crate::models::{AppSettings, ClipboardContentType, ClipboardItem, ClipboardMetadata};
 
-/// 数据库管理器
+/// Database manager
 pub struct Database {
     conn: Mutex<Connection>,
 }
 
 impl Database {
-    /// 初始化数据库连接
+    /// Initialize database connection
     pub fn new(app_dir: PathBuf) -> Result<Self> {
         let db_path = app_dir.join("clipboard.db");
         let conn = Connection::open(&db_path)?;
@@ -25,11 +23,11 @@ impl Database {
         Ok(db)
     }
 
-    /// 创建必要的表
+    /// Create necessary tables
     fn init_tables(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
 
-        // 剪贴板历史表
+        // Clipboard history table
         conn.execute(
             "CREATE TABLE IF NOT EXISTS clipboard_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,43 +43,7 @@ impl Database {
             [],
         )?;
 
-        // 数据库迁移：为旧表添加新字段
-        let columns: Vec<String> = conn
-            .prepare("PRAGMA table_info(clipboard_history)")?
-            .query_map([], |row| row.get::<_, String>(1))?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        if !columns.contains(&"metadata".to_string()) {
-            conn.execute("ALTER TABLE clipboard_history ADD COLUMN metadata TEXT", [])?;
-        }
-        if !columns.contains(&"file_paths".to_string()) {
-            conn.execute(
-                "ALTER TABLE clipboard_history ADD COLUMN file_paths TEXT",
-                [],
-            )?;
-        }
-        if !columns.contains(&"thumbnail_path".to_string()) {
-            conn.execute(
-                "ALTER TABLE clipboard_history ADD COLUMN thumbnail_path TEXT",
-                [],
-            )?;
-        }
-        if !columns.contains(&"tags".to_string()) {
-            conn.execute("ALTER TABLE clipboard_history ADD COLUMN tags TEXT", [])?;
-        }
-
-        // 数据迁移：将 is_favorite 转换为标签（如果存在旧字段）
-        if columns.contains(&"is_favorite".to_string()) {
-            conn.execute(
-                "UPDATE clipboard_history SET tags = '[\"收藏\"]' WHERE is_favorite = 1 AND tags IS NULL",
-                [],
-            )?;
-            // 删除旧列（SQLite 不支持直接 DROP COLUMN，需要重建表）
-            // 这里简化处理，保留旧列但不使用
-        }
-
-        // 设置表
+        // Settings table
         conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -90,7 +52,7 @@ impl Database {
             [],
         )?;
 
-        // 初始化默认设置
+        // Initialize default settings
         let defaults = vec![
             ("max_history_count", "5000"),
             ("auto_cleanup_days", "30"),
@@ -123,10 +85,20 @@ impl Database {
             )?;
         }
 
+        // Create index for faster searches
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_content_hash ON clipboard_history(content_hash)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_created_at ON clipboard_history(created_at DESC)",
+            [],
+        )?;
+
         Ok(())
     }
 
-    /// 检查是否是首次运行
+    /// Check if first run
     pub fn is_first_run(&self) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
         let result: Option<String> = conn
@@ -143,7 +115,7 @@ impl Database {
         }
     }
 
-    /// 标记应用已初始化（非首次运行）
+    /// Mark app as initialized
     pub fn mark_app_initialized(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
@@ -153,418 +125,230 @@ impl Database {
         Ok(())
     }
 
-    /// 添加剪贴板记录
-    ///
-    /// # 参数
-    /// - `item`: 要添加的剪贴板项
-    /// - `auto_sort`: 是否根据设置自动排序（将重复项置顶）
-    /// - `is_internal_copy`: 是否是软件内部复制。内部复制不会更新时间戳，外部复制（来自系统剪贴板）会更新时间戳
-    pub fn add_clipboard_item(
+    /// Add a clipboard item
+    pub fn add_item(
         &self,
-        item: &ClipboardItem,
-        auto_sort: bool,
-        is_internal_copy: bool,
-    ) -> Result<i64> {
+        content_type: ClipboardContentType,
+        content: String,
+        content_hash: String,
+        metadata: Option<ClipboardMetadata>,
+        file_paths: Option<Vec<String>>,
+        thumbnail_path: Option<String>,
+    ) -> Result<Option<ClipboardItem>> {
         let conn = self.conn.lock().unwrap();
 
-        let metadata_json = item
-            .metadata
+        // Check if item already exists
+        let existing: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM clipboard_history WHERE content_hash = ?1",
+                params![content_hash],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if let Some(_id) = existing {
+            // Update timestamp to move to top
+            conn.execute(
+                "UPDATE clipboard_history SET created_at = CURRENT_TIMESTAMP WHERE content_hash = ?1",
+                params![content_hash],
+            )?;
+
+            return self.get_item_by_hash(&conn, &content_hash);
+        }
+
+        // Insert new item
+        let metadata_json = metadata
             .as_ref()
             .map(|m| serde_json::to_string(m).ok())
             .flatten();
-        let file_paths_json = item
-            .file_paths
+        let file_paths_json = file_paths
             .as_ref()
-            .map(|p| serde_json::to_string(p).ok())
+            .map(|v| serde_json::to_string(v).ok())
             .flatten();
-        let tags_json = item
-            .tags
-            .as_ref()
-            .map(|t| serde_json::to_string(t).ok())
-            .flatten();
-
-        // 决定是否更新重复项的时间戳：
-        // 1. 如果是内部复制（用户点击项目复制），不更新时间戳
-        // 2. 如果是外部复制（来自系统剪贴板），根据 auto_sort 设置或内容类型决定是否更新
-        let should_update_timestamp = if is_internal_copy {
-            false
-        } else {
-            auto_sort
-                || matches!(
-                    item.content_type,
-                    ClipboardContentType::File
-                        | ClipboardContentType::Folder
-                        | ClipboardContentType::Files
-                )
-        };
-
-        let conflict_sql = if should_update_timestamp {
-            "ON CONFLICT(content_hash) DO UPDATE SET
-                created_at = excluded.created_at"
-        } else {
-            "ON CONFLICT(content_hash) DO NOTHING"
-        };
 
         conn.execute(
-            &format!("INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-             {}", conflict_sql),
+            "INSERT INTO clipboard_history (content_type, content, content_hash, metadata, file_paths, thumbnail_path) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
-                match item.content_type {
-                    ClipboardContentType::Text => "text",
-                    ClipboardContentType::Html => "html",
-                    ClipboardContentType::Rtf => "rtf",
-                    ClipboardContentType::Image => "image",
-                    ClipboardContentType::File => "file",
-                    ClipboardContentType::Folder => "folder",
-                    ClipboardContentType::Files => "files",
-                },
-                item.content,
-                item.created_at.to_rfc3339(),
-                item.content_hash,
+                serde_json::to_string(&content_type).unwrap_or_default(),
+                content,
+                content_hash,
                 metadata_json,
                 file_paths_json,
-                item.thumbnail_path,
-                tags_json
+                thumbnail_path
             ],
         )?;
 
-        // 如果发生 ON CONFLICT DO NOTHING，需要返回已存在项的 ID
-        let id: i64 = conn.query_row(
-            "SELECT id FROM clipboard_history WHERE content_hash = ?1",
-            params![item.content_hash],
-            |row| row.get(0),
-        )?;
-
-        Ok(id)
+        let id = conn.last_insert_rowid();
+        self.get_item_by_id(&conn, id)
     }
 
-    /// 获取历史记录
+    /// Get item by ID
+    fn get_item_by_id(&self, conn: &Connection, id: i64) -> Result<Option<ClipboardItem>> {
+        conn.query_row(
+            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags 
+             FROM clipboard_history WHERE id = ?1",
+            params![id],
+            |row| self.row_to_item(row),
+        )
+        .optional()
+    }
+
+    /// Get item by hash
+    fn get_item_by_hash(
+        &self,
+        conn: &Connection,
+        content_hash: &str,
+    ) -> Result<Option<ClipboardItem>> {
+        conn.query_row(
+            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags 
+             FROM clipboard_history WHERE content_hash = ?1",
+            params![content_hash],
+            |row| self.row_to_item(row),
+        )
+        .optional()
+    }
+
+    /// Convert row to ClipboardItem
+    fn row_to_item(&self, row: &rusqlite::Row) -> rusqlite::Result<ClipboardItem> {
+        let content_type_str: String = row.get(1)?;
+        let content_type: ClipboardContentType =
+            serde_json::from_str(&content_type_str).unwrap_or(ClipboardContentType::Text);
+
+        let metadata_str: Option<String> = row.get(5)?;
+        let metadata: Option<ClipboardMetadata> =
+            metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+
+        let file_paths_str: Option<String> = row.get(6)?;
+        let file_paths: Option<Vec<String>> =
+            file_paths_str.and_then(|s| serde_json::from_str(&s).ok());
+
+        let tags_str: Option<String> = row.get(8)?;
+        let tags: Option<Vec<String>> = tags_str.and_then(|s| serde_json::from_str(&s).ok());
+
+        Ok(ClipboardItem {
+            id: row.get(0)?,
+            content_type,
+            content: row.get(2)?,
+            created_at: row.get(3)?,
+            content_hash: row.get(4)?,
+            metadata,
+            file_paths,
+            thumbnail_path: row.get(7)?,
+            tags,
+        })
+    }
+
+    /// Get clipboard history
     pub fn get_history(&self, limit: i64, offset: i64) -> Result<Vec<ClipboardItem>> {
         let conn = self.conn.lock().unwrap();
-
         let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags
-             FROM clipboard_history
-             ORDER BY created_at DESC
-             LIMIT ?1 OFFSET ?2",
+            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags 
+             FROM clipboard_history ORDER BY created_at DESC LIMIT ?1 OFFSET ?2"
         )?;
 
         let items = stmt
-            .query_map(params![limit, offset], |row| {
-                let content_type_str: String = row.get(1)?;
-                let content_type = match content_type_str.as_str() {
-                    "text" => ClipboardContentType::Text,
-                    "html" => ClipboardContentType::Html,
-                    "rtf" => ClipboardContentType::Rtf,
-                    "image" => ClipboardContentType::Image,
-                    "file" => ClipboardContentType::File,
-                    "folder" => ClipboardContentType::Folder,
-                    "files" => ClipboardContentType::Files,
-                    _ => ClipboardContentType::Text,
-                };
-
-                let created_at_str: String = row.get(3)?;
-                let created_at = created_at_str
-                    .parse::<chrono::DateTime<chrono::Utc>>()
-                    .unwrap_or_else(|_| chrono::Utc::now());
-
-                let metadata: Option<ClipboardMetadata> = row
-                    .get::<_, Option<String>>(5)?
-                    .and_then(|s| serde_json::from_str(&s).ok());
-                let file_paths: Option<Vec<String>> = row
-                    .get::<_, Option<String>>(6)?
-                    .and_then(|s| serde_json::from_str(&s).ok());
-                let tags: Option<Vec<String>> = row
-                    .get::<_, Option<String>>(8)?
-                    .and_then(|s| serde_json::from_str(&s).ok());
-
-                Ok(ClipboardItem {
-                    id: row.get(0)?,
-                    content_type,
-                    content: row.get(2)?,
-                    created_at,
-                    content_hash: row.get(4)?,
-                    metadata,
-                    file_paths,
-                    thumbnail_path: row.get(7)?,
-                    tags,
-                })
-            })?
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(items)
-    }
-
-    /// 搜索历史记录
-    pub fn search_history(&self, query: &str, limit: i64) -> Result<Vec<ClipboardItem>> {
-        use crate::fuzzy_search::fuzzy_match;
-
-        let conn = self.conn.lock().unwrap();
-
-        // 先获取所有记录，然后在内存中进行模糊搜索
-        let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags
-             FROM clipboard_history
-             ORDER BY created_at DESC
-             LIMIT 1000",
-        )?;
-
-        let items = stmt
-            .query_map([], |row| {
-                let content_type_str: String = row.get(1)?;
-                let content_type = match content_type_str.as_str() {
-                    "text" => ClipboardContentType::Text,
-                    "html" => ClipboardContentType::Html,
-                    "rtf" => ClipboardContentType::Rtf,
-                    "image" => ClipboardContentType::Image,
-                    "file" => ClipboardContentType::File,
-                    "folder" => ClipboardContentType::Folder,
-                    "files" => ClipboardContentType::Files,
-                    _ => ClipboardContentType::Text,
-                };
-
-                let created_at_str: String = row.get(3)?;
-                let created_at = created_at_str
-                    .parse::<chrono::DateTime<chrono::Utc>>()
-                    .unwrap_or_else(|_| chrono::Utc::now());
-
-                let metadata_str: Option<String> = row.get(5)?;
-                let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
-
-                let file_paths_str: Option<String> = row.get(6)?;
-                let file_paths = file_paths_str.and_then(|s| serde_json::from_str(&s).ok());
-
-                let tags_str: Option<String> = row.get(8)?;
-                let tags = tags_str.and_then(|s| serde_json::from_str(&s).ok());
-
-                Ok(ClipboardItem {
-                    id: row.get(0)?,
-                    content_type,
-                    content: row.get(2)?,
-                    created_at,
-                    content_hash: row.get(4)?,
-                    metadata,
-                    file_paths,
-                    thumbnail_path: row.get(7)?,
-                    tags,
-                })
-            })?
-            .filter_map(|item| item.ok())
-            .filter(|item| {
-                // 应用模糊搜索过滤
-                fuzzy_match(query, &item.content)
-                    || (item
-                        .tags
-                        .as_ref()
-                        .map_or(false, |tags| tags.iter().any(|tag| fuzzy_match(query, tag))))
-            })
-            .take(limit as usize)
+            .query_map(params![limit, offset], |row| self.row_to_item(row))?
+            .filter_map(|r| r.ok())
             .collect();
 
         Ok(items)
     }
 
-    /// 删除单条记录
+    /// Search clipboard history
+    pub fn search(&self, query: &str, limit: i64) -> Result<Vec<ClipboardItem>> {
+        let conn = self.conn.lock().unwrap();
+        let search_pattern = format!("%{}%", query);
+
+        let mut stmt = conn.prepare(
+            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags 
+             FROM clipboard_history WHERE content LIKE ?1 ORDER BY created_at DESC LIMIT ?2"
+        )?;
+
+        let items = stmt
+            .query_map(params![search_pattern, limit], |row| self.row_to_item(row))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(items)
+    }
+
+    /// Delete item by ID
     pub fn delete_item(&self, id: i64) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM clipboard_history WHERE id = ?1", params![id])?;
         Ok(())
     }
 
-    /// 更新标签
-    pub fn update_tags(&self, id: i64, tags: &Option<Vec<String>>) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        let tags_json = tags
-            .as_ref()
-            .map(|t| serde_json::to_string(t).ok())
-            .flatten();
-        conn.execute(
-            "UPDATE clipboard_history SET tags = ?1 WHERE id = ?2",
-            params![tags_json, id],
-        )?;
-        Ok(())
-    }
-
-    /// 获取所有标签
-    pub fn get_all_tags(&self) -> Result<Vec<(String, i64)>> {
+    /// Clear history
+    pub fn clear_history(&self, keep_count: Option<i64>, keep_days: Option<i64>) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
 
-        let mut stmt = conn.prepare("SELECT tags FROM clipboard_history WHERE tags IS NOT NULL")?;
-
-        let rows: Vec<String> = stmt
-            .query_map([], |row| row.get::<_, String>(0))?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        let mut tag_counts: std::collections::HashMap<String, i64> =
-            std::collections::HashMap::new();
-        for tags_json in rows {
-            if let Ok(tags) = serde_json::from_str::<Vec<String>>(&tags_json) {
-                for tag in tags {
-                    *tag_counts.entry(tag).or_insert(0) += 1;
-                }
-            }
-        }
-
-        let mut result: Vec<(String, i64)> = tag_counts.into_iter().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1)); // 按使用次数降序
-
-        Ok(result)
-    }
-
-    /// 清空历史 (支持按条数或日期)
-    pub fn clear_history(&self, request: &ClearHistoryRequest) -> Result<i64> {
-        let conn = self.conn.lock().unwrap();
-
-        let rows_affected = if let Some(keep_count) = request.keep_count {
-            // 按条数保留
-            conn.execute(
-                "DELETE FROM clipboard_history
-                 WHERE id NOT IN (
-                     SELECT id FROM clipboard_history
-                     ORDER BY created_at DESC
-                     LIMIT ?1
-                 )",
-                params![keep_count],
-            )?
-        } else if let Some(keep_days) = request.keep_days {
-            // 按日期保留
-            let cutoff_date = chrono::Utc::now() - chrono::Duration::days(keep_days);
-            conn.execute(
-                "DELETE FROM clipboard_history WHERE created_at < ?1",
-                params![cutoff_date.to_rfc3339()],
-            )?
-        } else {
-            // 全部清空
-            conn.execute("DELETE FROM clipboard_history", [])?
-        };
-
-        Ok(rows_affected as i64)
-    }
-
-    /// 获取记录总数
-    pub fn get_count(&self) -> Result<i64> {
-        let conn = self.conn.lock().unwrap();
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM clipboard_history", [], |row| {
+        // Count total items
+        let total: i64 = conn.query_row("SELECT COUNT(*) FROM clipboard_history", [], |row| {
             row.get(0)
         })?;
-        Ok(count)
+
+        // Delete by count
+        if let Some(count) = keep_count {
+            conn.execute(
+                "DELETE FROM clipboard_history WHERE id NOT IN (
+                    SELECT id FROM clipboard_history ORDER BY created_at DESC LIMIT ?1
+                )",
+                params![count],
+            )?;
+        }
+
+        // Delete by days
+        if let Some(days) = keep_days {
+            conn.execute(
+                "DELETE FROM clipboard_history WHERE created_at < datetime('now', ?1)",
+                params![format!("-{} days", days)],
+            )?;
+        }
+
+        let remaining: i64 =
+            conn.query_row("SELECT COUNT(*) FROM clipboard_history", [], |row| {
+                row.get(0)
+            })?;
+
+        Ok(total - remaining)
     }
 
-    /// 获取设置
+    /// Get settings
     pub fn get_settings(&self) -> Result<AppSettings> {
         let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
 
         let mut settings = AppSettings::default();
-
-        let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
         let rows = stmt.query_map([], |row| {
-            let key: String = row.get(0)?;
-            let value: String = row.get(1)?;
-            Ok((key, value))
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
 
-        for row in rows {
-            let (key, value) = row?;
+        for row in rows.flatten() {
+            let (key, value) = row;
             match key.as_str() {
-                "max_history_count" => {
-                    if let Ok(v) = value.parse() {
-                        settings.max_history_count = v;
-                    }
-                }
-                "auto_cleanup_days" => {
-                    if let Ok(v) = value.parse() {
-                        settings.auto_cleanup_days = v;
-                    }
-                }
+                "max_history_count" => settings.max_history_count = value.parse().unwrap_or(5000),
+                "auto_cleanup_days" => settings.auto_cleanup_days = value.parse().unwrap_or(30),
                 "window_position" => settings.window_position = value,
-                "window_pos_x" => {
-                    if !value.is_empty() {
-                        if let Ok(v) = value.parse() {
-                            settings.window_pos_x = Some(v);
-                        }
-                    }
-                }
-                "window_pos_y" => {
-                    if !value.is_empty() {
-                        if let Ok(v) = value.parse() {
-                            settings.window_pos_y = Some(v);
-                        }
-                    }
-                }
-                "smart_activate" => {
-                    if let Ok(v) = value.parse() {
-                        settings.smart_activate = v;
-                    }
-                }
-                "copy_sound" => {
-                    if let Ok(v) = value.parse() {
-                        settings.copy_sound = v;
-                    }
-                }
+                "window_pos_x" => settings.window_pos_x = value.parse().ok(),
+                "window_pos_y" => settings.window_pos_y = value.parse().ok(),
+                "smart_activate" => settings.smart_activate = value == "true",
+                "copy_sound" => settings.copy_sound = value == "true",
                 "search_position" => settings.search_position = value,
-                "focus_search_on_activate" => {
-                    if let Ok(v) = value.parse() {
-                        settings.focus_search_on_activate = v;
-                    }
-                }
-                // 向后兼容：读取旧设置
-                "auto_focus_search" => {
-                    if let Ok(v) = value.parse() {
-                        settings.focus_search_on_activate = v;
-                    }
-                }
+                "focus_search_on_activate" => settings.focus_search_on_activate = value == "true",
                 "click_action" => settings.click_action = value,
                 "double_click_action" => settings.double_click_action = value,
                 "paste_shortcut" => settings.paste_shortcut = value,
-                "hide_window_after_copy" => {
-                    if let Ok(v) = value.parse() {
-                        settings.hide_window_after_copy = v;
-                    }
-                }
-                "image_ocr" => {
-                    if let Ok(v) = value.parse() {
-                        settings.image_ocr = v;
-                    }
-                }
-                "copy_as_plain_text" => {
-                    if let Ok(v) = value.parse() {
-                        settings.copy_as_plain_text = v;
-                    }
-                }
-                "paste_as_plain_text" => {
-                    if let Ok(v) = value.parse() {
-                        settings.paste_as_plain_text = v;
-                    }
-                }
-                "confirm_delete" => {
-                    if let Ok(v) = value.parse() {
-                        settings.confirm_delete = v;
-                    }
-                }
-                "auto_sort" => {
-                    if let Ok(v) = value.parse() {
-                        settings.auto_sort = v;
-                    }
-                }
+                "hide_window_after_copy" => settings.hide_window_after_copy = value == "true",
+                "image_ocr" => settings.image_ocr = value == "true",
+                "copy_as_plain_text" => settings.copy_as_plain_text = value == "true",
+                "paste_as_plain_text" => settings.paste_as_plain_text = value == "true",
+                "confirm_delete" => settings.confirm_delete = value == "true",
+                "auto_sort" => settings.auto_sort = value == "true",
                 "hotkey" => settings.hotkey = value,
-                "auto_start" => {
-                    if let Ok(v) = value.parse() {
-                        settings.auto_start = v;
-                    }
-                }
+                "auto_start" => settings.auto_start = value == "true",
                 "number_key_shortcut" => settings.number_key_shortcut = value,
-                // 忽略已移除的设置字段（保持向后兼容）
-                "window_width"
-                | "window_height"
-                | "scroll_to_top_on_activate"
-                | "switch_to_all_on_activate"
-                | "clear_search_on_activate"
-                | "auto_favorite"
-                | "blacklist_apps" => {
-                    // 这些字段已移除，忽略即可
-                }
                 _ => {}
             }
         }
@@ -572,11 +356,11 @@ impl Database {
         Ok(settings)
     }
 
-    /// 保存设置
+    /// Save settings
     pub fn save_settings(&self, settings: &AppSettings) -> Result<()> {
         let conn = self.conn.lock().unwrap();
 
-        let settings_to_save = vec![
+        let settings_map = vec![
             ("max_history_count", settings.max_history_count.to_string()),
             ("auto_cleanup_days", settings.auto_cleanup_days.to_string()),
             ("window_position", settings.window_position.clone()),
@@ -624,7 +408,7 @@ impl Database {
             ("number_key_shortcut", settings.number_key_shortcut.clone()),
         ];
 
-        for (key, value) in settings_to_save {
+        for (key, value) in settings_map {
             conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
                 params![key, value],

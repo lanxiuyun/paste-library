@@ -25,6 +25,23 @@
         "closable": true,
         "alwaysOnTop": false,
         "visible": false
+      },
+      {
+        "label": "clipboard",
+        "title": "剪贴板历史",
+        "width": 800,
+        "height": 600,
+        "url": "/clipboard",
+        "decorations": false,
+        "transparent": false,
+        "center": true,
+        "resizable": true,
+        "minimizable": true,
+        "maximizable": false,
+        "closable": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false
       }
     ],
     "security": {

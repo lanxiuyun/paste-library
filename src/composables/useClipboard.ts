@@ -1,5 +1,5 @@
-import { invoke } from '@tauri-apps/api/core';
 import { ref, onMounted, onUnmounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import {
   startListening,
   stopListening,
@@ -15,7 +15,6 @@ import type { ClipboardItem, ClipboardContentType, ClipboardMetadata, GetHistory
 const history = ref<ClipboardItem[]>([]);
 const isListening = ref(false);
 const lastCopyTime = ref<number>(Date.now());
-// 标记是否是应用内复制（用于区分系统剪贴板变化和应用内复制）
 const isInternalCopy = ref(false);
 
 export function useClipboard() {
@@ -53,7 +52,7 @@ export function useClipboard() {
     let unlisten: (() => void) | null = null;
 
     const initListener = async () => {
-      unlisten = await onClipboardChange(async (result) => {
+      unlisten = await onClipboardChange(async (result: ReadClipboard) => {
         await handleClipboardChange(result);
       });
     };
@@ -69,15 +68,13 @@ export function useClipboard() {
 
   const handleClipboardChange = async (result: ReadClipboard): Promise<void> => {
     try {
-      // 检查是否是应用内复制（如果是，跳过智能激活的时间记录）
       const wasInternalCopy = isInternalCopy.value;
 
-      // 优先级: files > image > html > rtf > text
+      // Priority: files > image > html > text
       if (result.files) {
-        // 文件类型
         const paths = result.files.value;
         const contentType: ClipboardContentType = paths.length === 1
-          ? (await isDirectory(paths[0]) ? 'folder' : 'file')
+          ? (isPathDirectory(paths[0]) ? 'folder' : 'file')
           : 'files';
 
         const metadata: ClipboardMetadata = paths.length === 1
@@ -92,7 +89,6 @@ export function useClipboard() {
           isInternalCopy: wasInternalCopy,
         });
       } else if (result.image) {
-        // 图片类型
         const metadata: ClipboardMetadata = {
           width: result.image.width,
           height: result.image.height,
@@ -107,14 +103,12 @@ export function useClipboard() {
           isInternalCopy: wasInternalCopy,
         });
       } else if (result.html) {
-        // HTML 类型
         await invoke('add_clipboard_item', {
           text: result.text?.value || '',
           html: result.html.value,
           isInternalCopy: wasInternalCopy,
         });
       } else if (result.text) {
-        // 纯文本类型
         await invoke('add_clipboard_item', {
           text: result.text.value,
           html: null,
@@ -122,32 +116,22 @@ export function useClipboard() {
         });
       }
 
-      // 只有在不是应用内复制的情况下，才更新 lastCopyTime（用于智能激活）
       if (!wasInternalCopy) {
         lastCopyTime.value = Date.now();
       }
 
-      // 重置内部复制标志
       isInternalCopy.value = false;
-
       await loadHistory();
     } catch (error) {
       console.error('Failed to handle clipboard change:', error);
     }
   };
 
-  // 辅助函数：检查路径是否为目录
-  const isDirectory = async (path: string): Promise<boolean> => {
-    try {
-      // 简单判断：如果路径没有扩展名，可能是目录
-      const lastPart = path.split(/[/\\]/).pop() || '';
-      return !lastPart.includes('.');
-    } catch {
-      return false;
-    }
+  const isPathDirectory = (path: string): boolean => {
+    const lastPart = path.split(/[/\\]/).pop() || '';
+    return !lastPart.includes('.');
   };
 
-  // 辅助函数：获取文件名
   const getFileName = (path: string): string => {
     return path.split(/[/\\]/).pop() || path;
   };
@@ -189,10 +173,8 @@ export function useClipboard() {
 
   const restoreToClipboard = async (item: ClipboardItem, options?: { copyAsPlainText?: boolean }): Promise<void> => {
     try {
-      // 标记为应用内复制（这样 handleClipboardChange 就不会更新 lastCopyTime）
       isInternalCopy.value = true;
       
-      // 如果需要复制为纯文本，去除 HTML 标签
       let content = item.content;
       if (options?.copyAsPlainText && (item.content_type === 'html' || item.content_type === 'rtf')) {
         content = content.replace(/<[^>]*>/g, '');
@@ -207,7 +189,6 @@ export function useClipboard() {
           break;
         }
         case 'image':
-          // 图片类型：使用缩略图路径或内容路径
           if (item.thumbnail_path) {
             await writeImage(item.thumbnail_path);
           }
@@ -215,7 +196,6 @@ export function useClipboard() {
         case 'file':
         case 'folder':
         case 'files':
-          // 文件类型：使用文件路径列表
           if (item.file_paths && item.file_paths.length > 0) {
             await writeFiles(item.file_paths);
           }
@@ -254,19 +234,6 @@ export function useClipboard() {
     return text;
   };
 
-  const getTypeIcon = (type: string): string => {
-    switch (type) {
-      case 'text':
-        return '📝';
-      case 'html':
-        return '🌐';
-      case 'rtf':
-        return '📄';
-      default:
-        return '📋';
-    }
-  };
-
   onMounted(() => {
     loadHistory();
     startClipboardListening();
@@ -292,6 +259,5 @@ export function useClipboard() {
     restoreToClipboard,
     formatRelativeTime,
     getContentPreview,
-    getTypeIcon,
   };
 }
