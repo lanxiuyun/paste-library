@@ -12,15 +12,11 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
 </p>
 
----
-
 ## ✨ 复制的内容，再也找不到了？
 
 **Last copied, never lost.**
 
 Paste Library 是你的第二大脑——自动记录每一次复制，毫秒级召回任何内容。
-
----
 
 <!-- ## 🎬 30 秒看懂 Paste Library
 
@@ -36,8 +32,6 @@ Paste Library 是你的第二大脑——自动记录每一次复制，毫秒级
 - ⚡ **极速响应**：本地 SQLite，百万条记录秒开
 - 🔒 **隐私优先**：数据本地存储，不上传云端
 - 🎯 **智能搜索**：拼音、首字母、容错，打错字也能找到
-
----
 
 ## 🎯 核心功能
 
@@ -91,8 +85,6 @@ Paste Library 是你的第二大脑——自动记录每一次复制，毫秒级
 - 图片预览放大
 - 细节查看更方便
 
----
-
 ## 🚀 立即开始
 
 ### 下载安装
@@ -101,8 +93,6 @@ Paste Library 是你的第二大脑——自动记录每一次复制，毫秒级
 | :---------- | :------------------------------------------------------------------------------------------ |
 | **Windows** | [立即下载](https://download.upgrade.toolsetlink.com/download?appKey=C35buW3bHIOtdaVl3hym7g) |
 | **macOS**   | [立即下载](https://download.upgrade.toolsetlink.com/download?appKey=C35buW3bHIOtdaVl3hym7g) |
-
----
 
 ## 📋 适用场景
 
@@ -115,8 +105,6 @@ Paste Library 是你的第二大脑——自动记录每一次复制，毫秒级
 | 学生   | 整理学习资料、笔记片段     |
 | 办公   | 批量粘贴多条内容           |
 
----
-
 ## 🌟 未来规划
 
 - [ ] 跨设备同步
@@ -125,13 +113,9 @@ Paste Library 是你的第二大脑——自动记录每一次复制，毫秒级
 - [ ] 多语言支持
 - [ ] 虚拟滚动优化
 
----
-
 ## 📄 开源协议
 
 MIT License - 自由使用，欢迎贡献！
-
----
 
 <p align="center">
   <sub>Built with ❤️ using Tauri + Vue</sub>
