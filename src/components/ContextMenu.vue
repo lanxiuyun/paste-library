@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue';
+import { computed } from 'vue';
 import type { ClipboardItem, ClipboardContentType } from '@/types';
 
 interface MenuItem {
@@ -226,13 +226,7 @@ const handleAction = (action: string) => {
   close();
 };
 
-// 更新收藏按钮标签
-watch(() => props.item, (newItem) => {
-  const favoriteItem = menuItems.find(m => m.key === 'favorite');
-  if (favoriteItem && newItem) {
-    favoriteItem.label = newItem.tags?.includes('收藏') ? '取消收藏' : '收藏';
-  }
-}, { immediate: true });
+
 </script>
 
 <style scoped>

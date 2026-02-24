@@ -17,6 +17,7 @@ import DragHandle from '@/components/DragHandle.vue';
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  outline: none;
 }
 
 body {

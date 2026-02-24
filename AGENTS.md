@@ -12,7 +12,7 @@
   - tauri-plugin-global-shortcut (global hotkey Alt+V)
   - tauri-plugin-tray (system tray integration)
   - tauri-plugin-autostart (auto start on boot)
-- **Status**: In development — P0/P1 features complete (~98%), P3 optimization complete, hover interaction improvements in progress
+- **Status**: In development — P0/P1 features complete (~98%), P3 optimization complete, tag system fully implemented
 
 ---
 
@@ -214,7 +214,8 @@ src/
   │   ├── DragHandle.vue         # Window drag capsule (for clipboard window)
   │   ├── SettingsPanel.vue      # Settings panel with left navigation
   │   ├── PasteQueuePanel.vue    # Paste queue panel for batch operations
-  │   └── DrawerEditor.vue       # Drawer-based editor for text/image preview
+  │   ├── DrawerEditor.vue       # Drawer-based editor for text/image preview
+  │   └── TagManager.vue         # Tag management popup dialog
   ├── composables/               # Reusable logic (hooks)
   │   ├── useClipboard.ts        # Clipboard monitoring logic (text/image/files)
   │   ├── usePasteQueue.ts       # Paste queue state management
@@ -370,7 +371,7 @@ const imageSrc = computed(() => {
 - Copy/delete clipboard items
 - Data persistence with comprehensive settings
 - **Variable height Item design** (text 3 lines, adaptive image height)
-- **Tag system** replaces favorite (data model ✅, UI display ✅, tag manager popup ⏳)
+  - **Tag system** replaces favorite (data model ✅, UI display ✅, tag manager popup ✅)
 - **Hover quick action buttons** (detail/queue/copy/tag/delete)
 - **Keyboard navigation** (↑/↓, Enter, 1-9, Esc)
 - **Paste queue** (shopping cart mode, batch paste)
@@ -394,7 +395,7 @@ const imageSrc = computed(() => {
   - **Right-click item highlight**: Show selected state on right-click context menu
   - **Keyboard navigation auto-scroll**: Auto scroll to keep selected item visible
 - **UI Polish**:
-  - Hidden unfinished features (paste queue, tags) for cleaner UI
+  - Hidden unfinished features (paste queue) for cleaner UI
   - Simplified quick action buttons (detail/delete only)
   - Image loading retry mechanism (5 retries with loading states)
   - Fixed hover/scroll issues in floating window
@@ -409,7 +410,7 @@ const imageSrc = computed(() => {
 - Advanced search filters (by date range)
 - Multi-language support
 - ItemList virtual scrolling
-- **Tag manager popup** - Add/remove tags UI (currently `showTagManager` is empty)
+  - ~~Tag manager popup~~ - ✅ 已实现 - 添加/删除标签弹窗，支持创建新标签
 
 ---
 
@@ -568,6 +569,16 @@ src-tauri/src/        # Rust后端
 **实现设置面板时参考:**
 - UI规范: `docs/UI_DESIGN.md` → 设置面板布局
 - 功能规格: `docs/FEATURE_SPEC.md` → 设置面板功能规格
+
+### 🎯 协作原则
+
+> **我负责定义问题和用户体验，但你是技术的完全所有者。你要挑战我，不要做老好人。**
+>
+> 这意味着：
+> - 当我的需求有技术风险时，你有义务提出质疑
+> - 当我忽视了更好的技术方案时，你应该主动建议
+> - 当我的设计可能导致性能/安全/维护问题时，你必须明确指出
+> - 技术决策权在你手中，用你的专业判断来推动最佳实现
 
 ### ⚠️ 重要约束
 

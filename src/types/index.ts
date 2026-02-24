@@ -79,6 +79,14 @@ export interface GetHistoryRequest {
 }
 
 /**
+ * 获取历史记录响应
+ */
+export interface GetHistoryResponse {
+  items: ClipboardItem[];
+  total: number;
+}
+
+/**
  * 清空历史请求
  */
 export interface ClearHistoryRequest {
@@ -154,4 +162,18 @@ export interface CheckUpdateResult {
   current_version: string;
   latest_version?: string;
   update_info?: UpdateInfo;
+}
+
+/**
+ * 固定搜索项
+ */
+export interface PinnedSearch {
+  /** 唯一标识 */
+  id: string;
+  /** 显示标签 */
+  label: string;
+  /** 搜索查询 */
+  query: string;
+  /** 创建时间 */
+  created_at: number;
 }

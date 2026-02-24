@@ -1,6 +1,6 @@
 <template>
-  <div 
-    class="clipboard-item" 
+  <div
+    class="clipboard-item"
     :class="{ 'is-hovered': isHovered, 'is-selected': isSelected }"
     @click="handleClick"
     @dblclick="handleDoubleClick"
@@ -8,7 +8,7 @@
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
   >
-    <div class="item-row" :class="{ 'has-tags': item.tags && item.tags.length > 0 }">
+    <div class="item-row" :class="{ 'has-tags': showTags && item.tags && item.tags.length > 0 }">
       <!-- 内容包装器 -->
       <div class="content-wrapper">
         <span class="type-badge" :class="item.content_type">
@@ -94,15 +94,15 @@
           </div>
           
           <!-- 文本预览 -->
-          <p v-else class="content-text">{{ contentPreview }}</p>
+          <p v-else class="content-text" v-html="highlightedContent"></p>
         </div>
 
         <!-- Hover 快捷按钮 - 绝对定位，不影响布局 -->
         <transition name="fade">
           <div v-if="isHovered" class="quick-actions" @click.stop>
-            <button 
-              class="action-btn" 
-              title="详情" 
+            <button
+              class="action-btn"
+              title="详情"
               @click="handleQuickAction('detail')"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -111,9 +111,20 @@
                 <line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
             </button>
-            <button 
-              class="action-btn danger" 
-              title="删除" 
+            <button
+              v-if="showTags"
+              class="action-btn"
+              title="标签"
+              @click="handleQuickAction('tag')"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                <line x1="7" y1="7" x2="7.01" y2="7"/>
+              </svg>
+            </button>
+            <button
+              class="action-btn danger"
+              title="删除"
               @click="handleQuickAction('delete')"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -130,33 +141,52 @@
       <span v-else class="item-index subdued">{{ index + 1 }}</span>
     </div>
 
-    <!-- 标签区域（暂时隐藏） -->
-    <!-- <div v-if="item.tags && item.tags.length > 0" class="tags-row">
-      <span 
-        v-for="tag in item.tags.slice(0, 3)" 
+    <!-- 标签区域 -->
+    <div v-if="showTags && item.tags && item.tags.length > 0" class="tags-row">
+      <span
+        v-for="tag in item.tags.slice(0, 3)"
         :key="tag"
         class="tag-item"
-        :style="{ backgroundColor: getTagColor(tag) + '20', color: getTagColor(tag) }"
+        :style="getTagStyle(tag)"
+        :class="{ clickable: true }"
+        @click.stop="handleTagClick(tag)"
+        title="点击筛选此标签"
       >
         {{ tag }}
+        <button
+          class="tag-remove-btn"
+          title="删除标签"
+          @click.stop="handleRemoveTag(tag)"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </span>
-      <span v-if="item.tags.length > 3" class="tag-more">+{{ item.tags.length - 3 }}</span>
-    </div> -->
+      <span v-if="item.tags.length > 3" class="tag-more" @click.stop="handleShowTagManager">+{{ item.tags.length - 3 }}</span>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { getTagStyle } from '@/utils/tagColors';
 import type { ClipboardItem } from '@/types';
 
 interface Props {
   item: ClipboardItem;
   index: number;
   isSelected?: boolean;
+  showTags?: boolean;
+  highlightKeywords?: string[];
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  showTags: true,
+  highlightKeywords: () => [],
+});
 
 const emit = defineEmits<{
   click: [item: ClipboardItem, index: number];
@@ -166,6 +196,8 @@ const emit = defineEmits<{
   copy: [item: ClipboardItem];
   tag: [item: ClipboardItem];
   quickAction: [action: string, item: ClipboardItem];
+  removeTag: [item: ClipboardItem, tag: string];
+  tagClick: [tag: string];
 }>();
 
 const isHovered = ref(false);
@@ -255,20 +287,7 @@ let clickTimer: ReturnType<typeof setTimeout> | null = null;
 let clickCount = 0;
 const DOUBLE_CLICK_DELAY = 250;
 
-// 预设标签颜色（暂时隐藏）
-// const tagColors: Record<string, string> = {
-//   '收藏': '#faad14',
-//   '工作': '#1890ff',
-//   '个人': '#52c41a',
-//   '待办': '#ff4d4f',
-//   '灵感': '#722ed1',
-//   '重要': '#ff4d4f',
-//   '稍后': '#8c8c8c',
-// };
 
-// const getTagColor = (tag: string): string => {
-//   return tagColors[tag] || '#595959';
-// };
 
 const typeLabel = computed(() => {
   switch (props.item.content_type) {
@@ -291,11 +310,63 @@ const typeLabel = computed(() => {
   }
 });
 
+/**
+ * 解码 HTML 实体
+ * 如: &#35843;&#25972; -> 调整, &amp; -> &, &lt; -> <
+ */
+const decodeHtmlEntities = (html: string): string => {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = html;
+  return textarea.value;
+};
+
 const contentPreview = computed(() => {
   let text = props.item.content;
   text = text.replace(/<[^>]*>/g, '');
+  // 解码 HTML 实体（如 &#35843;&#25972; -> 调整）
+  text = decodeHtmlEntities(text);
   text = text.trim();
   return text || '(空内容)';
+});
+
+// 高亮匹配的关键词
+const highlightedContent = computed(() => {
+  let text = contentPreview.value;
+  
+  if (!props.highlightKeywords || props.highlightKeywords.length === 0) {
+    // 转义HTML特殊字符
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+  
+  // 先转义HTML特殊字符
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  
+  // 按长度降序排序，优先匹配长词
+  const sortedKeywords = [...props.highlightKeywords]
+    .filter(k => k.trim())
+    .sort((a, b) => b.length - a.length);
+  
+  for (const keyword of sortedKeywords) {
+    if (!keyword.trim()) continue;
+    
+    // 转义正则特殊字符
+    const escapedKeyword = keyword
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // 创建正则表达式（忽略大小写）
+    const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+    
+    // 替换为高亮标记
+    escaped = escaped.replace(regex, '<mark class="search-highlight">$1</mark>');
+  }
+  
+  return escaped;
 });
 
 // 处理图片路径 - 使用 convertFileSrc 转换
@@ -360,6 +431,18 @@ const handleContextMenu = (event: MouseEvent) => {
 
 const handleQuickAction = (action: string) => {
   emit('quickAction', action, props.item);
+};
+
+const handleRemoveTag = (tag: string) => {
+  emit('removeTag', props.item, tag);
+};
+
+const handleShowTagManager = () => {
+  emit('quickAction', 'tag', props.item);
+};
+
+const handleTagClick = (tag: string) => {
+  emit('tagClick', tag);
 };
 
 // 拖拽功能暂时禁用（与 Tauri 窗口拖拽冲突）
@@ -782,16 +865,60 @@ const handleQuickAction = (action: string) => {
 }
 
 .tag-item {
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
   font-size: 11px;
   font-weight: 500;
   border-radius: 10px;
   white-space: nowrap;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.tag-item:hover {
+  opacity: 0.9;
+}
+
+.tag-remove-btn {
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  padding: 0;
+  opacity: 0.6;
+  transition: all 0.15s;
+  color: inherit;
+}
+
+.tag-remove-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.tag-remove-btn svg {
+  width: 10px;
+  height: 10px;
 }
 
 .tag-more {
   font-size: 11px;
   color: var(--text-desc, #8c8c8c);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.tag-more:hover {
+  color: var(--primary, #1890ff);
+  background: var(--bg-hover, #f5f5f5);
 }
 
 /* 过渡动画 */
@@ -803,5 +930,39 @@ const handleQuickAction = (action: string) => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 搜索高亮样式 */
+:deep(.search-highlight) {
+  background: #ffeb3b;
+  color: #262626;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+/* 可点击标签样式 */
+.tag-item.clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+.tag-item.clickable::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px dashed currentColor;
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.tag-item.clickable:hover::after {
+  opacity: 0.3;
+}
+
+.tag-item.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 </style>
