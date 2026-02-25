@@ -1094,26 +1094,27 @@ watch(filteredHistory, () => {
 }
 
 .tab-btn.is-pinned {
-  background: #e6f7ff;
-  color: #1890ff;
-  border: 1px solid #91d5ff;
+  background: #f5f5f5;
+  color: #595959;
+  border: 1px solid #d9d9d9;
 }
 
 .tab-btn.is-pinned:hover {
-  background: #bae7ff;
+  background: #e8e8e8;
 }
 
 .tab-btn.is-pinned.active {
-  background: #1890ff;
+  background: #262626;
   color: #fff;
+  border-color: #262626;
 }
 
 .tab-btn.is-fixed {
-  cursor: default;
+  cursor: pointer;
 }
 
 .tab-btn.is-fixed:hover {
-  background: transparent;
+  background: #f5f5f5;
 }
 
 .tab-btn.is-fixed.active:hover {
