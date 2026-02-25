@@ -2793,7 +2793,7 @@ dependencies = [
 
 [[package]]
 name = "paste-library"
-version = "26.2.11"
+version = "26.2.18"
 dependencies = [
  "chrono",
  "enigo",

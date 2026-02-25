@@ -48,7 +48,7 @@
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-title">智能激活</div>
-              <div class="setting-desc">5秒内复制过内容时，激活窗口自动回到顶部、切换至全部、聚焦搜索框</div>
+              <div class="setting-desc">3秒内复制过内容时，激活窗口自动回到顶部、切换至全部、聚焦搜索框</div>
             </div>
             <div class="setting-control">
               <label class="switch">
@@ -84,10 +84,10 @@
         -->
 
         <!-- 搜索设置 - 搜索框位置已隐藏，默认顶部 -->
-        <h2 class="section-title">搜索设置</h2>
+        <!-- <h2 class="section-title">搜索设置</h2>
         
         <div class="setting-group">
-          <!-- 搜索框位置 - 已隐藏，默认顶部
+          搜索框位置 - 已隐藏，默认顶部
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-title">搜索框位置</div>
@@ -99,7 +99,7 @@
               </select>
             </div>
           </div>
-          -->
+         
 
           <div class="setting-item">
             <div class="setting-info">
@@ -114,7 +114,7 @@
             </div>
           </div>
 
-        </div>
+        </div> -->
 
         <h2 class="section-title">内容设置</h2>
 
