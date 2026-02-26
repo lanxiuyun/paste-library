@@ -184,19 +184,9 @@ impl Database {
             .flatten();
 
         // 决定是否更新重复项的时间戳：
-        // 1. 如果是内部复制（用户点击项目复制），不更新时间戳
-        // 2. 如果是外部复制（来自系统剪贴板），根据 auto_sort 设置或内容类型决定是否更新
-        let should_update_timestamp = if is_internal_copy {
-            false
-        } else {
-            auto_sort
-                || matches!(
-                    item.content_type,
-                    ClipboardContentType::File
-                        | ClipboardContentType::Folder
-                        | ClipboardContentType::Files
-                )
-        };
+        // - auto_sort 启用时：总是更新时间戳（无论内部还是外部复制）
+        // - auto_sort 禁用时：仅外部复制更新时间戳（已存在的数据置顶），内部复制保持原位
+        let should_update_timestamp = auto_sort || !is_internal_copy;
 
         let conflict_sql = if should_update_timestamp {
             "ON CONFLICT(content_hash) DO UPDATE SET
