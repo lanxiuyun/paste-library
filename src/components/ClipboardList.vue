@@ -423,7 +423,6 @@ const loading = ref(false);
 const hasMore = ref(true);
 const offset = ref(0);
 const limit = 50;
-const searchInputRef = ref<HTMLInputElement | null>(null);
 
 // 右键菜单状态
 const contextMenuVisible = ref(false);
@@ -439,12 +438,15 @@ const itemToDelete = ref<ClipboardItemType | null>(null);
 
 // 智能激活逻辑
 const handleSmartActivate = async () => {
+  // 固定行为：激活时始终聚焦搜索框（硬编码开启）
+  smartSearchRef.value?.focus();
+
   // 检查智能激活是否开启
   if (settings.value.smart_activate) {
     const timeDiff = Date.now() - lastCopyTime.value;
 
-    // 如果距离上次复制 < 5秒，执行智能激活
-    if (timeDiff < 5000) {
+    // 如果距离上次复制 < 3秒，执行智能激活
+    if (timeDiff < 3000) {
       // 1. 清空搜索框
       searchQuery.value = '';
       await handleSearch();
@@ -456,18 +458,8 @@ const handleSmartActivate = async () => {
 
       // 3. 切换到"全部"标签
       activeTab.value = 'all';
-
-      // 4. 聚焦搜索框（不自动滚动，避免影响列表）
-      searchInputRef.value?.focus({ preventScroll: true } as FocusOptions);
-
-      // 智能激活完成后不再执行 focus_search_on_activate
       return;
     }
-  }
-
-  // 独立的「激活时聚焦搜索框」设置（与 smart_activate 独立工作）
-  if (settings.value.focus_search_on_activate) {
-    searchInputRef.value?.focus({ preventScroll: true } as FocusOptions);
   }
 };
 
@@ -1102,26 +1094,27 @@ watch(filteredHistory, () => {
 }
 
 .tab-btn.is-pinned {
-  background: #e6f7ff;
-  color: #1890ff;
-  border: 1px solid #91d5ff;
+  background: #f5f5f5;
+  color: #595959;
+  border: 1px solid #d9d9d9;
 }
 
 .tab-btn.is-pinned:hover {
-  background: #bae7ff;
+  background: #e8e8e8;
 }
 
 .tab-btn.is-pinned.active {
-  background: #1890ff;
+  background: #262626;
   color: #fff;
+  border-color: #262626;
 }
 
 .tab-btn.is-fixed {
-  cursor: default;
+  cursor: pointer;
 }
 
 .tab-btn.is-fixed:hover {
-  background: transparent;
+  background: #f5f5f5;
 }
 
 .tab-btn.is-fixed.active:hover {

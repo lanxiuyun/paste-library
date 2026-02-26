@@ -127,7 +127,7 @@ export function useClipboard() {
         lastCopyTime.value = Date.now();
       }
 
-      // 重置内部复制标志
+      // 重置内部复制标志（在 restoreToClipboard 中也有延迟重置，这里是保险措施）
       isInternalCopy.value = false;
 
       await loadHistory();
@@ -188,10 +188,10 @@ export function useClipboard() {
   };
 
   const restoreToClipboard = async (item: ClipboardItem, options?: { copyAsPlainText?: boolean }): Promise<void> => {
+    // 标记为应用内复制（这样 handleClipboardChange 就不会更新 lastCopyTime）
+    isInternalCopy.value = true;
+    
     try {
-      // 标记为应用内复制（这样 handleClipboardChange 就不会更新 lastCopyTime）
-      isInternalCopy.value = true;
-      
       // 如果需要复制为纯文本，去除 HTML 标签
       let content = item.content;
       if (options?.copyAsPlainText && (item.content_type === 'html' || item.content_type === 'rtf')) {
@@ -225,6 +225,12 @@ export function useClipboard() {
       }
     } catch (error) {
       console.error('Failed to restore to clipboard:', error);
+    } finally {
+      // 延迟重置标志，确保剪贴板事件已处理
+      // 延长到 500ms 以确保剪贴板变化事件被正确处理
+      setTimeout(() => {
+        isInternalCopy.value = false;
+      }, 500);
     }
   };
 
