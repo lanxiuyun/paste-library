@@ -273,21 +273,24 @@ export function useClipboard() {
     }
   };
 
-  onMounted(() => {
+  // 初始化函数 - 由组件在 onMounted 中调用
+  const init = (): (() => void) => {
     loadHistory();
     startClipboardListening();
-    const cleanup = setupClipboardListener();
+    const cleanupListener = setupClipboardListener();
 
-    onUnmounted(() => {
-      cleanup();
+    // 返回清理函数，供组件在 onUnmounted 中调用
+    return () => {
+      cleanupListener();
       stopClipboardListening();
-    });
-  });
+    };
+  };
 
   return {
     history,
     isListening,
     lastCopyTime,
+    init,
     loadHistory,
     startClipboardListening,
     stopClipboardListening,
