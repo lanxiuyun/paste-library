@@ -227,9 +227,10 @@ export function useClipboard() {
       console.error('Failed to restore to clipboard:', error);
     } finally {
       // 延迟重置标志，确保剪贴板事件已处理
+      // 延长到 500ms 以确保剪贴板变化事件被正确处理
       setTimeout(() => {
         isInternalCopy.value = false;
-      }, 100);
+      }, 500);
     }
   };
 
