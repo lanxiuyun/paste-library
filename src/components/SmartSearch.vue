@@ -73,27 +73,6 @@
       <div v-else class="dropdown-empty">未找到匹配项</div>
     </div>
 
-    <!-- 历史记录面板 (已屏蔽) -->
-    <!-- <div v-else-if="showHistory" class="search-dropdown" @mousedown.prevent>
-      <div class="dropdown-header">
-        <span>最近搜索</span>
-        <button v-if="props.history.length" class="clear-btn-text" @click="clearAllHistory">清空</button>
-      </div>
-      <div class="history-list">
-        <div
-          v-for="(h, i) in props.history"
-          :key="h"
-          class="history-item"
-          :class="{ active: selectedHistoryIndex === i }"
-          @click="selectHistory(h)"
-          @mouseenter="selectedHistoryIndex = i"
-        >
-          <span class="history-text">{{ h }}</span>
-          <button class="history-delete" @click.stop="$emit('clear-history', h)">×</button>
-        </div>
-        <div v-if="!props.history.length" class="dropdown-empty">暂无搜索历史</div>
-      </div>
-    </div> -->
   </div>
 </template>
 
