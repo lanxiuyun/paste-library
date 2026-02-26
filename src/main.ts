@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import App from "./App.vue";
 import ClipboardView from "./ClipboardView.vue";
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
 
 const path = window.location.pathname;
 const rootComponent = path === '/clipboard' ? ClipboardView : App;
