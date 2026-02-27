@@ -197,22 +197,11 @@ async fn request_content(content_hash: String, device_id: String) -> Result<Vec<
 设置面板/
 ├── 剪贴板
 ├── 历史记录
+├── 同步设置（新增）
 ├── 通用设置
 ├── 快捷键
 ├── 数据备份
-├── 关于
-└── 📱 同步设置（新增）
-    ├── 开关: 启用同步
-    ├── 开关: 自动同步
-    ├── 发现设备列表
-    │   ├── 设备A [配对]
-    │   ├── 设备B [已配对] [取消配对]
-    │   └── ...
-    ├── 配对请求（弹出）
-    │   ├── 设备X 请求配对
-    │   ├── PIN: 123456
-    │   └── [确认] [拒绝]
-    └── 已配对设备管理
+└── 关于
 ```
 
 ### 组件结构
@@ -220,26 +209,7 @@ async fn request_content(content_hash: String, device_id: String) -> Result<Vec<
 ```
 src/components/settings/
 ├── sections/
-│   ├── SyncSettings.vue      # 同步设置主面板
-│   ├── DeviceList.vue       # 设备列表
-│   ├── DeviceItem.vue       # 单个设备项
-│   └── PairingModal.vue     # 配对确认弹窗
-└── components/
-    └── ToggleSwitch.vue     # 已有
-```
-
-### 组件状态
-
-```typescript
-// SyncSettings.vue
-const state = reactive({
-  enabled: false,
-  autoSync: true,
-  discovering: false,
-  devices: [] as SyncDevice[],
-  pairedDevices: [] as SyncDevice[],
-  pendingRequest: null as PairingRequest | null,
-});
+│   └── SyncSection.vue     # 同步设置主面板
 ```
 
 ---
@@ -278,110 +248,88 @@ const state = reactive({
 4. **类型定义**
    - ✅ 添加 `SyncDevice`, `Platform`, `PairingRequest`, `SyncState`
 
-**进度**: ✅ 100% - 已完成
-
-### 阶段 1: 设备发现 + 前端设备列表
-
-**任务**:
-
-1. **Rust - mDNS 发现服务**
-   - 添加 `mdns-sd` crate 依赖
-   - 实现 `sync/discovery.rs`
-   - 注册 `_pastelib._tcp` 服务
-   - 定期扫描局域网设备
-
-2. **Tauri 命令**
-   - `start_device_discovery()`
-   - `stop_device_discovery()`
-   - `get_discovered_devices()`
-
-3. **前端 - 同步设置 UI**
-   - 创建 `SyncSettings.vue`
-   - 创建设备列表组件
-   - 集成到设置面板导航
-
-**进度**: ~40%
+**进度**: ✅ 100%
 
 ---
 
-### 阶段 2: 配对机制
+### 阶段 2: 配对机制 ⏳ 待开始
 
 **任务**:
 
-1. **Rust - 配对逻辑**
-   - 实现 PIN 生成（6位随机数）
-   - 实现 TCP 监听（配对端口）
-   - 实现设备认证
-   - 保存配对信息到数据库
+1. **Rust - 配对逻辑** (部分已完成)
+   - ✅ PIN 生成（6位随机数）- 已在 pairing.rs 实现
+   - ⏳ 实现 TCP 监听（配对端口）
+   - ⏳ 实现设备认证
+   - ⏳ 保存配对信息到数据库
 
 2. **前端 - 配对交互**
-   - 配对请求弹窗
-   - PIN 显示与确认
-   - 配对结果反馈
+   - ⏳ 配对请求弹窗
+   - ⏳ PIN 显示与确认
+   - ⏳ 配对结果反馈
 
 3. **数据库**
-   - 创建 `sync_devices` 表
-   - 迁移设置表
+   - ⏳ 创建 `sync_devices` 表
+   - ⏳ 迁移设置表
 
-**进度**: ~25%
+**进度**: ⏳ 0%
 
 ---
 
-### 阶段 3: P2P 连接与文本同步
+### 阶段 3: P2P 连接与文本同步 ⏳ 待开始
 
 **任务**:
 
 1. **Rust - P2P 连接**
-   - 实现 TCP 连接池
-   - 心跳保活（30秒间隔）
-   - 断线重连逻辑
+   - ⏳ 实现 TCP 连接池
+   - ⏳ 心跳保活（30秒间隔）
+   - ⏳ 断线重连逻辑
 
 2. **同步协议**
-   - 实现二进制协议
-   - 实现 ChaCha20 加密
-   - 实现消息队列
+   - ✅ 二进制协议 - 已在 protocol.rs 实现
+   - ✅ ChaCha20 加密 - 已在 crypto.rs 实现
+   - ⏳ 实现消息队列
 
 3. **文本同步**
-   - 剪贴板变化检测
-   - 文本内容广播
-   - ACK 确认机制
+   - ⏳ 剪贴板变化检测
+   - ⏳ 文本内容广播
+   - ⏳ ACK 确认机制
 
-**进度**: ~20%
+**进度**: ⏳ 0%
 
 ---
 
-### 阶段 4: 图片/文件引用同步
+### 阶段 4: 图片/文件引用同步 ⏳ 待开始
 
 **任务**:
 
 1. **引用同步**
-   - 仅同步内容Hash + 元数据
-   - 显示来源设备标签
+   - ⏳ 仅同步内容Hash + 元数据
+   - ⏳ 显示来源设备标签
 
 2. **按需传输**
-   - 实现内容请求命令
-   - 实现大块数据传输
-   - 传输进度显示
+   - ⏳ 实现内容请求命令
+   - ⏳ 实现大块数据传输
+   - ⏳ 传输进度显示
 
 3. **图片处理**
-   - 同步缩略图
-   - 原始图片按需获取
+   - ⏳ 同步缩略图
+   - ⏳ 原始图片按需获取
 
-**进度**: ~10%
+**进度**: ⏳ 0%
 
 ---
 
-### 阶段 5: 测试与优化
+### 阶段 5: 测试与优化 ⏳ 待开始
 
 **任务**:
 
-1. 多设备配对测试
-2. 离线重连测试
-3. 大文件传输测试
-4. 性能优化
-5. 文档更新
+1. ⏳ 多设备配对测试
+2. ⏳ 离线重连测试
+3. ⏳ 大文件传输测试
+4. ⏳ 性能优化
+5. ⏳ 文档更新
 
-**进度**: ~5%
+**进度**: ⏳ 0%
 
 ---
 
@@ -392,30 +340,25 @@ const state = reactive({
 ```
 src/
 ├── components/settings/sections/
-│   └── SyncSettings.vue       # 同步设置主面板
-├── components/settings/
-│   ├── DeviceList.vue         # 设备列表
-│   ├── DeviceItem.vue         # 设备项
-│   └── PairingModal.vue       # 配对弹窗
+│   └── SyncSection.vue        # 同步设置主面板
 
 src-tauri/src/
 └── sync/
-    ├── mod.rs
-    ├── discovery.rs
-    ├── pairing.rs
-    ├── connection.rs
-    ├── protocol.rs
-    └── crypto.rs
+    ├── mod.rs                 # 模块入口
+    ├── discovery.rs            # mDNS 设备发现
+    ├── pairing.rs             # 配对逻辑
+    ├── connection.rs          # P2P 连接管理
+    ├── protocol.rs            # 二进制协议
+    └── crypto.rs              # ChaCha20 加密
 ```
 
 ### 修改文件
 
 ```
-src/types/index.ts     # 新增 SyncDevice, SyncMessage 等
-src/components/settings/SettingsPanel.vue  # 添加同步导航项
-
-src-tauri/src/lib.rs           # 注册新命令
-src-tauri/Cargo.toml           # 添加依赖
+src/types/index.ts                              # 新增 SyncDevice, Platform 等类型
+src/components/settings/SettingsPanel.vue        # 添加同步导航项
+src-tauri/src/lib.rs                            # 注册 sync 模块和命令
+src-tauri/Cargo.toml                           # 添加依赖
 ```
 
 ### 依赖添加
@@ -423,8 +366,10 @@ src-tauri/Cargo.toml           # 添加依赖
 ```toml
 # Cargo.toml
 mdns-sd = "0.12"
-tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+whoami = "1"
 chacha20poly1305 = "0.10"
+lazy_static = "1.4"
 ```
 
 ---
