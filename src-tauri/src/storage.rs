@@ -433,6 +433,63 @@ impl Database {
         Ok(rows_affected as i64)
     }
 
+    /// 启动时自动清理 - 支持排除标签的清理
+    ///
+    /// 清理逻辑：
+    /// 1. 获取没有标签的记录数量
+    /// 2. 如果超过 max_history_count，删除最旧的记录（保留有标签的）
+    /// 3. 删除超过 auto_cleanup_days 的记录（保留有标签的）
+    ///
+    /// # 参数
+    /// - `max_history_count`: 最大历史记录数
+    /// - `auto_cleanup_days`: 自动清理天数 (0 表示不按日期清理)
+    ///
+    /// # 返回
+    /// - 清理的记录数量
+    pub fn startup_cleanup(&self, max_history_count: i64, auto_cleanup_days: i64) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let mut total_deleted = 0i64;
+
+        // 步骤1: 按数量清理 - 删除没有标签的最旧记录
+        let count_without_tags: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM clipboard_history WHERE tags IS NULL OR tags = '' OR tags = 'null'",
+            [],
+            |row| row.get(0),
+        )?;
+
+        if count_without_tags > max_history_count {
+            let to_delete_count = count_without_tags - max_history_count;
+
+            // 删除最旧的没有标签的记录
+            let rows_affected = conn.execute(
+                "DELETE FROM clipboard_history
+                 WHERE id IN (
+                     SELECT id FROM clipboard_history
+                     WHERE tags IS NULL OR tags = '' OR tags = 'null'
+                     ORDER BY created_at ASC
+                     LIMIT ?1
+                 )",
+                params![to_delete_count],
+            )?;
+            total_deleted += rows_affected as i64;
+        }
+
+        // 步骤2: 按日期清理 - 删除超过天数的没有标签的记录
+        if auto_cleanup_days > 0 {
+            let cutoff_date = chrono::Utc::now() - chrono::Duration::days(auto_cleanup_days);
+
+            let rows_affected = conn.execute(
+                "DELETE FROM clipboard_history
+                 WHERE (tags IS NULL OR tags = '' OR tags = 'null')
+                   AND created_at < ?1",
+                params![cutoff_date.to_rfc3339()],
+            )?;
+            total_deleted += rows_affected as i64;
+        }
+
+        Ok(total_deleted)
+    }
+
     /// 获取记录总数
     pub fn get_count(&self) -> Result<i64> {
         let conn = self.conn.lock().unwrap();

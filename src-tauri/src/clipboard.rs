@@ -172,6 +172,24 @@ impl ClipboardManager {
             .map_err(|e| e.to_string())
     }
 
+    /// 启动时自动清理
+    /// 
+    /// 在程序启动时执行自动清理，保留有标签的记录，
+    /// 只清理没有标签且超出数量限制或超出时间限制的记录。
+    /// 
+    /// # 返回
+    /// - 清理的记录数量
+    pub fn startup_cleanup(&self) -> Result<i64, String> {
+        let settings = self.settings.blocking_lock();
+        let max_history_count = settings.max_history_count;
+        let auto_cleanup_days = settings.auto_cleanup_days;
+        drop(settings);
+
+        self.database
+            .startup_cleanup(max_history_count, auto_cleanup_days)
+            .map_err(|e| e.to_string())
+    }
+
     pub fn get_settings(&self) -> Result<AppSettings, String> {
         self.database.get_settings().map_err(|e| e.to_string())
     }
