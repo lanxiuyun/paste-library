@@ -177,3 +177,52 @@ export interface PinnedSearch {
   /** 创建时间 */
   created_at: number;
 }
+
+// ============ Sync Types ============
+
+/**
+ * 设备平台
+ */
+export type Platform = 'windows' | 'macos' | 'linux' | 'android';
+
+/**
+ * 同步设备信息
+ */
+export interface SyncDevice {
+  id: string;
+  name: string;
+  platform: Platform;
+  last_seen: number;
+  is_online: boolean;
+  is_paired: boolean;
+  ip_address?: string;
+}
+
+/**
+ * 配对请求
+ */
+export interface PairingRequest {
+  device_id: string;
+  device_name: string;
+  pin: string;
+  timestamp: number;
+}
+
+/**
+ * 同步状态
+ */
+export interface SyncState {
+  enabled: boolean;
+  autoSync: boolean;
+  deviceId: string;
+  deviceName: string;
+}
+  /** 唯一标识 */
+  id: string;
+  /** 显示标签 */
+  label: string;
+  /** 搜索查询 */
+  query: string;
+  /** 创建时间 */
+  created_at: number;
+}

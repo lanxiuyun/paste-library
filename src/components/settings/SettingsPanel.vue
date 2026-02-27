@@ -14,9 +14,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path v-if="item.key === 'clipboard'" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
               <path v-else-if="item.key === 'history'" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <path v-else-if="item.key === 'sync'" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
               <path v-else-if="item.key === 'general'" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
               <path v-else-if="item.key === 'hotkey'" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-              <path v-else-if="item.key === 'backup'" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+              <path v-else-if="item.key === 'backup'" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s8-1.79-8-4"/>
               <path v-else-if="item.key === 'about'" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
           </span>
@@ -36,6 +37,10 @@
         v-else-if="activeMenu === 'history'"
         :form="form"
         @clear-all="handleClearAllHistory"
+      />
+
+      <SyncSection
+        v-else-if="activeMenu === 'sync'"
       />
 
       <GeneralSection
@@ -98,6 +103,7 @@ import GeneralSection from './sections/GeneralSection.vue';
 import HotkeySection from './sections/HotkeySection.vue';
 import BackupSection from './sections/BackupSection.vue';
 import AboutSection from './sections/AboutSection.vue';
+import SyncSection from './sections/SyncSection.vue';
 
 const { settings, loadSettings, saveSettings } = useSettings();
 const { loadHistory } = useClipboard();
@@ -107,6 +113,7 @@ const activeMenu = ref('clipboard');
 const menuItems = [
   { key: 'clipboard', label: '剪贴板' },
   { key: 'history', label: '历史记录' },
+  { key: 'sync', label: '同步设置' },
   { key: 'general', label: '通用设置' },
   { key: 'hotkey', label: '快捷键' },
   { key: 'backup', label: '数据备份' },
