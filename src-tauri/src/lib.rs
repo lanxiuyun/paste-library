@@ -6,6 +6,37 @@ mod shortcut_manager;
 mod tray_manager;
 mod fuzzy_search;
 mod prevent_default;
+mod sync;
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+#[macro_use]
+extern crate lazy_static;
+mod models;
+mod storage;
+mod window_manager;
+mod shortcut_manager;
+mod tray_manager;
+mod fuzzy_search;
+mod prevent_default;
+mod sync;
+mod models;
+mod storage;
+mod window_manager;
+mod shortcut_manager;
+mod tray_manager;
+mod fuzzy_search;
+mod prevent_default;
+mod sync;
+mod models;
+mod storage;
+mod window_manager;
+mod shortcut_manager;
+mod tray_manager;
+mod fuzzy_search;
+mod prevent_default;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -452,6 +483,106 @@ fn open_external_link(url: String) -> Result<(), String> {
     Ok(())
 }
 
+// ============ Sync Commands ============
+
+use sync::{DiscoveryService, PairingService, ConnectionManager, SyncDevice, Platform};
+use std::sync::Mutex;
+
+/// Global sync state
+lazy_static::lazy_static! {
+    static ref DISCOVERY_SERVICE: Mutex<Option<DiscoveryService>> = Mutex::new(None);
+    static ref PAIRING_SERVICE: PairingService = PairingService::new();
+    static ref CONNECTION_MANAGER: ConnectionManager = ConnectionManager::new();
+    static ref SYNC_ENABLED: Mutex<bool> = Mutex::new(false);
+    static ref AUTO_SYNC: Mutex<bool> = Mutex::new(true);
+}
+
+#[tauri::command]
+fn start_device_discovery() -> Result<(), String> {
+    let device_id = uuid::Uuid::new_v4().to_string();
+    let device_name = whoami::fallible::desktop_name()
+        .unwrap_or_else(|_| "My Device".to_string());
+    
+    let mut service = DiscoveryService::new(device_id, device_name)?;
+    service.start()?;
+    
+    let mut discovery = DISCOVERY_SERVICE.lock().map_err(|e| e.to_string())?;
+    *discovery = Some(service);
+    
+    log::info!("Device discovery started");
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_device_discovery() -> Result<(), String> {
+    let mut discovery = DISCOVERY_SERVICE.lock().map_err(|e| e.to_string())?;
+    if let Some(ref mut service) = *discovery {
+        service.stop()?;
+    }
+    *discovery = None;
+    
+    log::info!("Device discovery stopped");
+    Ok(())
+}
+
+#[tauri::command]
+fn get_discovered_devices() -> Result<Vec<SyncDevice>, String> {
+    let discovery = DISCOVERY_SERVICE.lock().map_err(|e| e.to_string())?;
+    match &*discovery {
+        Some(service) => Ok(service.get_devices()),
+        None => Ok(vec![]),
+    }
+}
+
+#[tauri::command]
+fn get_paired_devices() -> Result<Vec<SyncDevice>, String> {
+    Ok(PAIRING_SERVICE.get_paired_devices())
+}
+
+#[tauri::command]
+fn request_pair(device_id: String) -> Result<String, String> {
+    // Generate a PIN for pairing
+    let pin = PAIRING_SERVICE.generate_pin(&device_id);
+    Ok(pin)
+}
+
+#[tauri::command]
+fn confirm_pair(device_id: String, _pin: String) -> Result<SyncDevice, String> {
+    // In a real implementation, we would verify the PIN with the remote device
+    // For now, we just add the device to paired list
+    PAIRING_SERVICE.confirm_pairing(&device_id)
+        .ok_or_else(|| "Failed to confirm pairing".to_string())
+}
+
+#[tauri::command]
+fn unpair_device(device_id: String) -> Result<(), String> {
+    if PAIRING_SERVICE.unpair(&device_id) {
+        CONNECTION_MANAGER.remove_connection(&device_id);
+        Ok(())
+    } else {
+        Err("Device not found".to_string())
+    }
+}
+
+#[tauri::command]
+fn set_sync_enabled(enabled: bool) -> Result<(), String> {
+    let mut sync_enabled = SYNC_ENABLED.lock().map_err(|e| e.to_string())?;
+    *sync_enabled = enabled;
+    log::info!("Sync enabled: {}", enabled);
+    Ok(())
+}
+
+#[tauri::command]
+fn set_auto_sync(enabled: bool) -> Result<(), String> {
+    let mut auto_sync = AUTO_SYNC.lock().map_err(|e| e.to_string())?;
+    *auto_sync = enabled;
+    log::info!("Auto sync enabled: {}", enabled);
+    Ok(())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri_plugin_global_shortcut::ShortcutState;
@@ -620,7 +751,19 @@ pub fn run() {
             export_clipboard_data,
             import_clipboard_data,
             get_storage_paths,
-            simulate_paste,
+            get_app_version,
+            open_external_link,
+            // Sync commands
+            start_device_discovery,
+            stop_device_discovery,
+            get_discovered_devices,
+            get_paired_devices,
+            request_pair,
+            confirm_pair,
+            unpair_device,
+            set_sync_enabled,
+            set_auto_sync,
+        ])
             get_app_version,
             open_external_link,
         ])
