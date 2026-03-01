@@ -516,3 +516,21 @@ lazy_static = "1.4"
 - 内容 Hash 同步
 - 按需传输
 - 缩略图同步
+
+---
+
+## 2026-03-02 开发更新
+
+### Phase 4 开发完成
+- 更新 sync_manager.rs: broadcast_image/broadcast_file/request_content/send_content_response
+- 更新 SyncEvent 枚举: NewImageItem/NewFileItem/ContentReceived
+- 更新前端类型: ClipboardItem 添加 source_device/source_device_name
+
+### 待完成
+- lib.rs 集成 SyncManager 到 AppState
+- 数据库添加 source_device 字段
+- 前端 UI 显示来源设备标签
+
+---
+
+*Last Updated: 2026-03-02*
