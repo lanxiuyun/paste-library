@@ -16,12 +16,18 @@ use tokio::time;
 pub enum SyncEvent {
     /// New clipboard item from remote device
     NewItem { content_hash: String, content: String },
+    /// New image item from remote device (reference only)
+    NewImageItem { content_hash: String, thumbnail: Option<String>, path: Option<String>, source_device: String },
+    /// New file item from remote device (reference only)
+    NewFileItem { content_hash: String, name: String, path: Option<String>, size: u64, source_device: String },
     /// Delete request from remote device
     DeleteItem { content_hash: String },
     /// Heartbeat acknowledgment
     HeartbeatAck { device_id: String },
     /// Connection lost
     ConnectionLost { device_id: String },
+    /// Content received (on-demand transfer)
+    ContentReceived { content_hash: String, data: Vec<u8>, source_device: String },
 }
 
 /// Sync manager for handling P2P connections and message broadcasting
@@ -130,6 +136,100 @@ impl SyncManager {
         Ok(())
     }
 
+    /// Broadcast image metadata to all connected devices
+    pub async fn broadcast_image(
+        &self,
+        content_hash: String,
+        thumbnail: Option<String>,
+        path: Option<String>,
+    ) -> Result<(), String> {
+        let message = SyncMessage::Image {
+            content_hash: content_hash.clone(),
+            thumbnail,
+            path,
+        };
+
+        // Store in pending for ACK tracking
+        {
+            let mut pending = self.pending_messages.write().unwrap();
+            pending.insert(content_hash.clone(), message.clone());
+        }
+
+        // Get all connected devices
+        let device_ids = self.connections.get_connected_devices();
+
+        // Send to each device
+        for device_id in device_ids {
+            if let Err(e) = self.send_message(&device_id, &message).await {
+                log::error!("Failed to send image to {}: {}", device_id, e);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Broadcast file metadata to all connected devices
+    pub async fn broadcast_file(
+        &self,
+        content_hash: String,
+        name: String,
+        path: Option<String>,
+        size: u64,
+    ) -> Result<(), String> {
+        let message = SyncMessage::File {
+            content_hash: content_hash.clone(),
+            name,
+            path,
+            size,
+        };
+
+        // Store in pending for ACK tracking
+        {
+            let mut pending = self.pending_messages.write().unwrap();
+            pending.insert(content_hash.clone(), message.clone());
+        }
+
+        // Get all connected devices
+        let device_ids = self.connections.get_connected_devices();
+
+        // Send to each device
+        for device_id in device_ids {
+            if let Err(e) = self.send_message(&device_id, &message).await {
+                log::error!("Failed to send file to {}: {}", device_id, e);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Request content from a specific device (on-demand transfer)
+    pub async fn request_content(&self, device_id: &str, content_hash: String) -> Result<Vec<u8>, String> {
+        let message = SyncMessage::RequestContent {
+            content_hash: content_hash.clone(),
+        };
+
+        self.send_message(device_id, &message).await?;
+
+        // Wait for response (simplified - in real impl would use a response channel)
+        log::debug!("Requested content {} from {}", content_hash, device_id);
+        Ok(Vec::new())
+    }
+
+    /// Send content response to a device
+    pub async fn send_content_response(
+        &self,
+        device_id: &str,
+        content_hash: String,
+        data: Vec<u8>,
+    ) -> Result<(), String> {
+        let message = SyncMessage::ContentResponse {
+            content_hash,
+            data,
+        };
+
+        self.send_message(device_id, &message).await
+    }
+
     /// Handle incoming message from a device
     async fn handle_incoming_message(&self, device_id: &str, data: Vec<u8>) -> Result<(), String> {
         let message = SyncProtocol::decode(&data)?;
@@ -175,8 +275,65 @@ impl SyncManager {
                 }
             }
             
-            _ => {
-                log::debug!("Unhandled message type from {}: {:?}", device_id, message);
+            // Image metadata received - store reference only
+            SyncMessage::Image { content_hash, thumbnail, path } => {
+                log::info!("Received image sync: {} from {}", content_hash, device_id);
+                // Send event to clipboard manager
+                if let Some(ref sender) = self.event_sender {
+                    let _ = sender.send(SyncEvent::NewImageItem {
+                        content_hash: content_hash.clone(),
+                        thumbnail: thumbnail.clone(),
+                        path: path.clone(),
+                        source_device: device_id.to_string(),
+                    }).await;
+                }
+                // Send ACK
+                let ack = SyncMessage::Ack { content_hash: content_hash.clone() };
+                self.send_message(device_id, &ack).await?;
+            }
+            
+            // File metadata received - store reference only
+            SyncMessage::File { content_hash, name, path, size } => {
+                log::info!("Received file sync: {} ({}) from {}", name, size, device_id);
+                // Send event to clipboard manager
+                if let Some(ref sender) = self.event_sender {
+                    let _ = sender.send(SyncEvent::NewFileItem {
+                        content_hash: content_hash.clone(),
+                        name: name.clone(),
+                        path: path.clone(),
+                        size: *size,
+                        source_device: device_id.to_string(),
+                    }).await;
+                }
+                // Send ACK
+                let ack = SyncMessage::Ack { content_hash: content_hash.clone() };
+                self.send_message(device_id, &ack).await?;
+            }
+            
+            // Content request - on-demand transfer
+            SyncMessage::RequestContent { content_hash } => {
+                log::info!("Content requested: {} from {}", content_hash, device_id);
+                // TODO: Look up content in local database and send it
+                // For now, just send empty response
+                let response = SyncMessage::ContentResponse {
+                    content_hash: content_hash.clone(),
+                    data: Vec::new(),
+                };
+                self.send_message(device_id, &response).await?;
+            }
+            
+            // Content response - on-demand transfer received
+            SyncMessage::ContentResponse { content_hash, data } => {
+                log::info!("Content received: {} ({} bytes) from {}", 
+                    content_hash, data.len(), device_id);
+                // Send event to clipboard manager
+                if let Some(ref sender) = self.event_sender {
+                    let _ = sender.send(SyncEvent::ContentReceived {
+                        content_hash: content_hash.clone(),
+                        data: data.clone(),
+                        source_device: device_id.to_string(),
+                    }).await;
+                }
             }
         }
         
