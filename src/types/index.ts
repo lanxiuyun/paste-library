@@ -52,6 +52,34 @@ export interface ClipboardItem {
   file_paths?: string[];
   thumbnail_path?: string;
   tags?: string[];
+  // 同步相关字段
+  source_device?: string;  // 来源设备ID
+  source_device_name?: string;  // 来源设备名称
+}
+
+/**
+ * 创建剪贴板项请求
+  metadata?: ClipboardMetadata;
+  file_paths?: string[];
+  thumbnail_path?: string;
+  tags?: string[];
+  // 同步相关字段
+  source_device?: string;  // 来源设备ID
+  source_device_name?: string;  // 来源设备名称
+}
+ * 剪贴板历史记录项
+ */
+export interface ClipboardItem {
+  id: number;
+  content_type: ClipboardContentType;
+  content: string;
+  created_at: string;
+  content_hash: string;
+  // 新增字段
+  metadata?: ClipboardMetadata;
+  file_paths?: string[];
+  thumbnail_path?: string;
+  tags?: string[];
 }
 
 /**
