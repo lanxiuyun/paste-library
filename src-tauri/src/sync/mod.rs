@@ -3,11 +3,19 @@
 //! This module handles device discovery, pairing, and P2P communication
 //! for clipboard content synchronization across devices on the same LAN.
 
-pub mod discovery;
-pub mod pairing;
-pub mod connection;
-pub mod protocol;
-pub mod crypto;
+KX|pub mod discovery;
+VY|pub mod pairing;
+NS|pub mod connection;
+KZ|pub mod protocol;
+YJ|pub mod crypto;
+VB|pub mod sync_manager;
+
+NV|pub use discovery::DiscoveryService;
+VY|pub use pairing::PairingService;
+NS|pub use connection::ConnectionManager;
+KZ|pub use protocol::SyncProtocol;
+YJ|pub use crypto::CryptoManager;
+XB|pub use sync_manager::{SyncManager, SyncEvent};
 
 pub use discovery::DiscoveryService;
 pub use pairing::PairingService;

@@ -217,12 +217,3 @@ export interface SyncState {
   deviceId: string;
   deviceName: string;
 }
-  /** 唯一标识 */
-  id: string;
-  /** 显示标签 */
-  label: string;
-  /** 搜索查询 */
-  query: string;
-  /** 创建时间 */
-  created_at: number;
-}
