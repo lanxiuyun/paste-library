@@ -504,6 +504,8 @@ lazy_static = "1.4"
 ---
 
 *Last Updated: 2026-03-02*
+
+*Last Updated: 2026-03-02*
 - lib.rs 集成 SyncManager 到 AppState
 - 数据库添加 source_device 字段
 - 前端 UI 显示来源设备标签
