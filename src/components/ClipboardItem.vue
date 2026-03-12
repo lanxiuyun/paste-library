@@ -496,10 +496,11 @@ const handleTagClick = (tag: string) => {
 <style scoped>
 .clipboard-item {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border-light, #e8e8e8);
   cursor: pointer;
   transition: background-color 0.15s ease;
   background: var(--bg-card, #ffffff);
+  /* 使用 box-shadow 模拟底边框，避免虚拟滚动器高度计算问题 */
+  box-shadow: inset 0 -1px 0 0 var(--border-light, #e8e8e8);
 }
 
 .clipboard-item:hover {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ClipboardList from '@/components/ClipboardList.vue';
+import ClipboardList from '@/components/clipboard/ClipboardList.vue';
 import DragHandle from '@/components/DragHandle.vue';
 </script>
 

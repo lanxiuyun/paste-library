@@ -493,6 +493,25 @@ pub fn run() {
             let app_state = Arc::new(Mutex::new(AppState::new(database.clone(), settings.clone())));
             app.manage(app_state.clone());
 
+            // 启动时自动清理（保留有标签的记录）
+            let app_state_for_cleanup = app_state.clone();
+            tauri::async_runtime::spawn(async move {
+                let state = app_state_for_cleanup.lock().await;
+                match state.clipboard_manager.startup_cleanup() {
+                    Ok(count) => {
+                        if count > 0 {
+                            println!("启动时自动清理完成，清理了 {} 条记录", count);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("启动时自动清理失败: {}", e);
+                    }
+                }
+            });
+
+            // 尝试注册主快捷键
+            app.manage(app_state.clone());
+
             // 尝试注册主快捷键
             let hotkey = settings.blocking_lock().hotkey.clone();
             let app_handle_for_shortcut = app.handle().clone();
