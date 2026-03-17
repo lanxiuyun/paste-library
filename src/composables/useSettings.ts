@@ -41,6 +41,9 @@ const settings = ref<AppSettings>({
 
   // 快捷键设置
   number_key_shortcut: 'ctrl',
+
+  // 钉住模式设置
+  pin_shortcut: 'Ctrl+Shift+P',
 });
 
 // 全局监听器标记

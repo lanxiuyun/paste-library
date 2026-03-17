@@ -13,6 +13,25 @@
           @clear-history="removeSearchHistory"
           @clear-all-history="clearAllHistory"
         />
+        <!-- 钉住模式按钮 -->
+        <button
+          class="pin-mode-btn"
+          :class="{ 'is-pinned': isPinned }"
+          :title="isPinned ? '取消钉住' : `钉住面板 (${settings.pin_shortcut || 'Ctrl+Shift+P'})`"
+          @click="togglePinMode"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M12 2a2 2 0 0 0-2 2v3.586l-3.707 3.707A1 1 0 0 0 6 12v2a1 1 0 0 0 1 1h3l2 7 2-7h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-.293-.707L14 7.586V4a2 2 0 0 0-2-2z"
+            />
+          </svg>
+          <span v-if="isPinned" class="pin-indicator"></span>
+        </button>
         <button
           v-if="canPinCurrentSearch"
           class="pin-btn"
@@ -67,6 +86,7 @@
             :item="item"
             :index="index"
             :is-selected="selectedIndex === index"
+            :is-highlighted="highlightedItemId === item.id"
             :show-tags="true"
             :highlight-keywords="parsedQuery.keywords"
             @click="handleItemClick"
@@ -118,6 +138,7 @@
 <script setup lang="ts">
 import { useClipboard } from "@/composables/useClipboard";
 import { useSettings } from "@/composables/useSettings";
+import { usePinMode } from "@/composables/usePinMode";
 import {
   addSearchHistory,
   clearSearchHistory,
@@ -129,6 +150,7 @@ import {
 } from "@/composables/useSmartSearch";
 import type { ClipboardItem as ClipboardItemType, PinnedSearch } from "@/types";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "tauri-plugin-clipboard-x-api";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
@@ -152,6 +174,7 @@ const {
 } = useClipboard();
 
 const { settings } = useSettings();
+const { isPinned, togglePinMode, loadPinMode } = usePinMode();
 
 // 搜索相关
 const smartSearchRef = ref<InstanceType<typeof SmartSearch> | null>(null);
@@ -200,6 +223,13 @@ const tagManagerItem = ref<ClipboardItemType | null>(null);
 
 // 激活标记
 const hasActivated = ref(false);
+
+// 粘贴高亮状态
+const highlightedItemId = ref<number | null>(null);
+
+// 状态保存（用于 Esc/失焦后恢复）
+const savedSearchQuery = ref("");
+const savedScrollPosition = ref(0);
 
 // 加载搜索历史
 const loadSearchHistory = () => {
@@ -407,6 +437,26 @@ const handleTagClick = (tag: string) => {
   handleSmartSearch(searchQuery.value);
 };
 
+// 重置面板状态
+const resetPanelState = () => {
+  searchQuery.value = "";
+  activeTab.value = "all";
+  selectedIndex.value = -1;
+  if (scrollerRef.value) {
+    scrollerRef.value.scrollToItem(0, "start");
+  }
+};
+
+// 显示粘贴成功反馈
+const showPasteFeedback = (itemId: number) => {
+  highlightedItemId.value = itemId;
+  setTimeout(() => {
+    if (highlightedItemId.value === itemId) {
+      highlightedItemId.value = null;
+    }
+  }, 500);
+};
+
 // 项目点击处理
 const handleItemClick = async (item: ClipboardItemType, index: number) => {
   selectedIndex.value = index;
@@ -419,8 +469,11 @@ const handleItemClick = async (item: ClipboardItemType, index: number) => {
   const copyAsPlainText = settings.value.copy_as_plain_text;
   await restoreToClipboard(item, { copyAsPlainText });
 
+  // 显示粘贴反馈（绿色高亮）
+  showPasteFeedback(item.id);
+
   if (clickAction === "paste") {
-    await simulatePaste();
+    await simulatePaste(item.id);
   } else if (settings.value.hide_window_after_copy) {
     await invoke("hide_clipboard_window");
   }
@@ -440,8 +493,11 @@ const handleItemDoubleClick = async (
   const copyAsPlainText = settings.value.copy_as_plain_text;
   await restoreToClipboard(item, { copyAsPlainText });
 
+  // 显示粘贴反馈（绿色高亮）
+  showPasteFeedback(item.id);
+
   if (doubleClickAction === "paste") {
-    await simulatePaste();
+    await simulatePaste(item.id);
   } else if (settings.value.hide_window_after_copy) {
     await invoke("hide_clipboard_window");
   }
@@ -586,6 +642,8 @@ const handleContextMenuAction = async (
       await restoreToClipboard(item, {
         copyAsPlainText: settings.value.copy_as_plain_text,
       });
+      // 显示粘贴反馈
+      showPasteFeedback(item.id);
       if (settings.value.hide_window_after_copy) {
         await invoke("hide_clipboard_window");
       }
@@ -594,7 +652,9 @@ const handleContextMenuAction = async (
       await restoreToClipboard(item, {
         copyAsPlainText: settings.value.copy_as_plain_text,
       });
-      await simulatePaste();
+      // 显示粘贴反馈
+      showPasteFeedback(item.id);
+      await simulatePaste(item.id);
       break;
     case "tag":
       tagManagerItem.value = item;
@@ -642,9 +702,16 @@ const handleContextMenuAction = async (
 };
 
 // 模拟粘贴
-const simulatePaste = async (): Promise<void> => {
+const simulatePaste = async (itemId?: number): Promise<void> => {
   try {
-    await invoke("hide_clipboard_window");
+    // 默认模式下：关闭面板并重置状态
+    // 钉住模式下：保持面板开启，不重置状态
+    if (!isPinned.value) {
+      await invoke("hide_clipboard_window");
+      // 重置面板状态
+      resetPanelState();
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 100));
     await invoke("simulate_paste", {
       pasteShortcut: settings.value.paste_shortcut,
@@ -668,9 +735,34 @@ const handleKeyDown = async (e: KeyboardEvent) => {
     return;
   }
 
-  // Esc 关闭窗口
+  // 钉住模式快捷键
+  const pinShortcut = settings.value.pin_shortcut || "Ctrl+Shift+P";
+  const shortcutParts = pinShortcut.toLowerCase().split("+");
+  const hasCtrl = shortcutParts.includes("ctrl");
+  const hasShift = shortcutParts.includes("shift");
+  const hasAlt = shortcutParts.includes("alt");
+  const hasMeta = shortcutParts.includes("meta") || shortcutParts.includes("cmd");
+  const keyPart = shortcutParts.find(p => !["ctrl", "shift", "alt", "meta", "cmd"].includes(p));
+
+  if (
+    (hasCtrl === e.ctrlKey) &&
+    (hasShift === e.shiftKey) &&
+    (hasAlt === e.altKey) &&
+    (hasMeta === e.metaKey) &&
+    e.key.toLowerCase() === (keyPart || "p")
+  ) {
+    e.preventDefault();
+    await togglePinMode();
+    return;
+  }
+
+  // Esc 关闭窗口（保存当前状态）
   if (e.key === "Escape") {
     e.preventDefault();
+    // 保存当前状态
+    savedSearchQuery.value = searchQuery.value;
+    savedScrollPosition.value = scrollerRef.value?.$el?.scrollTop || 0;
+    selectedIndex.value = -1; // 清除高亮
     invoke("hide_clipboard_window");
     return;
   }
@@ -696,7 +788,9 @@ const handleKeyDown = async (e: KeyboardEvent) => {
       await restoreToClipboard(item, {
         copyAsPlainText: settings.value.copy_as_plain_text,
       });
-      await simulatePaste();
+      // 显示粘贴反馈
+      showPasteFeedback(item.id);
+      await simulatePaste(item.id);
     }
     return;
   }
@@ -737,7 +831,9 @@ const handleKeyDown = async (e: KeyboardEvent) => {
           await restoreToClipboard(item, {
             copyAsPlainText: settings.value.copy_as_plain_text,
           });
-          await simulatePaste();
+          // 显示粘贴反馈
+          showPasteFeedback(item.id);
+          await simulatePaste(item.id);
         }
       }
     }
@@ -754,6 +850,8 @@ const scrollSelectedItemIntoView = () => {
 
 // 生命周期
 let cleanupClipboard: (() => void) | null = null;
+let unlistenPinMode: (() => void) | null = null;
+let unlistenOpacity: (() => void) | null = null;
 
 onMounted(async () => {
   // 初始化剪贴板监听
@@ -762,6 +860,7 @@ onMounted(async () => {
   loadHistory(settings.value.max_history_count, 0);
   loadSearchHistory();
   loadPinnedSearches();
+  loadPinMode();
   window.addEventListener("keydown", handleKeyDown);
 
   if (filteredHistory.value.length > 0) {
@@ -773,11 +872,35 @@ onMounted(async () => {
     if (!hasActivated.value) {
       hasActivated.value = true;
       handleSmartActivate();
+      // 恢复保存的状态
+      if (savedSearchQuery.value) {
+        searchQuery.value = savedSearchQuery.value;
+        nextTick(() => {
+          if (scrollerRef.value && savedScrollPosition.value > 0) {
+            scrollerRef.value.$el.scrollTop = savedScrollPosition.value;
+          }
+        });
+      }
     }
   });
 
   const unlistenBlur = await appWindow.listen("tauri://blur", () => {
     hasActivated.value = false;
+    // 保存当前状态
+    savedSearchQuery.value = searchQuery.value;
+    savedScrollPosition.value = scrollerRef.value?.$el?.scrollTop || 0;
+    selectedIndex.value = -1; // 清除高亮
+  });
+
+  // 监听钉住模式变化
+  unlistenPinMode = await listen<{ pinned: boolean }>("pin-mode-changed", (event) => {
+    isPinned.value = event.payload.pinned;
+  });
+
+  // 监听窗口透明度变化
+  unlistenOpacity = await listen<{ opacity: number }>("window-opacity-change", (event) => {
+    const opacity = event.payload.opacity;
+    document.body.style.opacity = String(opacity);
   });
 
   (window as any).__unlistenFocus = unlistenFocus;
@@ -791,6 +914,12 @@ onUnmounted(() => {
   }
   if ((window as any).__unlistenBlur) {
     (window as any).__unlistenBlur();
+  }
+  if (unlistenPinMode) {
+    unlistenPinMode();
+  }
+  if (unlistenOpacity) {
+    unlistenOpacity();
   }
   // 清理剪贴板监听
   if (cleanupClipboard) {
@@ -832,6 +961,49 @@ watch(filteredHistory, () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.pin-mode-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #8c8c8c;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.pin-mode-btn:hover {
+  background: #e6f7ff;
+  border-color: #91d5ff;
+  color: #1890ff;
+}
+
+.pin-mode-btn.is-pinned {
+  background: #e6f7ff;
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.pin-mode-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pin-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: #52c41a;
+  border-radius: 50%;
 }
 
 .pin-btn {

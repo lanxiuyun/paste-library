@@ -133,6 +133,7 @@ const form = reactive<AppSettings>({
   hotkey: 'Alt+V',
   auto_start: false,
   number_key_shortcut: 'ctrl',
+  pin_shortcut: 'Ctrl+Shift+P',
 });
 
 const shortcutError = ref('');
@@ -224,6 +225,7 @@ const resetSettings = async () => {
       auto_sort: false,
       auto_start: false,
       number_key_shortcut: 'ctrl',
+      pin_shortcut: 'Ctrl+Shift+P',
     });
 
     try {

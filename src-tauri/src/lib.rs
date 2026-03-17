@@ -27,6 +27,35 @@ pub struct AppState {
     window_manager: WindowManager,
 }
 
+/// 粘贴队列管理器（用于串行化处理快速连续粘贴）
+pub struct PasteQueue {
+    last_paste_time: Mutex<std::time::Instant>,
+}
+
+impl PasteQueue {
+    pub fn new() -> Self {
+        Self {
+            last_paste_time: Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1)),
+        }
+    }
+
+    /// 等待合适的粘贴间隔（串行化处理 <100ms 的连续粘贴）
+    pub async fn wait_for_paste_interval(&self) {
+        let mut last_time = self.last_paste_time.lock().await;
+        let elapsed = last_time.elapsed().as_millis() as u64;
+        
+        // 如果距离上次粘贴 <100ms，等待剩余时间
+        if elapsed < 100 {
+            let wait_ms = 100 - elapsed;
+            drop(last_time);
+            tokio::time::sleep(tokio::time::Duration::from_millis(wait_ms)).await;
+        }
+        
+        // 更新上次粘贴时间
+        *self.last_paste_time.lock().await = std::time::Instant::now();
+    }
+}
+
 impl AppState {
     pub fn new(database: Arc<Database>, settings: Arc<Mutex<AppSettings>>) -> Self {
         Self {
@@ -317,6 +346,71 @@ fn get_app_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
+// ===== 钉住模式相关命令 =====
+
+#[tauri::command]
+async fn get_pin_mode(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<bool, String> {
+    let state = state.lock().await;
+    let pin_mode = state.window_manager.get_pin_mode().await;
+    Ok(pin_mode.is_pinned())
+}
+
+#[tauri::command]
+async fn set_pin_mode(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    let state = state.lock().await;
+    state.window_manager.set_pin_mode(&app, enabled).await
+}
+
+#[tauri::command]
+async fn toggle_pin_mode(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
+) -> Result<bool, String> {
+    let state = state.lock().await;
+    state.window_manager.toggle_pin_mode(&app).await
+}
+
+#[tauri::command]
+async fn set_window_opacity(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
+    opacity: f32,
+) -> Result<(), String> {
+    let state = state.lock().await;
+    state.window_manager.set_window_opacity(&app, opacity).await
+}
+
+#[tauri::command]
+async fn update_pin_shortcut(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
+    shortcut: String,
+) -> Result<(), String> {
+    // 验证快捷键格式
+    shortcut_manager::validate_hotkey(&shortcut)?;
+    
+    let state = state.lock().await;
+    
+    // 获取当前设置
+    let mut settings = state.clipboard_manager.get_settings()?;
+    settings.pin_shortcut = shortcut.clone();
+    
+    // 保存设置
+    state.clipboard_manager.save_settings(&settings).await?;
+    
+    // 重新注册快捷键（需要重启应用生效，或者动态更新）
+    // 这里发送事件通知前端快捷键已更新
+    let _ = app.emit("pin-shortcut-updated", serde_json::json!({ "shortcut": shortcut }));
+    
+    Ok(())
+}
+
 #[tauri::command]
 fn get_storage_paths(app: tauri::AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
     let mut paths = std::collections::HashMap::new();
@@ -336,15 +430,10 @@ fn get_storage_paths(app: tauri::AppHandle) -> Result<std::collections::HashMap<
     Ok(paths)
 }
 
-#[tauri::command]
-fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
-    // 模拟粘贴操作（根据设置使用 Ctrl+V 或 Shift+Insert）
+// 执行实际粘贴操作的内部函数
+fn do_paste(paste_shortcut: &str) -> Result<(), String> {
     use std::thread;
-    use std::time::Duration;
-
-    // 等待窗口隐藏并焦点回到原窗口
-    thread::sleep(Duration::from_millis(200));
-
+    
     #[cfg(target_os = "windows")]
     {
         let use_shift_insert = paste_shortcut == "shift_insert";
@@ -353,43 +442,25 @@ fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
         unsafe {
             if use_shift_insert {
                 // 使用 Shift+Insert
-                // Insert 是扩展键，需要 KEYEVENTF_EXTENDEDKEY 标志
                 const SCANCODE_SHIFT: u8 = 0x2A;
-
-                // 按下 Shift（使用虚拟键码 + 扫描码）
                 keybd_event(VK_SHIFT as u8, SCANCODE_SHIFT, KEYEVENTF_SCANCODE, 0);
-                thread::sleep(Duration::from_millis(20));
-
-                // 按下 Insert（使用扩展键标志）
+                thread::sleep(std::time::Duration::from_millis(20));
                 keybd_event(VK_INSERT as u8, 0, KEYEVENTF_EXTENDEDKEY, 0);
-                thread::sleep(Duration::from_millis(50));
-
-                // 释放 Insert
+                thread::sleep(std::time::Duration::from_millis(50));
                 keybd_event(VK_INSERT as u8, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
-                thread::sleep(Duration::from_millis(20));
-
-                // 释放 Shift
+                thread::sleep(std::time::Duration::from_millis(20));
                 keybd_event(VK_SHIFT as u8, SCANCODE_SHIFT, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
             } else {
                 // 使用 Ctrl+V
-                // V 键的扫描码是 0x2F, Ctrl 扫描码: 0x1D
                 const SCANCODE_V: u8 = 0x2F;
                 const SCANCODE_CTRL: u8 = 0x1D;
-                const VK_CONTROL: u8 = 0xA3; // 右 Ctrl
-
-                // 按下 Ctrl
+                const VK_CONTROL: u8 = 0xA3;
                 keybd_event(VK_CONTROL as u8, SCANCODE_CTRL, KEYEVENTF_SCANCODE, 0);
-                thread::sleep(Duration::from_millis(20));
-
-                // 按下 V
-                keybd_event(0x41 + 21, SCANCODE_V, KEYEVENTF_SCANCODE, 0); // 'V' = 0x56
-                thread::sleep(Duration::from_millis(50));
-
-                // 释放 V
+                thread::sleep(std::time::Duration::from_millis(20));
+                keybd_event(0x41 + 21, SCANCODE_V, KEYEVENTF_SCANCODE, 0);
+                thread::sleep(std::time::Duration::from_millis(50));
                 keybd_event(0x41 + 21, SCANCODE_V, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
-                thread::sleep(Duration::from_millis(20));
-
-                // 释放 Ctrl
+                thread::sleep(std::time::Duration::from_millis(20));
                 keybd_event(VK_CONTROL as u8, SCANCODE_CTRL, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
             }
         }
@@ -397,7 +468,6 @@ fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
 
     #[cfg(target_os = "macos")]
     {
-        // macOS 始终使用 Command+V
         use enigo::{Direction, Enigo, Key, Keyboard, Settings};
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
         enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;
@@ -407,16 +477,15 @@ fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
 
     #[cfg(target_os = "linux")]
     {
+        let use_shift_insert = paste_shortcut == "shift_insert";
         use enigo::{Direction, Enigo, Key, Keyboard, Settings};
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
         
         if use_shift_insert {
-            // 使用 Shift+Insert
             enigo.key(Key::Shift, Direction::Press).map_err(|e| e.to_string())?;
             enigo.key(Key::Insert, Direction::Click).map_err(|e| e.to_string())?;
             enigo.key(Key::Shift, Direction::Release).map_err(|e| e.to_string())?;
         } else {
-            // 使用 Ctrl+V
             enigo.key(Key::Control, Direction::Press).map_err(|e| e.to_string())?;
             enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
             enigo.key(Key::Control, Direction::Release).map_err(|e| e.to_string())?;
@@ -424,6 +493,65 @@ fn simulate_paste(paste_shortcut: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[tauri::command]
+async fn simulate_paste(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
+    paste_shortcut: String,
+) -> Result<(), String> {
+    use std::thread;
+    use std::time::Duration;
+
+    // 检查是否在钉住模式
+    let state = state.lock().await;
+    let pin_mode = state.window_manager.get_pin_mode().await;
+    
+    if pin_mode.is_pinned() {
+        // 钉住模式下：临时隐藏窗口让焦点回到之前的窗口，执行粘贴后再显示
+        eprintln!("[DEBUG] simulate_paste in pinned mode: hiding window temporarily");
+        
+        // 1. 临时隐藏窗口（让焦点回到之前的窗口）
+        if let Some(window) = app.get_webview_window("clipboard") {
+            window.hide().map_err(|e| e.to_string())?;
+        }
+        
+        drop(state);
+        
+        // 2. 等待焦点转移
+        thread::sleep(Duration::from_millis(200));
+        
+        // 3. 执行粘贴操作
+        do_paste(&paste_shortcut)?;
+        
+        // 4. 粘贴完成后恢复窗口显示
+        if let Some(window) = app.get_webview_window("clipboard") {
+            window.show().map_err(|e| e.to_string())?;
+            window.set_focus().map_err(|e| e.to_string())?;
+        }
+        
+        // 5. 恢复置顶状态
+        #[cfg(target_os = "windows")]
+        {
+            use winapi::um::winuser::{SetWindowPos, HWND_TOPMOST, SWP_NOSIZE, SWP_NOMOVE, SWP_NOACTIVATE};
+            if let Some(window) = app.get_webview_window("clipboard") {
+                if let Ok(hwnd) = window.hwnd() {
+                    let hwnd = hwnd.0 as *mut winapi::shared::windef::HWND__;
+                    unsafe {
+                        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+                    }
+                }
+            }
+        }
+        
+        return Ok(());
+    } else {
+        // 默认模式：等待窗口隐藏
+        drop(state);
+        thread::sleep(Duration::from_millis(200));
+        do_paste(&paste_shortcut)
+    }
 }
 
 #[tauri::command]
@@ -547,6 +675,36 @@ pub fn run() {
                 }
             }
 
+            // 注册钉住模式快捷键
+            let pin_shortcut = settings.blocking_lock().pin_shortcut.clone();
+            let app_handle_for_pin_shortcut = app.handle().clone();
+            let app_state_for_pin_shortcut = app_state.clone();
+
+            if let Ok((modifiers, code)) = shortcut_manager::parse_shortcut(&pin_shortcut) {
+                let shortcut = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
+
+                let result = app.global_shortcut().on_shortcut(shortcut, move |app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        let app_handle = app.clone();
+                        let state = app_state_for_pin_shortcut.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let state = state.lock().await;
+                            let _ = state.window_manager.toggle_pin_mode(&app_handle).await;
+                        });
+                    }
+                });
+
+                if let Err(e) = result {
+                    eprintln!("警告: 钉住模式快捷键 '{}' 注册失败: {}", pin_shortcut, e);
+                    let pin_shortcut_clone = pin_shortcut.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = app_handle_for_pin_shortcut.emit("pin-shortcut-registration-failed", pin_shortcut_clone);
+                    });
+                } else {
+                    println!("钉住模式快捷键 '{}' 注册成功", pin_shortcut);
+                }
+            }
+
             // 获取主窗口并设置事件监听
             if let Some(main_window) = app.get_webview_window("main") {
                 let app_handle = app.handle().clone();
@@ -623,6 +781,12 @@ pub fn run() {
             simulate_paste,
             get_app_version,
             open_external_link,
+            // 钉住模式相关命令
+            get_pin_mode,
+            set_pin_mode,
+            toggle_pin_mode,
+            set_window_opacity,
+            update_pin_shortcut,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

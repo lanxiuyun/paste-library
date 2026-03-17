@@ -139,6 +139,10 @@ export interface AppSettings {
   // 快捷键设置
   /** 数字键 1-9 快速粘贴修饰键组合，如 "ctrl", "ctrl+shift", "alt", "none" 等 */
   number_key_shortcut: string;
+
+  // 钉住模式设置
+  /** 切换钉住模式的快捷键 */
+  pin_shortcut: string;
 }
 
 /**

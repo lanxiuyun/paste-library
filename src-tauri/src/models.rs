@@ -164,6 +164,10 @@ pub struct AppSettings {
     // 快捷键设置
     /// 数字键 1-9 快速粘贴修饰键组合，如 "ctrl", "ctrl+shift", "alt", "none" 等，默认 "ctrl"
     pub number_key_shortcut: String,
+
+    // 钉住模式设置
+    /// 钉住模式快捷键（默认 "Ctrl+Shift+P"）
+    pub pin_shortcut: String,
 }
 
 impl Default for AppSettings {
@@ -205,6 +209,9 @@ impl Default for AppSettings {
 
             // 快捷键设置
             number_key_shortcut: "ctrl".to_string(),
+
+            // 钉住模式设置
+            pin_shortcut: "Ctrl+Shift+P".to_string(),
         }
     }
 }
