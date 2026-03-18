@@ -47,6 +47,8 @@ export interface ClipboardItem {
   content: string;
   created_at: string;
   content_hash: string;
+  // 纯文本内容（用于 HTML/RTF 类型的纯文本粘贴）
+  text_content?: string;
   // 新增字段
   metadata?: ClipboardMetadata;
   file_paths?: string[];

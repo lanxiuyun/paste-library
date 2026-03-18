@@ -191,6 +191,7 @@ import { ref, computed, watch } from 'vue';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { writeText } from 'tauri-plugin-clipboard-x-api';
 import type { ClipboardItem } from '@/types';
+import { decodeHtmlEntities } from '@/utils/htmlUtils';
 
 interface Props {
   visible: boolean;
@@ -237,7 +238,8 @@ const formattedTime = computed(() => {
 const previewContent = computed(() => {
   if (!props.item) return '';
   if (props.item.content_type === 'html') {
-    return editedContent.value;
+    // 解码 HTML 实体后显示，避免显示 &#160; 等实体编码
+    return decodeHtmlEntities(editedContent.value);
   }
   return editedContent.value.replace(/\n/g, '<br>');
 });

@@ -37,6 +37,7 @@ impl Database {
                 content TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 content_hash TEXT NOT NULL UNIQUE,
+                text_content TEXT,
                 metadata TEXT,
                 file_paths TEXT,
                 thumbnail_path TEXT,
@@ -69,6 +70,12 @@ impl Database {
         }
         if !columns.contains(&"tags".to_string()) {
             conn.execute("ALTER TABLE clipboard_history ADD COLUMN tags TEXT", [])?;
+        }
+        if !columns.contains(&"text_content".to_string()) {
+            conn.execute(
+                "ALTER TABLE clipboard_history ADD COLUMN text_content TEXT",
+                [],
+            )?;
         }
 
         // 数据迁移：将 is_favorite 转换为标签（如果存在旧字段）
@@ -197,8 +204,8 @@ impl Database {
         };
 
         conn.execute(
-            &format!("INSERT INTO clipboard_history (content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            &format!("INSERT INTO clipboard_history (content_type, content, created_at, content_hash, text_content, metadata, file_paths, thumbnail_path, tags)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              {}", conflict_sql),
             params![
                 match item.content_type {
@@ -213,10 +220,11 @@ impl Database {
                 item.content,
                 item.created_at.to_rfc3339(),
                 item.content_hash,
+                item.text_content,
                 metadata_json,
                 file_paths_json,
                 item.thumbnail_path,
-                tags_json
+                tags_json,
             ],
         )?;
 
@@ -235,7 +243,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags
+            "SELECT id, content_type, content, created_at, content_hash, text_content, metadata, file_paths, thumbnail_path, tags
              FROM clipboard_history
              ORDER BY created_at DESC
              LIMIT ?1 OFFSET ?2",
@@ -260,14 +268,15 @@ impl Database {
                     .parse::<chrono::DateTime<chrono::Utc>>()
                     .unwrap_or_else(|_| chrono::Utc::now());
 
+                let text_content: Option<String> = row.get(5)?;
                 let metadata: Option<ClipboardMetadata> = row
-                    .get::<_, Option<String>>(5)?
-                    .and_then(|s| serde_json::from_str(&s).ok());
-                let file_paths: Option<Vec<String>> = row
                     .get::<_, Option<String>>(6)?
                     .and_then(|s| serde_json::from_str(&s).ok());
+                let file_paths: Option<Vec<String>> = row
+                    .get::<_, Option<String>>(7)?
+                    .and_then(|s| serde_json::from_str(&s).ok());
                 let tags: Option<Vec<String>> = row
-                    .get::<_, Option<String>>(8)?
+                    .get::<_, Option<String>>(9)?
                     .and_then(|s| serde_json::from_str(&s).ok());
 
                 Ok(ClipboardItem {
@@ -276,9 +285,10 @@ impl Database {
                     content: row.get(2)?,
                     created_at,
                     content_hash: row.get(4)?,
+                    text_content,
                     metadata,
                     file_paths,
-                    thumbnail_path: row.get(7)?,
+                    thumbnail_path: row.get(8)?,
                     tags,
                 })
             })?
@@ -295,7 +305,7 @@ impl Database {
 
         // 先获取所有记录，然后在内存中进行模糊搜索
         let mut stmt = conn.prepare(
-            "SELECT id, content_type, content, created_at, content_hash, metadata, file_paths, thumbnail_path, tags
+            "SELECT id, content_type, content, created_at, content_hash, text_content, metadata, file_paths, thumbnail_path, tags
              FROM clipboard_history
              ORDER BY created_at DESC
              LIMIT 1000",
@@ -320,13 +330,14 @@ impl Database {
                     .parse::<chrono::DateTime<chrono::Utc>>()
                     .unwrap_or_else(|_| chrono::Utc::now());
 
-                let metadata_str: Option<String> = row.get(5)?;
+                let text_content: Option<String> = row.get(5)?;
+                let metadata_str: Option<String> = row.get(6)?;
                 let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
 
-                let file_paths_str: Option<String> = row.get(6)?;
+                let file_paths_str: Option<String> = row.get(7)?;
                 let file_paths = file_paths_str.and_then(|s| serde_json::from_str(&s).ok());
 
-                let tags_str: Option<String> = row.get(8)?;
+                let tags_str: Option<String> = row.get(9)?;
                 let tags = tags_str.and_then(|s| serde_json::from_str(&s).ok());
 
                 Ok(ClipboardItem {
@@ -335,9 +346,10 @@ impl Database {
                     content: row.get(2)?,
                     created_at,
                     content_hash: row.get(4)?,
+                    text_content,
                     metadata,
                     file_paths,
-                    thumbnail_path: row.get(7)?,
+                    thumbnail_path: row.get(8)?,
                     tags,
                 })
             })?

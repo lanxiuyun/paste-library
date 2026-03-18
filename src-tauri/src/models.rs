@@ -54,12 +54,15 @@ pub struct ClipboardItem {
     pub id: i64,
     /// 内容类型
     pub content_type: ClipboardContentType,
-    /// 文本内容 (纯文本或 HTML)
+    /// 文本内容 (纯文本或 HTML/RTF 的原始内容)
     pub content: String,
     /// 创建时间
     pub created_at: DateTime<Utc>,
     /// 内容哈希 (用于去重)
     pub content_hash: String,
+    /// 纯文本内容 (用于 HTML/RTF 类型的纯文本粘贴)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_content: Option<String>,
     /// 元数据 (图片尺寸、文件信息等)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<ClipboardMetadata>,

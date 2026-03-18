@@ -43,10 +43,12 @@ impl ClipboardManager {
         }
         drop(settings);
 
-        let (content_type, content) = if let Some(html_content) = html {
-            (ClipboardContentType::Html, html_content)
+        let (content_type, content, text_content) = if let Some(html_content) = html {
+            // HTML 类型：content 存储 HTML，text_content 存储纯文本
+            (ClipboardContentType::Html, html_content, Some(text))
         } else {
-            (ClipboardContentType::Text, text)
+            // 纯文本类型：content 和 text_content 都存储纯文本
+            (ClipboardContentType::Text, text.clone(), Some(text))
         };
 
         let mut hasher = Sha256::new();
@@ -59,6 +61,7 @@ impl ClipboardManager {
             content,
             created_at: chrono::Utc::now(),
             content_hash,
+            text_content,
             metadata: None,
             file_paths: None,
             thumbnail_path: None,
@@ -122,6 +125,7 @@ impl ClipboardManager {
             content,
             created_at: chrono::Utc::now(),
             content_hash,
+            text_content: None,
             metadata,
             file_paths,
             thumbnail_path,

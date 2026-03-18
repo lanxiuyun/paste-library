@@ -135,6 +135,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "tauri-plugin-clipboard-x-api";
+import { decodeHtmlEntities } from "@/utils/htmlUtils";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { DynamicScroller, DynamicScrollerItem } from "vue-virtual-scroller";
 import { Pin as PinIcon, PinOff as PinOffIcon, BookmarkPlus } from "lucide-vue-next";
@@ -644,20 +645,24 @@ const handleContextMenuAction = async (
       tagManagerVisible.value = true;
       break;
     case "copyPlain":
+      // 使用已存储的 text_content，或从 content 提取并解码 HTML 实体
+      const plainContent = item.text_content || decodeHtmlEntities(item.content.replace(/<[^>]*>/g, ""));
       await restoreToClipboard({
         ...item,
         content_type: "text",
-        content: item.content.replace(/<[^>]*>/g, ""),
+        content: plainContent,
       });
       if (settings.value.hide_window_after_copy) {
         await invoke("hide_clipboard_window");
       }
       break;
     case "pastePlain":
+      // 使用已存储的 text_content，或从 content 提取并解码 HTML 实体
+      const pastePlainContent = item.text_content || decodeHtmlEntities(item.content.replace(/<[^>]*>/g, ""));
       await restoreToClipboard({
         ...item,
         content_type: "text",
-        content: item.content.replace(/<[^>]*>/g, ""),
+        content: pastePlainContent,
       });
       await simulatePaste();
       break;
