@@ -16,6 +16,7 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.0",
     "@tauri-apps/plugin-window": "2.0.0-alpha.1",
+    "lucide-vue-next": "^0.577.0",
     "tauri-plugin-clipboard-x-api": "^2.0.1",
     "vue": "^3.5.13",
     "vue-virtual-scroller": "2.0.0-beta.8"

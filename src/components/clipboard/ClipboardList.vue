@@ -13,6 +13,14 @@
           @clear-history="removeSearchHistory"
           @clear-all-history="clearAllHistory"
         />
+        <button
+          v-if="canPinCurrentSearch"
+          class="pin-btn"
+          title="固定当前搜索"
+          @click="pinCurrentSearch"
+        >
+          <BookmarkPlus :size="18" />
+        </button>
         <!-- 钉住模式按钮 -->
         <button
           class="pin-mode-btn"
@@ -20,34 +28,8 @@
           :title="isPinned ? '取消钉住' : `钉住面板 (${settings.pin_shortcut || 'Ctrl+Shift+P'})`"
           @click="togglePinMode"
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path
-              d="M12 2a2 2 0 0 0-2 2v3.586l-3.707 3.707A1 1 0 0 0 6 12v2a1 1 0 0 0 1 1h3l2 7 2-7h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-.293-.707L14 7.586V4a2 2 0 0 0-2-2z"
-            />
-          </svg>
-          <span v-if="isPinned" class="pin-indicator"></span>
-        </button>
-        <button
-          v-if="canPinCurrentSearch"
-          class="pin-btn"
-          title="固定当前搜索"
-          @click="pinCurrentSearch"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path
-              d="M12 2a2 2 0 0 0-2 2v3.586l-3.707 3.707A1 1 0 0 0 6 12v2a1 1 0 0 0 1 1h3l2 7 2-7h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-.293-.707L14 7.586V4a2 2 0 0 0-2-2z"
-            />
-          </svg>
+          <!-- 使用 Lucide 图标 -->
+          <PinIcon :size="18" />
         </button>
       </div>
     </div>
@@ -155,6 +137,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "tauri-plugin-clipboard-x-api";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { DynamicScroller, DynamicScrollerItem } from "vue-virtual-scroller";
+import { Pin as PinIcon, PinOff as PinOffIcon, BookmarkPlus } from "lucide-vue-next";
 import ClipboardItem from "../ClipboardItem.vue";
 import ContextMenu from "../ContextMenu.vue";
 import DrawerEditor from "../DrawerEditor.vue";
@@ -986,24 +969,14 @@ watch(filteredHistory, () => {
 }
 
 .pin-mode-btn.is-pinned {
-  background: #e6f7ff;
+  background: #1890ff;
   border-color: #1890ff;
-  color: #1890ff;
+  color: #fff;
 }
 
 .pin-mode-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.pin-indicator {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 6px;
-  height: 6px;
-  background: #52c41a;
-  border-radius: 50%;
+  width: 18px;
+  height: 18px;
 }
 
 .pin-btn {
@@ -1028,8 +1001,8 @@ watch(filteredHistory, () => {
 }
 
 .pin-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .list-container {
