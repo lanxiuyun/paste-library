@@ -303,12 +303,11 @@ const reorderPinnedSearches = (fromIndex: number, toIndex: number) => {
 watch(activeTab, (key) => {
   const pinned = pinnedSearches.value.find((ps) => ps.id === key);
   if (pinned) {
+    // 切换到固定搜索标签时，使用该固定搜索的查询
     searchQuery.value = pinned.query;
-  } else if (key !== "all") {
-    searchQuery.value = "";
-  } else {
-    searchQuery.value = "";
   }
+  // 切换到固定标签（all, text, image, file, folder）时，保留当前搜索查询
+  // 不再自动清除搜索条件
 });
 
 // 智能激活
