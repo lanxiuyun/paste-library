@@ -24,6 +24,8 @@ pub struct WindowManager {
     database: Arc<Database>,
     pin_mode: Arc<Mutex<PinMode>>,
     window_opacity: Arc<Mutex<f32>>,
+    /// 标志位：是否有待执行的隐藏操作（用于取消点击窗口内部时的意外隐藏）
+    pending_hide: Arc<Mutex<bool>>,
 }
 
 impl WindowManager {
@@ -33,6 +35,7 @@ impl WindowManager {
             database,
             pin_mode: Arc::new(Mutex::new(PinMode::Standard)),
             window_opacity: Arc::new(Mutex::new(1.0)),
+            pending_hide: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -42,12 +45,14 @@ impl WindowManager {
         database: Arc<Database>,
         pin_mode: Arc<Mutex<PinMode>>,
         window_opacity: Arc<Mutex<f32>>,
+        pending_hide: Arc<Mutex<bool>>,
     ) -> Self {
         Self {
             settings,
             database,
             pin_mode,
             window_opacity,
+            pending_hide,
         }
     }
 
@@ -472,34 +477,60 @@ impl WindowManager {
         // 根据设置定位窗口
         self.position_window(&window).await?;
 
+        // 记录窗口创建时间，用于初始化保护期（防止 blur 事件过早触发导致窗口消失）
+        let window_created_at = std::time::Instant::now();
+        eprintln!("[DEBUG] Clipboard window created at {:?}, protection period: 500ms", window_created_at);
+
         let app_handle = app.clone();
         let settings_clone = self.settings.clone();
         let database_clone = self.database.clone();
         let pin_mode_clone = self.pin_mode.clone();
         let window_opacity_clone = self.window_opacity.clone();
+        let pending_hide_clone = self.pending_hide.clone();
 
         let app_handle_for_event = app.clone();
         window.on_window_event(move |event| {
             if let tauri::WindowEvent::Focused(false) = event {
+                let elapsed_ms = window_created_at.elapsed().as_millis();
+                eprintln!("[DEBUG] Blur event received, elapsed since creation: {}ms", elapsed_ms);
+
+                // 检查是否在初始化保护期内（800ms），防止窗口刚创建时因焦点不稳定而意外隐藏
+                if elapsed_ms < 800 {
+                    eprintln!("[DEBUG] Ignoring blur event during initialization period ({}ms < 800ms)", elapsed_ms);
+                    return;
+                }
+
                 let app = app_handle_for_event.clone();
                 let settings = settings_clone.clone();
                 let database = database_clone.clone();
                 let pin_mode = pin_mode_clone.clone();
                 let window_opacity = window_opacity_clone.clone();
+                let pending_hide = pending_hide_clone.clone();
 
                 tauri::async_runtime::spawn(async move {
+                    // 设置待隐藏标志
+                    *pending_hide.lock().await = true;
+
                     // 增加延迟时间，给用户足够的时间完成 hover 和点击操作
-                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+
+                    // 检查待隐藏标志是否被取消（由 focus 事件取消）
+                    let should_hide = *pending_hide.lock().await;
+                    if !should_hide {
+                        eprintln!("[DEBUG] Hide operation was cancelled by focus event");
+                        return;
+                    }
 
                     if let Some(win) = app.get_webview_window("clipboard") {
+                        // 二次确认：再次检查焦点状态
                         if let Ok(is_focused) = win.is_focused() {
                             if !is_focused {
                                 // 使用共享的 pin_mode 状态
-                                let manager = WindowManager::new_with_shared_state(settings, database, pin_mode, window_opacity);
+                                let manager = WindowManager::new_with_shared_state(settings, database, pin_mode, window_opacity, pending_hide);
                                 let current_pin_mode = manager.get_pin_mode().await;
-                                
-                                eprintln!("[DEBUG] Window blur event, pin_mode: {:?}", current_pin_mode);
-                                
+
+                                eprintln!("[DEBUG] Window blur confirmed after 150ms, pin_mode: {:?}", current_pin_mode);
+
                                 if current_pin_mode.is_pinned() {
                                     // 钉住模式下：半透明化而不是隐藏
                                     eprintln!("[DEBUG] Pinned mode: setting opacity to 0.6");
@@ -513,6 +544,8 @@ impl WindowManager {
                                     let _ = win.hide();
                                     let _ = app.emit("clipboard-window-blur", serde_json::json!({ "reset": false }));
                                 }
+                            } else {
+                                eprintln!("[DEBUG] Window regained focus, skip hiding");
                             }
                         }
                     }
@@ -520,31 +553,38 @@ impl WindowManager {
             }
         });
 
-        // 单独注册获得焦点事件，用于恢复透明度
+        // 单独注册获得焦点事件，用于恢复透明度并取消待隐藏操作
         let app_handle_for_focus = app.clone();
         let pin_mode_clone_focus = self.pin_mode.clone();
         let window_opacity_clone_focus = self.window_opacity.clone();
+        let pending_hide_clone_focus = self.pending_hide.clone();
         window.on_window_event(move |event| {
             if let tauri::WindowEvent::Focused(true) = event {
                 let app = app_handle_for_focus.clone();
                 let pin_mode = pin_mode_clone_focus.clone();
                 let window_opacity = window_opacity_clone_focus.clone();
-                
+                let pending_hide = pending_hide_clone_focus.clone();
+
                 tauri::async_runtime::spawn(async move {
+                    // 取消待隐藏操作（用户点击了窗口内部）
+                    *pending_hide.lock().await = false;
+
                     // 直接读取状态，不需要创建 manager
                     let current_opacity = *window_opacity.lock().await;
                     let current_pin_mode = *pin_mode.lock().await;
-                    
+
                     eprintln!("[DEBUG] Window focus event, pin_mode: {:?}, opacity: {}", current_pin_mode, current_opacity);
-                    
+
                     if current_pin_mode.is_pinned() && current_opacity < 1.0 {
                         eprintln!("[DEBUG] Pinned mode: restoring opacity to 1.0");
-                        // 创建临时 manager 来设置透明度
+                        // 创建临时 manager 来设置透明度（使用新的 pending_hide）
+                        let temp_pending_hide = Arc::new(Mutex::new(false));
                         let manager = WindowManager::new_with_shared_state(
                             Arc::new(Mutex::new(AppSettings::default())),
                             Arc::new(Database::new(std::path::PathBuf::from(".")).unwrap()),
-                            pin_mode, 
-                            window_opacity
+                            pin_mode,
+                            window_opacity,
+                            temp_pending_hide
                         );
                         let _ = manager.set_window_opacity(&app, 1.0).await;
                     }
