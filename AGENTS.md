@@ -221,26 +221,21 @@ src/
   │   ├── DrawerEditor.vue       # Drawer-based editor for text/image preview
   │   ├── SmartSearch.vue        # Search input component
   │   └── TagManager.vue         # Tag management popup dialog
-  │   ├── ClipboardItem.vue      # Card component for single clipboard item
-  │   ├── ClipboardList.vue      # Main list with tabs and search
-  │   ├── ContextMenu.vue        # Right-click context menu
-  │   ├── DragHandle.vue         # Window drag capsule (for clipboard window)
-  │   ├── SettingsPanel.vue      # Settings panel with left navigation
-  │   ├── PasteQueuePanel.vue    # Paste queue panel for batch operations
-  │   ├── DrawerEditor.vue       # Drawer-based editor for text/image preview
-  │   └── TagManager.vue         # Tag management popup dialog
   ├── composables/               # Reusable logic (hooks)
-  │   ├── useClipboard.ts        # Clipboard monitoring logic (text/image/files)
+  │   ├── useClipboard.ts        # Clipboard monitoring & CRUD (text/image/files)
+  │   ├── useContentType.ts      # Content type detection utilities
+  │   ├── useFileOperations.ts   # File open/reveal in folder operations
+  │   ├── useImageLoader.ts      # Image loading with retry mechanism (5 retries)
   │   ├── usePasteQueue.ts       # Paste queue state management
-  │   ├── useSettings.ts         # Settings management
-  │   └── useWindow.ts           # Window management (toggle/show/hide)
+  │   ├── usePinMode.ts          # Pin mode (window stays open after paste)
+  │   ├── useSettings.ts         # Settings read/write via Tauri
+  │   ├── useSmartSearch.ts      # Smart search with @tag/@type syntax
+  │   └── useWindow.ts           # Window visibility toggle
   ├── utils/                      # Utility functions
   ├── types/                     # TypeScript type definitions
   │   ├── index.ts               # Shared types (ClipboardItem, AppSettings, etc.)
   │   ├── components.ts          # Component-specific types
   │   └── window.ts              # Window state types
-  └── styles/                    # Global CSS (if needed)
-  │   └── index.ts               # Shared types (ClipboardItem, AppSettings, etc.)
   └── styles/                    # Global CSS (if needed)
 
 src-tauri/
@@ -419,16 +414,13 @@ const imageSrc = computed(() => {
   - Fixed hover/scroll issues in floating window
 
 ### In Progress ⏳
-- ItemList virtual scrolling (performance optimization)
-- Hover interaction stability improvements
+*当前无进行中的功能*
 
 ### Planned 📋
 - Cross-device sync architecture
 - Dark theme (currently light only)
 - Advanced search filters (by date range)
 - Multi-language support
-- ItemList virtual scrolling
-  - ~~Tag manager popup~~ - ✅ 已实现 - 添加/删除标签弹窗，支持创建新标签
 
 ---
 
@@ -531,81 +523,24 @@ Then commit and push to `release` branch to trigger the release workflow.
 
 ## Project Documentation
 
-### 📁 文档目录结构
+### 📁 文档说明
 
-```
-docs/
-├── FEATURE_SPEC.md          # 功能规格说明 - 详细功能定义
-├── TECH_DESIGN.md           # 技术设计方案 - 类型定义和架构
-├── UI_DESIGN.md            # UI设计规范 - 颜色和组件规范
-└── IMPLEMENTATION_PLAN.md  # 实施计划 - 开发任务清单
-
-DEVELOPMENT_PLAN.md         # 主开发计划 - 项目概览和进度
-```
+项目已移除独立的 docs/ 目录文档，功能规格和技术细节直接通过源码和本文件维护。
 
 ### 📖 如何开始新任务
 
-**步骤1**: 阅读主开发计划
-```
-请阅读 @DEVELOPMENT_PLAN.md 了解当前进度和待开发功能清单
-```
+**步骤1**: 阅读本文件 (AGENTS.md)
+了解项目整体结构、已实现功能清单和代码规范。
 
-**步骤2**: 根据任务类型查阅详细文档
-- **实现具体功能** → 阅读 `docs/FEATURE_SPEC.md` + `docs/TECH_DESIGN.md`
-- **UI开发/样式调整** → 阅读 `docs/UI_DESIGN.md`
-- **了解开发顺序** → 阅读 `docs/IMPLEMENTATION_PLAN.md`
+**步骤2**: 查看相关源码
+- **实现前端功能** → 查看 `src/components/` 和 `src/composables/`
+- **实现后端功能** → 查看 `src-tauri/src/`
+- **类型定义** → 查看 `src/types/index.ts`
 
-**步骤3**: 查看现有代码结构
-```bash
-# 了解当前实现
-src/components/       # Vue组件
-src/composables/      # 逻辑hooks
-src/types/index.ts    # TypeScript类型
-src-tauri/src/        # Rust后端
-```
-
-### 🎯 当前开发优先级
-
-**✅ 已完成 - 核心功能（P0）**
-1. ~~图片类型监听与显示（ClipboardItem显示缩略图）~~
-2. ~~文件/文件夹类型监听与显示~~
-3. ~~左键/双击/右键交互重构~~
-4. ~~右键上下文菜单（ContextMenu组件）~~
-5. ~~系统托盘集成~~
-6. ~~可变高度 Item 设计（文本3行、图片自适应）~~
-7. ~~标签系统替代收藏~~
-8. ~~Hover 快捷操作按钮~~
-9. ~~键盘导航系统~~
-10. ~~粘贴队列（购物车模式）~~
-11. ~~抽屉式编辑器~~
-
-**🟡 P1 - 增强体验 ✅ 已完成**
-12. ~~数据备份导入导出~~
-13. ~~存储路径显示~~
-14. ~~设置面板完善（历史记录删除按钮）~~
-15. ~~跨应用拖拽~~
-16. ~~模糊搜索（拼音、首字母、容错）~~
-
-**🟢 P2 - 优化完善**
-17. 多语言/主题切换
-18. 性能优化
-19. ItemList虚拟滚动
-20. 缩略图懒加载
-
-### 💡 快速开发提示
-
-**实现图片支持时参考:**
-- 技术方案: `docs/TECH_DESIGN.md` → 图片处理方案
-- UI规范: `docs/UI_DESIGN.md` → 类型标签颜色
-- 类型定义: `src/types/index.ts` → ClipboardItem
-
-**实现交互增强时参考:**
-- 技术方案: `docs/TECH_DESIGN.md` → 交互实现方案
-- 功能规格: `docs/FEATURE_SPEC.md` → 交互规格
-
-**实现设置面板时参考:**
-- UI规范: `docs/UI_DESIGN.md` → 设置面板布局
-- 功能规格: `docs/FEATURE_SPEC.md` → 设置面板功能规格
+**步骤3**: 参考相关目录的 AGENTS.md
+- `src/components/AGENTS.md` - 组件开发指南
+- `src/composables/AGENTS.md` - Composables 开发指南
+- `src-tauri/src/AGENTS.md` - Rust 后端开发指南
 
 ### 🎯 协作原则
 
