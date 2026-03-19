@@ -1,8 +1,13 @@
 <template>
   <Teleport to="body">
     <Transition name="drawer">
-      <div v-if="visible" class="drawer-overlay" @click="handleOverlayClick">
-        <div class="drawer-panel" @click.stop>
+      <div
+        v-if="visible"
+        class="drawer-overlay"
+        @mousedown="handleOverlayMouseDown"
+        @mouseup="handleOverlayMouseUp"
+      >
+        <div class="drawer-panel" @mousedown.stop @mouseup.stop>
           <!-- Header -->
           <div class="drawer-header">
             <div class="header-info">
@@ -210,6 +215,7 @@ const emit = defineEmits<{
 const editedContent = ref('');
 const isPreview = ref(false);
 const actualFileSize = ref<number>(0);
+const isMouseDownOnOverlay = ref(false);
 
 const isTextContent = computed(() => {
   return props.item?.content_type === 'text' || props.item?.content_type === 'html' || props.item?.content_type === 'rtf';
@@ -312,8 +318,19 @@ const close = () => {
   emit('update:visible', false);
 };
 
-const handleOverlayClick = () => {
-  close();
+const handleOverlayMouseDown = (e: MouseEvent) => {
+  // 只有点击遮罩层本身（不是抽屉面板）才标记为可关闭
+  if (e.target === e.currentTarget) {
+    isMouseDownOnOverlay.value = true;
+  }
+};
+
+const handleOverlayMouseUp = (e: MouseEvent) => {
+  // 只有在遮罩层上按下且释放时才关闭（避免从抽屉内部拖出时误关闭）
+  if (isMouseDownOnOverlay.value && e.target === e.currentTarget) {
+    close();
+  }
+  isMouseDownOnOverlay.value = false;
 };
 
 const handleCopy = () => {
