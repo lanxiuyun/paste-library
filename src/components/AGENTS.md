@@ -11,6 +11,11 @@ components/
 │   ├── TabBar.vue             # Tab navigation with pinned searches
 │   ├── EmptyState.vue         # Empty state display
 │   └── DeleteConfirmDialog.vue # Delete confirmation dialog
+├── drawer/                    # Drawer editor sub-components
+│   ├── ExtractedInfoPanel.vue # Smart info extraction (phone, ID, etc.)
+│   ├── TextPreview.vue        # Text editor/preview with extraction
+│   ├── ImagePreview.vue       # Image viewer with metadata
+│   └── FilePreview.vue        # File/folder/multi-file info display
 ├── settings/                  # Settings panel components
 │   ├── SettingsPanel.vue      # Main settings container with sidebar
 │   ├── components/            # Reusable setting widgets
@@ -27,7 +32,7 @@ components/
 ├── ClipboardItem.vue        # Individual clipboard item card
 ├── ContextMenu.vue          # Right-click context menu
 ├── DragHandle.vue           # Window drag region (36px)
-├── DrawerEditor.vue         # Slide-out editor for text/image preview
+├── DrawerEditor.vue         # Slide-out editor container (orchestrates drawer/*)
 ├── PasteQueuePanel.vue      # Batch paste panel (shopping cart mode)
 ├── SmartSearch.vue          # Advanced search with @mention support
 └── TagManager.vue           # Tag CRUD popup dialog
@@ -87,12 +92,41 @@ Tab 导航组件，214 行，包含：
 
 ### DrawerEditor.vue
 
-抽屉式编辑器，771 行，包含：
+抽屉式编辑器容器，~444 行，精简后作为 orchestrator：
 - 滑出面板动画
-- 文本编辑器（带预览模式）
-- 图片查看器（带元数据显示）
-- 文件信息展示
-- 全屏/关闭控制
+- 头部操作按钮（复制/粘贴/保存/关闭）
+- 内容类型分发：TextPreview / ImagePreview / FilePreview
+- 底部统计（文本类型）
+
+### drawer/ ExtractedInfoPanel.vue
+
+智能信息提取面板，~272 行：
+- 自动识别：身份证、手机号、座机、邮箱、地址、URL、IP、银行卡、日期
+- 复制/粘贴 双动作按钮
+- 支持 HTML 内容（自动去除标签后提取）
+- 类型标签颜色区分
+
+### drawer/ TextPreview.vue
+
+文本编辑/预览组件，~223 行：
+- 编辑/预览 双模式切换
+- 集成 ExtractedInfoPanel（自动显示识别的信息）
+- 底部字符/单词/行数/大小统计
+- HTML 实体解码显示
+
+### drawer/ ImagePreview.vue
+
+图片预览组件，~109 行：
+- 图片显示（使用 convertFileSrc）
+- 异步获取文件大小
+- 显示：尺寸、格式、大小
+
+### drawer/ FilePreview.vue
+
+文件信息展示组件，~246 行：
+- 单文件/文件夹信息展示
+- 多文件列表展示
+- 复制路径按钮
 
 ### TagManager.vue
 
@@ -125,7 +159,12 @@ Tab 导航组件，214 行，包含：
 | Modify filter logic | ClipboardList.vue (async search) |
 | Add pinned search | SmartSearch.vue + TabBar.vue |
 | Modify tags | TagManager.vue |
-| Modify drawer | DrawerEditor.vue |
+| Modify drawer container | DrawerEditor.vue |
+| Modify drawer text editing | drawer/TextPreview.vue |
+| Modify drawer image view | drawer/ImagePreview.vue |
+| Modify drawer file view | drawer/FilePreview.vue |
+| Modify info extraction | drawer/ExtractedInfoPanel.vue |
+| Add new extraction type | drawer/ExtractedInfoPanel.vue |
 | Modify keyboard nav | ClipboardList.vue |
 
 ## NOTES
