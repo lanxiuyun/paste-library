@@ -50,13 +50,13 @@
     <div v-if="showMentionPanel" class="search-dropdown" @mousedown.prevent>
       <div class="dropdown-header">
         <span>{{ mentionFilter ? `匹配 "${mentionFilter}"` : '选择标签或类型' }}</span>
-        <span class="hint">↑↓←→ 选择 · Enter 确认 · Esc 关闭</span>
+        <span class="hint">↑↓ 选择 · Enter 确认 · Esc 关闭</span>
       </div>
-      <div class="mention-grid" v-if="filteredMentionOptions.length > 0">
+      <div class="mention-list" v-if="filteredMentionOptions.length > 0">
         <div
           v-for="(item, index) in filteredMentionOptions"
           :key="item.value"
-          class="mention-cell"
+          class="mention-item"
           :class="{ 
             active: selectedMentionIndex === index,
             'is-type': item.category === 'type'
@@ -65,9 +65,11 @@
           @click="selectMention(item)"
           @mouseenter="selectedMentionIndex = index"
         >
-          <span class="mention-icon">@</span>
-          <span class="mention-name">{{ item.value }}</span>
-          <span v-if="item.count > 0" class="mention-count">{{ item.count }}</span>
+          <span class="mention-item-icon">{{ getMentionIcon(item) }}</span>
+          <span class="mention-item-name">{{ item.value }}</span>
+          <span class="mention-item-meta">
+            {{ item.category === 'type' ? '类型' : `标签 · ${item.count || 0}次` }}
+          </span>
         </div>
       </div>
       <div v-else class="dropdown-empty">未找到匹配项</div>
@@ -119,7 +121,6 @@ const isComposing = ref(false);
 const mentionUsageCount = ref<Record<string, number>>({});
 
 // Constants
-const GRID_COLS = 3;
 const TYPE_OPTIONS = ['文本', 'html', '图片', '文件', '文件夹'];
 
 // Computed
@@ -382,33 +383,37 @@ const updateSearchQuery = (shouldCommit = false) => {
   }
 };
 
-// Grid navigation
-const navigateGrid = (direction: 'up' | 'down' | 'left' | 'right') => {
-  const currentRow = Math.floor(selectedMentionIndex.value / GRID_COLS);
-  const currentCol = selectedMentionIndex.value % GRID_COLS;
-  const totalRows = Math.ceil(filteredMentionOptions.value.length / GRID_COLS);
-  
-  let newRow = currentRow;
-  let newCol = currentCol;
-  
-  switch (direction) {
-    case 'up':
-      newRow = Math.max(0, currentRow - 1);
-      break;
-    case 'down':
-      newRow = Math.min(totalRows - 1, currentRow + 1);
-      break;
-    case 'left':
-      newCol = Math.max(0, currentCol - 1);
-      break;
-    case 'right':
-      newCol = Math.min(GRID_COLS - 1, currentCol + 1);
-      break;
+// List navigation (vertical only)
+const navigateList = (direction: 'up' | 'down') => {
+  if (direction === 'up') {
+    selectedMentionIndex.value = Math.max(0, selectedMentionIndex.value - 1);
+  } else {
+    selectedMentionIndex.value = Math.min(
+      filteredMentionOptions.value.length - 1,
+      selectedMentionIndex.value + 1
+    );
   }
-  
-  const newIndex = newRow * GRID_COLS + newCol;
-  if (newIndex < filteredMentionOptions.value.length) {
-    selectedMentionIndex.value = newIndex;
+};
+
+// Icon mapping for mention items
+const getMentionIcon = (item: { value: string; category: 'type' | 'tag' }): string => {
+  if (item.category === 'tag') {
+    return '🏷️';
+  }
+  // Type icons
+  switch (item.value) {
+    case '文本':
+      return '📝';
+    case 'html':
+      return '🌐';
+    case '图片':
+      return '🖼️';
+    case '文件':
+      return '📄';
+    case '文件夹':
+      return '📁';
+    default:
+      return '📋';
   }
 };
 
@@ -433,23 +438,15 @@ const handleKeyDown = (e: KeyboardEvent) => {
   // Mention panel navigation
   if (showMentionPanel.value) {
     e.stopPropagation();
-    
+
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        navigateGrid('down');
+        navigateList('down');
         break;
       case 'ArrowUp':
         e.preventDefault();
-        navigateGrid('up');
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
-        navigateGrid('left');
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        navigateGrid('right');
+        navigateList('up');
         break;
       case 'Enter':
         e.preventDefault();
@@ -511,16 +508,26 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
 // 监听 modelValue 变化，同步更新内部状态（用于外部如标签点击时更新）
 watch(() => props.modelValue, (newValue) => {
+  // 如果正在显示候选面板，说明用户正在输入标签，不要自动解析
+  if (showMentionPanel.value) {
+    return;
+  }
+
   // 解析 query 为 tags 和 inputText
   const parts = newValue.split(/\s+/);
   const newTags: { value: string; type: 'type' | 'tag' }[] = [];
   let remainingText = '';
+  let hasIncompleteAt = false;
 
   parts.forEach(part => {
     if (part.startsWith('@')) {
       const value = part.slice(1);
-      // 忽略只有 @ 没有内容的情况（用户正在输入）
-      if (!value) return;
+      // 只有 @ 没有内容的情况是正在输入的标签，保留在 inputText 中
+      if (!value) {
+        hasIncompleteAt = true;
+        remainingText += (remainingText ? ' ' : '') + part;
+        return;
+      }
       const isType = TYPE_OPTIONS.includes(value);
       newTags.push({
         value,
@@ -685,11 +692,11 @@ input::placeholder {
   left: 0;
   right: 0;
   margin-top: 4px;
-  background: #fff;
+  background: #ffffff;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
   z-index: 1000;
-  border: 1px solid #f0f0f0;
+  border: 1px solid #e8e8e8;
   overflow: hidden;
 }
 
@@ -728,70 +735,78 @@ input::placeholder {
   font-size: 13px;
 }
 
-/* Mention grid */
-.mention-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  padding: 8px;
-  max-height: 200px;
+/* Mention list (vertical layout) */
+.mention-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  max-height: 280px;
   overflow-y: auto;
 }
 
-.mention-cell {
+.mention-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 8px 14px;
+  margin: 2px 6px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
-  background: #fafafa;
-  border: 1px solid transparent;
-  transition: all 0.15s;
+  font-size: 14px;
+  color: #333333;
+  background: transparent;
+  transition: all 0.15s ease;
   min-height: 36px;
 }
 
-/* 类型默认灰色背景 */
-.mention-cell.is-type {
-  background: #f5f5f5;
+/* hover 效果 */
+.mention-item:hover {
+  background: #f0f5ff;
 }
 
-/* hover 效果 - 仅加深边框，不改变背景 */
-.mention-cell:hover {
-  border-color: #d9d9d9;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+/* active/选中状态 - 醒目的高亮 */
+.mention-item.active {
+  background: #e6f0ff;
+  color: #1a73e8;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px #4285f4;
 }
 
-/* active/选中状态 - 深色边框 */
-.mention-cell.active {
-  border-color: #262626;
-  box-shadow: 0 0 0 1px #262626;
+.mention-item-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  opacity: 0.85;
 }
 
-.mention-icon {
-  font-weight: 600;
-  opacity: 0.6;
-  font-size: 12px;
+.mention-item.active .mention-item-icon {
+  opacity: 1;
 }
 
-.mention-name {
+.mention-item-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: inherit;
+  color: inherit;
 }
 
-.mention-count {
-  font-size: 10px;
-  padding: 1px 5px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  opacity: 0.7;
+.mention-item.active .mention-item-name {
+  color: #1a73e8;
 }
 
-.mention-cell.active .mention-count {
-  background: rgba(255, 255, 255, 0.2);
+.mention-item-meta {
+  font-size: 12px;
+  color: #888888;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.mention-item.active .mention-item-meta {
+  color: #5c9cfc;
 }
 
 /* History list */
