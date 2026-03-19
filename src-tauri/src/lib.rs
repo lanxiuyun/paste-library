@@ -4,7 +4,6 @@ mod storage;
 mod window_manager;
 mod shortcut_manager;
 mod tray_manager;
-mod fuzzy_search;
 mod prevent_default;
 
 use std::path::PathBuf;

@@ -11,7 +11,6 @@ Rust backend (Tauri commands).
 | clipboard.rs | Clipboard monitoring (text/image/files) |
 | models.rs | Data structures (ClipboardItem, Settings) |
 | storage.rs | SQLite CRUD via rusqlite |
-| fuzzy_search.rs | Search with pinyin + initials |
 | window_manager.rs | Window create/hide/show |
 | tray_manager.rs | System tray setup |
 | shortcut_manager.rs | Global hotkey handling |
@@ -31,7 +30,7 @@ Rust backend (Tauri commands).
 | Add Tauri command | lib.rs (add fn + register) |
 | Modify clipboard logic | clipboard.rs |
 | Database schema | storage.rs |
-| Search algorithm | fuzzy_search.rs |
+| Search algorithm | storage.rs (SQL LIKE filtering) |
 
 ## NOTES
 
