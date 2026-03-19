@@ -65,6 +65,7 @@
         :items="filteredHistory"
         :min-item-size="60"
         key-field="id"
+        @scroll.native="handleScroll"
         v-slot="{ item, index, active }"
       >
         <DynamicScrollerItem
@@ -89,7 +90,18 @@
         </DynamicScrollerItem>
       </DynamicScroller>
 
-      <div v-if="loading" class="loading-more">加载中...</div>
+      <!-- 加载更多指示器 -->
+      <div v-if="isSearching && searchHasMore && filteredHistory.length > 0" class="loading-more">
+        <svg class="loading-spinner-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
+        </svg>
+        <span>加载更多...</span>
+      </div>
+
+      <!-- 没有更多数据提示 -->
+      <div v-else-if="!searchHasMore && filteredHistory.length >= 200" class="no-more-data">
+        没有更多数据了
+      </div>
     </div>
 
     <!-- 右键上下文菜单 -->
@@ -341,6 +353,9 @@ const handleSmartActivate = async () => {
 // 异步搜索结果
 const filteredHistory = ref<ClipboardItemType[]>([]);
 const isSearching = ref(false);
+const searchOffset = ref(0); // 搜索分页偏移量
+const searchHasMore = ref(true); // 搜索是否还有更多数据
+const SEARCH_PAGE_SIZE = 200; // 每页加载数量
 
 // 防抖工具函数
 function debounce<T extends (...args: Parameters<T>) => void>(
@@ -357,46 +372,52 @@ function debounce<T extends (...args: Parameters<T>) => void>(
 /**
  * 执行异步搜索（调用 Rust 后端）
  * 支持标签过滤、类型过滤和关键词搜索
+ * @param query 搜索查询
+ * @param isLoadMore 是否为加载更多（累加数据）
  */
-const performSearch = async (query: string) => {
+const performSearch = async (query: string, isLoadMore = false) => {
   const parsed = parseSearchQuery(query);
+
+  // 如果不是加载更多，重置分页状态
+  if (!isLoadMore) {
+    searchOffset.value = 0;
+    searchHasMore.value = true;
+  }
 
   // 如果有钉住搜索，使用钉住的查询
   const pinnedSearch = pinnedSearches.value.find(
     (ps) => ps.id === activeTab.value
   );
 
+  let searchRequest: {
+    keywords: string[];
+    tags: string[];
+    types: string[];
+    limit: number;
+    offset: number;
+  };
+
   if (pinnedSearch) {
     const pinnedParsed = parseSearchQuery(pinnedSearch.query);
-    // 合并钉住搜索和当前搜索
     if (pinnedParsed.isValid) {
-      isSearching.value = true;
-      try {
-        const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
-          request: {
-            keywords: pinnedParsed.keywords,
-            tags: pinnedParsed.tags,
-            types: pinnedParsed.types.map(t => {
-              // 映射类型字符串到枚举
-              const typeMap: Record<string, string> = {
-                'text': 'Text', 'html': 'Html', 'rtf': 'Rtf',
-                'image': 'Image', 'file': 'File', 'folder': 'Folder', 'files': 'Files'
-              };
-              return typeMap[t] || 'Text';
-            }),
-            limit: 200
-          }
-        });
-        filteredHistory.value = results;
-      } finally {
-        isSearching.value = false;
-      }
-      return;
+      searchRequest = {
+        keywords: pinnedParsed.keywords,
+        tags: pinnedParsed.tags,
+        types: pinnedParsed.types.map(t => {
+          const typeMap: Record<string, string> = {
+            'text': 'Text', 'html': 'Html', 'rtf': 'Rtf',
+            'image': 'Image', 'file': 'File', 'folder': 'Folder', 'files': 'Files'
+          };
+          return typeMap[t] || 'Text';
+        }),
+        limit: SEARCH_PAGE_SIZE,
+        offset: searchOffset.value
+      };
+    } else {
+      searchRequest = { keywords: [], tags: [], types: [], limit: SEARCH_PAGE_SIZE, offset: 0 };
     }
-  }
-
-  // Tab 过滤（非搜索状态）
-  if (activeTab.value !== "all" && !parsed.isValid) {
+  } else if (activeTab.value !== "all" && !parsed.isValid) {
+    // Tab 过滤（非搜索状态）
     const typeMap: Record<string, string[]> = {
       'file': ['File', 'Folder', 'Files'],
       'text': ['Text', 'Html', 'Rtf'],
@@ -404,48 +425,79 @@ const performSearch = async (query: string) => {
     };
     const types = typeMap[activeTab.value] || [activeTab.value.charAt(0).toUpperCase() + activeTab.value.slice(1)];
 
-    isSearching.value = true;
-    try {
-      const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
-        request: {
-          keywords: [],
-          tags: [],
-          types: types,
-          limit: 200
-        }
-      });
-      filteredHistory.value = results;
-    } finally {
-      isSearching.value = false;
+    searchRequest = {
+      keywords: [],
+      tags: [],
+      types: types,
+      limit: SEARCH_PAGE_SIZE,
+      offset: searchOffset.value
+    };
+  } else if (parsed.isValid) {
+    // 普通搜索
+    searchRequest = {
+      keywords: parsed.keywords,
+      tags: parsed.tags,
+      types: parsed.types.map(t => {
+        const typeMap: Record<string, string> = {
+          'text': 'Text', 'html': 'Html', 'rtf': 'Rtf',
+          'image': 'Image', 'file': 'File', 'folder': 'Folder', 'files': 'Files'
+        };
+        return typeMap[t] || 'Text';
+      }),
+      limit: SEARCH_PAGE_SIZE,
+      offset: searchOffset.value
+    };
+  } else {
+    // 无搜索条件，显示全部
+    if (!isLoadMore) {
+      filteredHistory.value = history.value.slice(0, SEARCH_PAGE_SIZE);
+      searchHasMore.value = history.value.length > SEARCH_PAGE_SIZE;
     }
     return;
   }
 
-  // 普通搜索
-  if (parsed.isValid) {
-    isSearching.value = true;
-    try {
-      const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
-        request: {
-          keywords: parsed.keywords,
-          tags: parsed.tags,
-          types: parsed.types.map(t => {
-            const typeMap: Record<string, string> = {
-              'text': 'Text', 'html': 'Html', 'rtf': 'Rtf',
-              'image': 'Image', 'file': 'File', 'folder': 'Folder', 'files': 'Files'
-            };
-            return typeMap[t] || 'Text';
-          }),
-          limit: 200
-        }
-      });
+  // 执行搜索
+  isSearching.value = true;
+  try {
+    const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
+      request: searchRequest
+    });
+
+    if (isLoadMore) {
+      // 加载更多：追加数据
+      filteredHistory.value = [...filteredHistory.value, ...results];
+    } else {
+      // 新搜索：替换数据
       filteredHistory.value = results;
-    } finally {
-      isSearching.value = false;
     }
+
+    // 更新分页状态
+    searchOffset.value += SEARCH_PAGE_SIZE;
+    searchHasMore.value = results.length === SEARCH_PAGE_SIZE;
+  } finally {
+    isSearching.value = false;
+  }
+};
+
+/**
+ * 加载更多搜索结果（滚动到底部触发）
+ */
+const loadMoreResults = async () => {
+  if (isSearching.value) return;
+
+  // 如果有搜索条件或标签过滤，调用后端加载更多
+  if (searchQuery.value || activeTab.value !== 'all') {
+    if (!searchHasMore.value) return;
+    await performSearch(searchQuery.value, true);
   } else {
-    // 无搜索条件，显示全部
-    filteredHistory.value = history.value.slice(0, 200);
+    // 全部模式：从历史记录中加载更多
+    const currentLength = filteredHistory.value.length;
+    const moreItems = history.value.slice(currentLength, currentLength + SEARCH_PAGE_SIZE);
+    if (moreItems.length > 0) {
+      filteredHistory.value = [...filteredHistory.value, ...moreItems];
+    }
+    // 更新是否有更多标志
+    searchHasMore.value = currentLength + moreItems.length < history.value.length;
   }
 };
 
@@ -783,9 +835,27 @@ const simulatePaste = async (itemId?: number): Promise<void> => {
   }
 };
 
-// 滚动处理 - 虚拟滚动器自动处理，保留加载更多逻辑
-const handleScroll = async () => {
-  // 虚拟滚动器自动处理滚动，这里保留加载更多逻辑如果需要的话
+// 滚动处理 - 检测滚动到底部加载更多
+let scrollThrottleTimer: number | null = null;
+
+const handleScroll = () => {
+  if (scrollThrottleTimer) return;
+
+  scrollThrottleTimer = window.setTimeout(() => {
+    scrollThrottleTimer = null;
+
+    const scroller = scrollerRef.value?.$el;
+    if (!scroller) return;
+
+    const scrollTop = scroller.scrollTop;
+    const scrollHeight = scroller.scrollHeight;
+    const clientHeight = scroller.clientHeight;
+
+    // 距离底部 200px 时触发加载更多
+    if (scrollTop + clientHeight >= scrollHeight - 200) {
+      loadMoreResults();
+    }
+  }, 100);
 };
 
 // 键盘导航
@@ -971,6 +1041,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
+  // 清理滚动节流 timer
+  if (scrollThrottleTimer) {
+    clearTimeout(scrollThrottleTimer);
+  }
   if ((window as any).__unlistenFocus) {
     (window as any).__unlistenFocus();
   }
@@ -1003,7 +1077,8 @@ watch(filteredHistory, () => {
 watch(history, () => {
   if (!searchQuery.value && activeTab.value === 'all') {
     // 初始状态，显示全部
-    filteredHistory.value = history.value.slice(0, 200);
+    filteredHistory.value = history.value.slice(0, SEARCH_PAGE_SIZE);
+    searchHasMore.value = history.value.length > SEARCH_PAGE_SIZE;
   }
 }, { immediate: true });
 
@@ -1029,6 +1104,21 @@ watch(activeTab, () => {
   width: 16px;
   height: 16px;
   animation: spin 1s linear infinite;
+}
+
+/* 加载更多动画 */
+.loading-spinner-small {
+  width: 14px;
+  height: 14px;
+  animation: spin 1s linear infinite;
+}
+
+/* 没有更多数据提示 */
+.no-more-data {
+  text-align: center;
+  padding: 16px;
+  color: #bfbfbf;
+  font-size: 12px;
 }
 
 @keyframes spin {
