@@ -633,8 +633,8 @@ const updateSearchQuery = (shouldCommit = false) => {
 
   emit('update:modelValue', fullQuery);
 
-  if (shouldCommit && fullQuery.trim()) {
-    // 选择标签时立即提交，不防抖
+  if (shouldCommit) {
+    // 选择标签时立即提交，不防抖（即使是空查询也要触发，用于清空搜索）
     emit('search-commit', fullQuery);
     return;
   }
@@ -645,9 +645,8 @@ const updateSearchQuery = (shouldCommit = false) => {
 
 /** 防抖搜索函数（150ms 延迟） */
 const debouncedSearch = debounce((query: string) => {
-  if (query.trim()) {
-    emit('search', query);
-  }
+  // 始终触发搜索事件，让父组件处理空查询的情况（显示所有数据）
+  emit('search', query);
 }, 150);
 
 /** 处理输入事件 */

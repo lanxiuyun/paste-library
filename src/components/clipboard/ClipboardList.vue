@@ -520,6 +520,8 @@ const handleSearchCommit = (query: string) => {
     addSearchHistory(query.trim());
     loadSearchHistory();
   }
+  // 触发搜索（即使是空查询也要执行，用于显示所有数据）
+  handleSmartSearch(query);
 };
 
 // 标签点击
