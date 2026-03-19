@@ -84,10 +84,23 @@ pub struct CreateClipboardItemRequest {
     pub content: String,
 }
 
-/// 搜索请求
+/// 搜索请求（简单查询）
 #[derive(Debug, Deserialize)]
 pub struct SearchRequest {
     pub query: String,
+    pub limit: Option<i64>,
+}
+
+/// 高级搜索请求（支持标签和类型过滤）
+#[derive(Debug, Deserialize)]
+pub struct AdvancedSearchRequest {
+    /// 关键词列表（普通文本搜索词）
+    pub keywords: Vec<String>,
+    /// 标签过滤（@标签）
+    pub tags: Vec<String>,
+    /// 类型过滤（@类型）
+    pub types: Vec<ClipboardContentType>,
+    /// 返回数量限制
     pub limit: Option<i64>,
 }
 

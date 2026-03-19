@@ -45,8 +45,16 @@
 
     <!-- 列表内容 -->
     <div ref="listContainerRef" class="list-container" tabindex="-1">
+      <!-- 搜索加载指示器 -->
+      <div v-if="isSearching" class="search-loading">
+        <svg class="loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
+        </svg>
+        <span>搜索中...</span>
+      </div>
+
       <EmptyState
-        v-if="filteredHistory.length === 0"
+        v-else-if="filteredHistory.length === 0"
         :has-search-query="!!searchQuery"
       />
 
@@ -330,59 +338,126 @@ const handleSmartActivate = async () => {
   }
 };
 
-// 模糊匹配
-const fuzzyMatch = (query: string, text: string): boolean => {
-  const queryLower = query.toLowerCase();
-  const textLower = text.toLowerCase();
-  return textLower.includes(queryLower);
-};
+// 异步搜索结果
+const filteredHistory = ref<ClipboardItemType[]>([]);
+const isSearching = ref(false);
 
-// 过滤后的历史记录
-const filteredHistory = computed(() => {
-  let result = history.value;
+// 防抖工具函数
+function debounce<T extends (...args: Parameters<T>) => void>(
+  fn: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  let timer: number | null = null;
+  return (...args: Parameters<T>) => {
+    if (timer) clearTimeout(timer);
+    timer = window.setTimeout(() => fn(...args), delay);
+  };
+}
 
+/**
+ * 执行异步搜索（调用 Rust 后端）
+ * 支持标签过滤、类型过滤和关键词搜索
+ */
+const performSearch = async (query: string) => {
+  const parsed = parseSearchQuery(query);
+
+  // 如果有钉住搜索，使用钉住的查询
   const pinnedSearch = pinnedSearches.value.find(
     (ps) => ps.id === activeTab.value
   );
+
   if (pinnedSearch) {
-    const pinnedQuery = parseSearchQuery(pinnedSearch.query);
-    if (pinnedQuery.isValid) {
-      result = result.filter((item) =>
-        matchItemWithQuery(item, pinnedQuery, fuzzyMatch)
-      );
-    }
-  } else if (activeTab.value !== "all") {
-    if (activeTab.value === "file") {
-      result = result.filter(
-        (item) =>
-          item.content_type === "file" ||
-          item.content_type === "files" ||
-          item.content_type === "folder"
-      );
-    } else if (activeTab.value === "text") {
-      result = result.filter(
-        (item) =>
-          item.content_type === "text" ||
-          item.content_type === "html" ||
-          item.content_type === "rtf"
-      );
-    } else {
-      result = result.filter((item) => item.content_type === activeTab.value);
+    const pinnedParsed = parseSearchQuery(pinnedSearch.query);
+    // 合并钉住搜索和当前搜索
+    if (pinnedParsed.isValid) {
+      isSearching.value = true;
+      try {
+        const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
+          request: {
+            keywords: pinnedParsed.keywords,
+            tags: pinnedParsed.tags,
+            types: pinnedParsed.types.map(t => {
+              // 映射类型字符串到枚举
+              const typeMap: Record<string, string> = {
+                'text': 'Text', 'html': 'Html', 'rtf': 'Rtf',
+                'image': 'Image', 'file': 'File', 'folder': 'Folder', 'files': 'Files'
+              };
+              return typeMap[t] || 'Text';
+            }),
+            limit: 200
+          }
+        });
+        filteredHistory.value = results;
+      } finally {
+        isSearching.value = false;
+      }
+      return;
     }
   }
 
-  if (!pinnedSearch && parsedQuery.value.isValid) {
-    result = result.filter((item) =>
-      matchItemWithQuery(item, parsedQuery.value, fuzzyMatch)
-    );
+  // Tab 过滤（非搜索状态）
+  if (activeTab.value !== "all" && !parsed.isValid) {
+    const typeMap: Record<string, string[]> = {
+      'file': ['File', 'Folder', 'Files'],
+      'text': ['Text', 'Html', 'Rtf'],
+      'image': ['Image'],
+    };
+    const types = typeMap[activeTab.value] || [activeTab.value.charAt(0).toUpperCase() + activeTab.value.slice(1)];
+
+    isSearching.value = true;
+    try {
+      const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
+        request: {
+          keywords: [],
+          tags: [],
+          types: types,
+          limit: 200
+        }
+      });
+      filteredHistory.value = results;
+    } finally {
+      isSearching.value = false;
+    }
+    return;
   }
 
-  return result;
-});
+  // 普通搜索
+  if (parsed.isValid) {
+    isSearching.value = true;
+    try {
+      const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
+        request: {
+          keywords: parsed.keywords,
+          tags: parsed.tags,
+          types: parsed.types.map(t => {
+            const typeMap: Record<string, string> = {
+              'text': 'Text', 'html': 'Html', 'rtf': 'Rtf',
+              'image': 'Image', 'file': 'File', 'folder': 'Folder', 'files': 'Files'
+            };
+            return typeMap[t] || 'Text';
+          }),
+          limit: 200
+        }
+      });
+      filteredHistory.value = results;
+    } finally {
+      isSearching.value = false;
+    }
+  } else {
+    // 无搜索条件，显示全部
+    filteredHistory.value = history.value.slice(0, 200);
+  }
+};
+
+// 防抖搜索（250ms 延迟）
+const debouncedSearch = debounce(performSearch, 250);
 
 // 搜索处理
 const handleSmartSearch = async (query: string) => {
   searchQuery.value = query;
+
+  // 立即执行搜索（不防抖）
+  await performSearch(query);
 
   nextTick(() => {
     // 使用虚拟滚动器滚动到顶部
@@ -923,9 +998,44 @@ watch(filteredHistory, () => {
     selectedIndex.value = 0;
   }
 });
+
+// 监听历史记录变化，初始化时加载
+watch(history, () => {
+  if (!searchQuery.value && activeTab.value === 'all') {
+    // 初始状态，显示全部
+    filteredHistory.value = history.value.slice(0, 200);
+  }
+}, { immediate: true });
+
+// 监听标签切换，重新搜索
+watch(activeTab, () => {
+  performSearch(searchQuery.value);
+});
 </script>
 
 <style scoped>
+/* 搜索加载指示器 */
+.search-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.search-loading .loading-spinner {
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .clipboard-list {
   display: flex;
   flex-direction: column;

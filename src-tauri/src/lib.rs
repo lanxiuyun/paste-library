@@ -13,7 +13,8 @@ use tokio::sync::Mutex;
 
 use clipboard::ClipboardManager;
 use models::{
-    AppSettings, ClipboardItem, ClipboardContentType, ClipboardMetadata, ClearHistoryRequest, GetHistoryRequest, SearchRequest,
+    AdvancedSearchRequest, AppSettings, ClipboardItem, ClipboardContentType, ClipboardMetadata, ClearHistoryRequest,
+    GetHistoryRequest, SearchRequest,
 };
 use storage::Database;
 use tauri::Manager;
@@ -117,6 +118,16 @@ fn search_clipboard_history(
 ) -> Result<Vec<ClipboardItem>, String> {
     let state = state.blocking_lock();
     state.clipboard_manager.search_history(request)
+}
+
+/// 高级搜索命令（支持标签和类型过滤）
+#[tauri::command]
+async fn search_clipboard_advanced(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    request: AdvancedSearchRequest,
+) -> Result<Vec<ClipboardItem>, String> {
+    let state = state.lock().await;
+    state.clipboard_manager.search_history_advanced(request)
 }
 
 #[tauri::command]
@@ -763,6 +774,7 @@ pub fn run() {
             add_clipboard_item_extended,
             get_clipboard_history,
             search_clipboard_history,
+            search_clipboard_advanced,
             delete_clipboard_item,
             clear_clipboard_history,
             get_settings,

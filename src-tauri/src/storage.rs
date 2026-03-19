@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use crate::models::{
-    AppSettings, ClearHistoryRequest, ClipboardContentType, ClipboardItem, ClipboardMetadata,
+    AdvancedSearchRequest, AppSettings, ClearHistoryRequest, ClipboardContentType, ClipboardItem,
+    ClipboardMetadata,
 };
 
 /// 数据库管理器
@@ -363,6 +364,150 @@ impl Database {
                         .map_or(false, |tags| tags.iter().any(|tag| fuzzy_match(query, tag))))
             })
             .take(limit as usize)
+            .collect();
+
+        Ok(items)
+    }
+
+    /// 高级搜索历史记录（支持标签和类型过滤）
+    ///
+    /// 搜索策略：
+    /// 1. 首先使用 SQL 进行预过滤（类型、时间范围）
+    /// 2. 对结果应用模糊搜索（内容、标签匹配）
+    /// 3. 支持多关键词 AND 匹配
+    pub fn search_history_advanced(&self, request: &AdvancedSearchRequest) -> Result<Vec<ClipboardItem>> {
+        use crate::fuzzy_search::fuzzy_match;
+
+        let conn = self.conn.lock().unwrap();
+
+        // 构建 SQL 查询条件
+        let mut conditions: Vec<String> = vec!["1=1".to_string()]; // 基础条件，方便后续追加
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+        // 类型过滤
+        if !request.types.is_empty() {
+            let type_placeholders: Vec<String> = (0..request.types.len())
+                .map(|i| format!("?{}", i + 1))
+                .collect();
+            conditions.push(format!(
+                "content_type IN ({})",
+                type_placeholders.join(", ")
+            ));
+            for t in &request.types {
+                params.push(Box::new(format!("{:?}", t).to_lowercase()));
+            }
+        }
+
+        // SQL 查询：先按时间排序获取最近记录
+        let sql = format!(
+            "SELECT id, content_type, content, created_at, content_hash, text_content, metadata, file_paths, thumbnail_path, tags
+             FROM clipboard_history
+             WHERE {}
+             ORDER BY created_at DESC
+             LIMIT 2000",
+            conditions.join(" AND ")
+        );
+
+        let mut stmt = conn.prepare(&sql)?;
+
+        // 执行查询
+        let items = stmt
+            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
+                let content_type_str: String = row.get(1)?;
+                let content_type = match content_type_str.as_str() {
+                    "text" => ClipboardContentType::Text,
+                    "html" => ClipboardContentType::Html,
+                    "rtf" => ClipboardContentType::Rtf,
+                    "image" => ClipboardContentType::Image,
+                    "file" => ClipboardContentType::File,
+                    "folder" => ClipboardContentType::Folder,
+                    "files" => ClipboardContentType::Files,
+                    _ => ClipboardContentType::Text,
+                };
+
+                let created_at_str: String = row.get(3)?;
+                let created_at = created_at_str
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .unwrap_or_else(|_| chrono::Utc::now());
+
+                let text_content: Option<String> = row.get(5)?;
+                let metadata_str: Option<String> = row.get(6)?;
+                let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+
+                let file_paths_str: Option<String> = row.get(7)?;
+                let file_paths = file_paths_str.and_then(|s| serde_json::from_str(&s).ok());
+
+                let tags_str: Option<String> = row.get(9)?;
+                let tags = tags_str.and_then(|s| serde_json::from_str(&s).ok());
+
+                Ok(ClipboardItem {
+                    id: row.get(0)?,
+                    content_type,
+                    content: row.get(2)?,
+                    created_at,
+                    content_hash: row.get(4)?,
+                    text_content,
+                    metadata,
+                    file_paths,
+                    thumbnail_path: row.get(8)?,
+                    tags,
+                })
+            })?
+            .filter_map(|item| item.ok())
+            .filter(|item| {
+                // 标签过滤：要求所有指定标签都匹配
+                if !request.tags.is_empty() {
+                    let item_tags = item.tags.as_ref().map_or(vec![], |t| t.clone());
+                    let all_tags_match = request.tags.iter().all(|tag| {
+                        item_tags.iter().any(|item_tag| {
+                            item_tag.to_lowercase() == tag.to_lowercase()
+                        })
+                    });
+                    if !all_tags_match {
+                        return false;
+                    }
+                }
+
+                // 关键词过滤：所有关键词都必须匹配
+                if !request.keywords.is_empty() {
+                    let search_text = match item.content_type {
+                        ClipboardContentType::Html => {
+                            // HTML 类型：去除 HTML 标签后再搜索
+                            item.content.replace(|c: char| c == '<' || c == '>', " ")
+                                .replace(|c: char| c.is_whitespace(), " ")
+                        }
+                        _ => item.content.clone(),
+                    };
+
+                    let all_keywords_match = request.keywords.iter().all(|keyword| {
+                        // 在内容中搜索
+                        if fuzzy_match(keyword, &search_text) {
+                            return true;
+                        }
+                        // 在文件路径中搜索
+                        if let Some(paths) = &item.file_paths {
+                            let path_text = paths.join(" ");
+                            if fuzzy_match(keyword, &path_text) {
+                                return true;
+                            }
+                        }
+                        // 在缩略图路径中搜索（图片类型）
+                        if let Some(thumb) = &item.thumbnail_path {
+                            if fuzzy_match(keyword, thumb) {
+                                return true;
+                            }
+                        }
+                        false
+                    });
+
+                    if !all_keywords_match {
+                        return false;
+                    }
+                }
+
+                true
+            })
+            .take(request.limit.unwrap_or(100) as usize)
             .collect();
 
         Ok(items)

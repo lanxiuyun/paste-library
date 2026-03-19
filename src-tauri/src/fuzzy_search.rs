@@ -18,13 +18,40 @@ pub fn to_pinyin_full(text: &str) -> String {
         .join("")
 }
 
-/// 精确匹配搜索
+/// 模糊匹配搜索（支持拼音、首字母、容错匹配）
 pub fn fuzzy_match(query: &str, text: &str) -> bool {
+    if query.is_empty() || text.is_empty() {
+        return false;
+    }
+
     let query_lower = query.to_lowercase();
     let text_lower = text.to_lowercase();
 
-    // 精确匹配
-    text_lower.contains(&query_lower)
+    // 1. 精确子串匹配
+    if text_lower.contains(&query_lower) {
+        return true;
+    }
+
+    // 2. 拼音首字母匹配（如 "gx" 匹配 "工作"）
+    let text_initials = to_pinyin_initials(&text_lower);
+    let query_initials = to_pinyin_initials(&query_lower);
+    if text_initials.contains(&query_initials) {
+        return true;
+    }
+
+    // 3. 完整拼音匹配（如 "gongzuo" 匹配 "工作"）
+    let text_pinyin = to_pinyin_full(&text_lower);
+    let query_pinyin = to_pinyin_full(&query_lower);
+    if text_pinyin.contains(&query_pinyin) {
+        return true;
+    }
+
+    // 4. 字符级容错匹配（允许字符分散，如 "gongz" 匹配 "gongzuo"）
+    if fuzzy_match_chars(&query_lower, &text_lower) {
+        return true;
+    }
+
+    false
 }
 
 /// 字符级容错匹配

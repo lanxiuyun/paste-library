@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::models::{
-    AppSettings, ClipboardContentType, ClipboardItem, ClipboardMetadata, ClearHistoryRequest, GetHistoryRequest,
-    SearchRequest,
+    AdvancedSearchRequest, AppSettings, ClipboardContentType, ClipboardItem, ClipboardMetadata, ClearHistoryRequest,
+    GetHistoryRequest, SearchRequest,
 };
 use crate::storage::Database;
 
@@ -163,6 +163,13 @@ impl ClipboardManager {
 
         self.database
             .search_history(&request.query, limit)
+            .map_err(|e| e.to_string())
+    }
+
+    /// 高级搜索（支持标签和类型过滤）
+    pub fn search_history_advanced(&self, request: AdvancedSearchRequest) -> Result<Vec<ClipboardItem>, String> {
+        self.database
+            .search_history_advanced(&request)
             .map_err(|e| e.to_string())
     }
 
