@@ -5,35 +5,22 @@
         <circle cx="11" cy="11" r="8"/>
         <path d="M21 21l-4.35-4.35"/>
       </svg>
-      
-      <!-- 搜索内容区域 -->
-      <div class="search-content" ref="contentRef">
-        <!-- 已添加的 tags -->
-        <span 
-          v-for="(tag, index) in selectedTags" 
-          :key="index"
-          class="search-tag"
-          :class="{ 'is-type': tag.type === 'type' }"
-        >
-          @{{ tag.value }}
-          <button class="tag-remove" @click.stop="removeTag(index)">×</button>
-        </span>
-        
-        <!-- 输入框 -->
-        <input
-          ref="inputRef"
-          v-model="inputText"
-          type="text"
-          :placeholder="selectedTags.length ? '' : '搜索剪贴板... 使用 @标签名 或 @类型'"
-          @focus="handleFocus"
-          @blur="handleBlur"
-          @keydown="handleKeyDown"
-          @input="handleInput"
-          @compositionstart="isComposing = true"
-          @compositionend="handleCompositionEnd"
-        />
-      </div>
-      
+
+      <!-- 搜索内容区域 - 使用 contenteditable -->
+      <div
+        ref="editorRef"
+        class="search-editor"
+        contenteditable="true"
+        :placeholder="placeholderText"
+        @focus="handleFocus"
+        @blur="handleBlur"
+        @keydown="handleKeyDown"
+        @input="handleInput"
+        @compositionstart="isComposing = true"
+        @compositionend="handleCompositionEnd"
+        @click="handleEditorClick"
+      ></div>
+
       <!-- 清除按钮 -->
       <button v-if="hasContent" class="clear-btn" @click.stop="clearAll">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -46,35 +33,38 @@
       <span v-else class="shortcut-hint">Ctrl + F</span>
     </div>
 
-    <!-- @补全面板 -->
-    <div v-if="showMentionPanel" class="search-dropdown" @mousedown.prevent>
+    <!-- @补全面板 - 跟随光标位置 -->
+    <div
+      v-if="showMentionPanel"
+      class="search-dropdown"
+      :style="mentionPanelStyle"
+      @mousedown.prevent
+    >
       <div class="dropdown-header">
         <span>{{ mentionFilter ? `匹配 "${mentionFilter}"` : '选择标签或类型' }}</span>
         <span class="hint">↑↓ 选择 · Enter 确认 · Esc 关闭</span>
       </div>
-      <div class="mention-list" v-if="filteredMentionOptions.length > 0">
+      <div ref="mentionListRef" class="mention-list" v-if="filteredMentionOptions.length > 0">
         <div
           v-for="(item, index) in filteredMentionOptions"
           :key="item.value"
           class="mention-item"
-          :class="{ 
+          :class="{
             active: selectedMentionIndex === index,
             'is-type': item.category === 'type'
           }"
-          :style="item.category === 'tag' ? getTagStyle(item.value) : {}"
           @click="selectMention(item)"
           @mouseenter="selectedMentionIndex = index"
         >
-          <span class="mention-item-icon">{{ getMentionIcon(item) }}</span>
+          <span class="mention-item-icon">{{ item.category === 'tag' ? '#' : getMentionIcon(item) }}</span>
           <span class="mention-item-name">{{ item.value }}</span>
           <span class="mention-item-meta">
-            {{ item.category === 'type' ? '类型' : `标签 · ${item.count || 0}次` }}
+            {{ item.category === 'type' ? '类型' : `${item.count || 0}` }}
           </span>
         </div>
       </div>
       <div v-else class="dropdown-empty">未找到匹配项</div>
     </div>
-
   </div>
 </template>
 
@@ -100,22 +90,18 @@ const emit = defineEmits<{
 }>();
 
 // Refs
-const inputRef = ref<HTMLInputElement>();
-const contentRef = ref<HTMLElement>();
+const editorRef = ref<HTMLDivElement>();
 const searchContainerRef = ref<HTMLElement>();
 
 // State
 const isFocused = ref(false);
-const inputText = ref('');
-const selectedTags = ref<{ value: string; type: 'type' | 'tag' }[]>([]);
+const isComposing = ref(false);
 
-// Dropdown states
+// Mention panel states
 const showMentionPanel = ref(false);
-const showHistory = ref(false);
 const mentionFilter = ref('');
 const selectedMentionIndex = ref(0);
-const selectedHistoryIndex = ref(-1);
-const isComposing = ref(false);
+const mentionPanelPosition = ref({ left: 0, top: 0 });
 
 // Usage tracking
 const mentionUsageCount = ref<Record<string, number>>({});
@@ -123,8 +109,30 @@ const mentionUsageCount = ref<Record<string, number>>({});
 // Constants
 const TYPE_OPTIONS = ['文本', 'html', '图片', '文件', '文件夹'];
 
+// Track current mention range
+const currentMentionRange = ref<Range | null>(null);
+const currentMentionNode = ref<Text | null>(null);
+
+// Track last committed query
+const lastCommittedQuery = ref('');
+
 // Computed
-const hasContent = computed(() => selectedTags.value.length > 0 || inputText.value.length > 0);
+const hasContent = computed(() => {
+  const text = getTextContent();
+  return text.trim().length > 0;
+});
+
+const placeholderText = computed(() => {
+  const text = getTextContent();
+  return text.trim() ? '' : '搜索剪贴板... 使用 @标签名 或 @类型';
+});
+
+const mentionPanelStyle = computed(() => ({
+  position: 'fixed' as const,
+  left: `${mentionPanelPosition.value.left}px`,
+  top: `${mentionPanelPosition.value.top}px`,
+  zIndex: 1000,
+}));
 
 const allTags = computed(() => {
   const tags = new Set<string>();
@@ -134,7 +142,7 @@ const allTags = computed(() => {
 
 const mentionOptions = computed(() => {
   const options: { value: string; category: 'type' | 'tag'; count: number }[] = [];
-  
+
   TYPE_OPTIONS.forEach(type => {
     options.push({
       value: type,
@@ -142,7 +150,7 @@ const mentionOptions = computed(() => {
       count: mentionUsageCount.value[type] || 0
     });
   });
-  
+
   allTags.value.forEach(tag => {
     options.push({
       value: tag,
@@ -150,23 +158,23 @@ const mentionOptions = computed(() => {
       count: mentionUsageCount.value[tag] || 0
     });
   });
-  
+
   return options;
 });
 
 const filteredMentionOptions = computed(() => {
   let options = mentionOptions.value;
-  
-  // Filter out already selected tags
-  const selectedValues = selectedTags.value.map(t => t.value);
-  options = options.filter(o => !selectedValues.includes(o.value));
-  
+
+  // Filter out already selected tags (check in current text)
+  const existingTags = getExistingTags();
+  options = options.filter(o => !existingTags.includes(o.value));
+
   // Filter by input
   if (mentionFilter.value) {
     const f = mentionFilter.value.toLowerCase();
     options = options.filter(o => o.value.toLowerCase().includes(f));
   }
-  
+
   // Sort by usage count
   return options.sort((a, b) => {
     if (b.count !== a.count) return b.count - a.count;
@@ -174,217 +182,267 @@ const filteredMentionOptions = computed(() => {
   });
 });
 
-// Methods
-const focusInput = () => {
-  inputRef.value?.focus();
-};
+// Get existing tags from editor content
+function getExistingTags(): string[] {
+  const tags: string[] = [];
+  const editor = editorRef.value;
+  if (!editor) return tags;
 
-const handleFocus = () => {
-  isFocused.value = true;
-  // 检查是否需要显示@补全面板
-  checkMention();
-  // 历史记录功能已屏蔽
-  // if (!showMentionPanel.value && props.history.length > 0) {
-  //   showHistory.value = true;
-  //   selectedHistoryIndex.value = -1;
-  // }
-};
+  const spans = editor.querySelectorAll('.inline-tag');
+  spans.forEach(span => {
+    const tagName = span.getAttribute('data-tag');
+    if (tagName) tags.push(tagName);
+  });
+  return tags;
+}
 
-// Track last committed query to avoid duplicate history entries
-const lastCommittedQuery = ref('');
+// Get plain text content from editor
+function getTextContent(): string {
+  const editor = editorRef.value;
+  if (!editor) return '';
 
-let blurTimer: number | null = null;
+  let text = '';
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent || '';
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (el.classList.contains('inline-tag')) {
+        const tagName = el.getAttribute('data-tag');
+        if (tagName) text += `@${tagName}`;
+      } else {
+        node.childNodes.forEach(walk);
+      }
+      if (el.tagName === 'DIV' && el !== editor) {
+        text += '\n';
+      }
+    }
+  };
 
-const handleBlur = () => {
-  // Clean up: if input is only "@" (incomplete tag), clear it
-  // Also handle "@ " which can happen when user types space after @
-  const trimmedInput = inputText.value.trim();
-  let cleanedText = inputText.value;
-  if (trimmedInput === '@' || trimmedInput === '') {
-    cleanedText = '';
+  editor.childNodes.forEach(walk);
+  return text;
+}
+
+// Set editor content from parsed tags and text
+function setEditorContent(tags: { value: string; type: 'type' | 'tag' }[], text: string) {
+  const editor = editorRef.value;
+  if (!editor) return;
+
+  editor.innerHTML = '';
+
+  // Add tags as inline elements
+  tags.forEach(tag => {
+    const span = createInlineTagElement(tag.value, tag.type);
+    editor.appendChild(span);
+    editor.appendChild(document.createTextNode('\u00A0')); // Non-breaking space after tag
+  });
+
+  // Add remaining text
+  if (text) {
+    const textNode = document.createTextNode(text);
+    editor.appendChild(textNode);
   }
-  
-  // Commit search on blur if there's actual content
-  const fullQuery = selectedTags.value.map(t => `@${t.value}`).join(' ') +
-    (selectedTags.value.length && cleanedText ? ' ' : '') + cleanedText;
-  if (fullQuery.trim() && fullQuery !== lastCommittedQuery.value) {
-    lastCommittedQuery.value = fullQuery;
-    emit('search-commit', fullQuery);
+
+  // Place cursor at the end
+  nextTick(() => {
+    const range = document.createRange();
+    const sel = window.getSelection();
+    if (editor.lastChild) {
+      range.setStartAfter(editor.lastChild);
+      range.collapse(true);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  });
+}
+
+// Create inline tag element
+function createInlineTagElement(value: string, type: 'type' | 'tag'): HTMLSpanElement {
+  const span = document.createElement('span');
+  span.className = `inline-tag ${type === 'type' ? 'is-type' : ''}`;
+  span.contentEditable = 'false';
+  span.setAttribute('data-tag', value);
+  span.setAttribute('data-type', type);
+  span.textContent = `@${value}`;
+  return span;
+}
+
+// Get caret position in text (character index)
+function getCaretPosition(): number {
+  const editor = editorRef.value;
+  if (!editor) return 0;
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return 0;
+
+  const range = sel.getRangeAt(0);
+  let pos = 0;
+
+  const walk = (node: Node, targetNode: Node, targetOffset: number): boolean => {
+    if (node === targetNode) {
+      pos += targetOffset;
+      return true;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      pos += node.textContent?.length || 0;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (el.classList.contains('inline-tag')) {
+        const tagName = el.getAttribute('data-tag');
+        if (tagName) pos += `@${tagName}`.length;
+      } else {
+        for (let i = 0; i < node.childNodes.length; i++) {
+          if (walk(node.childNodes[i], targetNode, targetOffset)) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  walk(editor, range.startContainer, range.startOffset);
+  return pos;
+}
+
+// Get caret coordinates for positioning dropdown
+function getCaretCoordinates(): { left: number; top: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+
+  if (rect.width === 0 && rect.height === 0) {
+    // If collapsed range has no dimensions, try to get from range's client rects
+    const rects = range.getClientRects();
+    if (rects.length > 0) {
+      const lastRect = rects[rects.length - 1];
+      return {
+        left: lastRect.left,
+        top: lastRect.bottom + 4
+      };
+    }
   }
 
-  blurTimer = window.setTimeout(() => {
-    isFocused.value = false;
+  return {
+    left: rect.left,
+    top: rect.bottom + 4
+  };
+}
+
+// Check if there's an active @ mention
+function checkMention() {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) {
     showMentionPanel.value = false;
-    showHistory.value = false;
-  }, 150);
-};
-
-const clearBlurTimer = () => {
-  if (blurTimer) {
-    clearTimeout(blurTimer);
-    blurTimer = null;
+    return;
   }
-};
 
-const checkMention = () => {
-  const text = inputText.value;
-  const lastAt = text.lastIndexOf('@');
+  const range = sel.getRangeAt(0);
+  const node = range.startContainer;
 
-  if (lastAt === -1) {
-    // 没有@符号时，关闭补全面板
+  // Only check text nodes
+  if (node.nodeType !== Node.TEXT_NODE) {
     showMentionPanel.value = false;
-    // 历史记录功能已屏蔽
-    // if (!text.trim() && props.history.length > 0 && isFocused.value) {
-    //   showHistory.value = true;
-    // }
+    return;
+  }
+
+  const text = node.textContent || '';
+  const offset = range.startOffset;
+
+  // Find the last @ before cursor
+  const textBeforeCursor = text.slice(0, offset);
+  const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+  if (lastAtIndex === -1) {
+    showMentionPanel.value = false;
+    return;
+  }
+
+  // Check if @ is at start or after space
+  if (lastAtIndex > 0 && textBeforeCursor[lastAtIndex - 1] !== ' ') {
+    showMentionPanel.value = false;
     return;
   }
 
   // Check if there's a space after @ (meaning user finished typing)
-  const afterAt = text.slice(lastAt + 1);
+  const afterAt = textBeforeCursor.slice(lastAtIndex + 1);
   if (afterAt.includes(' ')) {
     showMentionPanel.value = false;
-    // 历史记录功能已屏蔽
-    // const beforeAt = text.slice(0, lastAt).trim();
-    // if (!beforeAt && props.history.length > 0 && isFocused.value) {
-    //   showHistory.value = true;
-    // }
     return;
   }
 
-  // Check @ is at start or after space
-  if (lastAt > 0 && text[lastAt - 1] !== ' ') {
-    showMentionPanel.value = false;
-    return;
-  }
-
-  // 显示@补全面板，隐藏历史记录
+  // Show mention panel
   mentionFilter.value = afterAt;
+  currentMentionNode.value = node as Text;
+
+  // Save range for later replacement
+  const mentionRange = document.createRange();
+  mentionRange.setStart(node, lastAtIndex);
+  mentionRange.setEnd(node, offset);
+  currentMentionRange.value = mentionRange;
+
   showMentionPanel.value = true;
-  showHistory.value = false;
   selectedMentionIndex.value = 0;
-};
 
-const handleInput = () => {
-  if (isComposing.value) return;
-  checkMention();
-  updateSearchQuery();
-  // 如果有输入内容（非@标签），关闭历史记录
-  const text = inputText.value.trim();
-  if (text && !showMentionPanel.value) {
-    showHistory.value = false;
-  }
-};
+  // Position panel
+  nextTick(() => {
+    const coords = getCaretCoordinates();
+    if (coords) {
+      mentionPanelPosition.value = coords;
+    }
+  });
+}
 
-const handleCompositionEnd = () => {
-  isComposing.value = false;
-  checkMention();
-  updateSearchQuery();
-  // 如果有输入内容（非@标签），关闭历史记录
-  const text = inputText.value.trim();
-  if (text && !showMentionPanel.value) {
-    showHistory.value = false;
-  }
-};
-
-const selectMention = (item: { value: string; category: 'type' | 'tag' }) => {
+// Select a mention and replace @xxx with inline tag
+function selectMention(item: { value: string; category: 'type' | 'tag' }) {
   clearBlurTimer();
 
-  // Remove the @ and filter text from input
-  const text = inputText.value;
-  const lastAt = text.lastIndexOf('@');
-  inputText.value = text.slice(0, lastAt);
+  const range = currentMentionRange.value;
+  const node = currentMentionNode.value;
+  const editor = editorRef.value;
 
-  // Add to selected tags
-  selectedTags.value.push({
-    value: item.value,
-    type: item.category
-  });
+  if (range && node && editor) {
+    // Delete the @xxx text
+    range.deleteContents();
+
+    // Insert inline tag
+    const tagSpan = createInlineTagElement(item.value, item.category);
+    range.insertNode(tagSpan);
+
+    // Add space after tag
+    const spaceNode = document.createTextNode('\u00A0');
+    tagSpan.after(spaceNode);
+
+    // Move cursor after space
+    const sel = window.getSelection();
+    const newRange = document.createRange();
+    newRange.setStartAfter(spaceNode);
+    newRange.collapse(true);
+    sel?.removeAllRanges();
+    sel?.addRange(newRange);
+  }
 
   // Record usage
   mentionUsageCount.value[item.value] = (mentionUsageCount.value[item.value] || 0) + 1;
 
   showMentionPanel.value = false;
-  // Commit search when selecting a mention
+  currentMentionRange.value = null;
+  currentMentionNode.value = null;
+
+  // Update search
   updateSearchQuery(true);
 
   nextTick(() => {
-    inputRef.value?.focus();
+    editorRef.value?.focus();
   });
-};
+}
 
-const removeTag = (index: number) => {
-  selectedTags.value.splice(index, 1);
-  updateSearchQuery();
-  inputRef.value?.focus();
-};
+// Refs
+const mentionListRef = ref<HTMLDivElement>();
 
-const selectHistory = (h: string) => {
-  clearBlurTimer();
-
-  // Parse history to extract tags and text
-  const parts = h.split(/\s+/);
-  const newTags: { value: string; type: 'type' | 'tag' }[] = [];
-  let remainingText = '';
-
-  parts.forEach(part => {
-    if (part.startsWith('@')) {
-      const value = part.slice(1);
-      const isType = TYPE_OPTIONS.includes(value);
-      newTags.push({
-        value,
-        type: isType ? 'type' : 'tag'
-      });
-    } else {
-      remainingText += (remainingText ? ' ' : '') + part;
-    }
-  });
-
-  selectedTags.value = newTags;
-  inputText.value = remainingText;
-  showHistory.value = false;
-
-  // 如果有剩余文本，需要检查是否有新的@需要补全
-  nextTick(() => {
-    checkMention();
-    updateSearchQuery();
-    inputRef.value?.focus();
-  });
-};
-
-// 历史记录功能已屏蔽
-// const clearAllHistory = () => {
-//   emit('clear-all-history');
-// };
-
-const clearAll = () => {
-  selectedTags.value = [];
-  inputText.value = '';
-  updateSearchQuery();
-  inputRef.value?.focus();
-};
-
-const updateSearchQuery = (shouldCommit = false) => {
-  const tags = selectedTags.value.map(t => `@${t.value}`).join(' ');
-  const fullQuery = tags + (tags && inputText.value ? ' ' : '') + inputText.value;
-  
-  // Skip search when input is incomplete @ tag: starts with @ and no space after
-  // This handles "@", "@a", "@ab" etc while allowing "@tag " (completed)
-  const trimmedInput = inputText.value.trim();
-  const isIncompleteAtTag = trimmedInput.startsWith('@') && !trimmedInput.includes(' ');
-  const hasContent = fullQuery.trim() && !isIncompleteAtTag;
-  
-  emit('update:modelValue', fullQuery);
-  if (hasContent) {
-    emit('search', fullQuery);
-  }
-  if (shouldCommit && hasContent) {
-    emit('search-commit', fullQuery);
-  }
-};
-
-// List navigation (vertical only)
-const navigateList = (direction: 'up' | 'down') => {
+// Navigation in mention list with scroll into view
+const navigateMentionList = (direction: 'up' | 'down') => {
   if (direction === 'up') {
     selectedMentionIndex.value = Math.max(0, selectedMentionIndex.value - 1);
   } else {
@@ -393,48 +451,130 @@ const navigateList = (direction: 'up' | 'down') => {
       selectedMentionIndex.value + 1
     );
   }
+
+  // Scroll active item into view
+  nextTick(() => {
+    const listEl = mentionListRef.value;
+    if (!listEl) return;
+
+    const activeItem = listEl.querySelector('.mention-item.active') as HTMLElement;
+    if (!activeItem) return;
+
+    const listRect = listEl.getBoundingClientRect();
+    const itemRect = activeItem.getBoundingClientRect();
+
+    // Check if item is above visible area
+    if (itemRect.top < listRect.top) {
+      activeItem.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    // Check if item is below visible area
+    else if (itemRect.bottom > listRect.bottom) {
+      activeItem.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }
+  });
 };
 
-// Icon mapping for mention items
+// Icon mapping
 const getMentionIcon = (item: { value: string; category: 'type' | 'tag' }): string => {
   if (item.category === 'tag') {
     return '🏷️';
   }
-  // Type icons
   switch (item.value) {
-    case '文本':
-      return '📝';
-    case 'html':
-      return '🌐';
-    case '图片':
-      return '🖼️';
-    case '文件':
-      return '📄';
-    case '文件夹':
-      return '📁';
-    default:
-      return '📋';
+    case '文本': return '📝';
+    case 'html': return '🌐';
+    case '图片': return '🖼️';
+    case '文件': return '📄';
+    case '文件夹': return '📁';
+    default: return '📋';
   }
 };
 
+// Focus input
+const focusInput = () => {
+  editorRef.value?.focus();
+};
+
+// Handle focus
+const handleFocus = () => {
+  isFocused.value = true;
+  checkMention();
+};
+
+// Handle blur
+let blurTimer: number | null = null;
+
+const clearBlurTimer = () => {
+  if (blurTimer) {
+    clearTimeout(blurTimer);
+    blurTimer = null;
+  }
+};
+
+const handleBlur = () => {
+  // Commit search on blur
+  const fullQuery = getTextContent();
+  if (fullQuery.trim() && fullQuery !== lastCommittedQuery.value) {
+    lastCommittedQuery.value = fullQuery;
+    emit('search-commit', fullQuery);
+  }
+
+  blurTimer = window.setTimeout(() => {
+    isFocused.value = false;
+    showMentionPanel.value = false;
+  }, 150);
+};
+
+// Handle input
+const handleInput = () => {
+  if (isComposing.value) return;
+  checkMention();
+  updateSearchQuery();
+};
+
+const handleCompositionEnd = () => {
+  isComposing.value = false;
+  checkMention();
+  updateSearchQuery();
+};
+
+// Update search query
+const updateSearchQuery = (shouldCommit = false) => {
+  const fullQuery = getTextContent();
+
+  emit('update:modelValue', fullQuery);
+  if (fullQuery.trim()) {
+    emit('search', fullQuery);
+  }
+  if (shouldCommit && fullQuery.trim()) {
+    emit('search-commit', fullQuery);
+  }
+};
+
+// Clear all content
+const clearAll = () => {
+  const editor = editorRef.value;
+  if (editor) {
+    editor.innerHTML = '';
+  }
+  updateSearchQuery();
+  editorRef.value?.focus();
+};
+
+// Handle editor click - check if clicked on tag
+const handleEditorClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  if (target.classList.contains('inline-tag')) {
+    // Select the tag for potential deletion
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.selectNode(target);
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+};
+
+// Handle keydown
 const handleKeyDown = (e: KeyboardEvent) => {
-  // 快捷键：Ctrl+Shift+H 切换历史记录显示（已屏蔽）
-  // if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
-  //   e.preventDefault();
-  //   e.stopPropagation();
-  //   if (props.history.length > 0) {
-  //     if (showMentionPanel.value || showHistory.value) {
-  //       showMentionPanel.value = false;
-  //       showHistory.value = false;
-  //     } else {
-  //       showMentionPanel.value = false;
-  //       showHistory.value = true;
-  //       selectedHistoryIndex.value = 0;
-  //     }
-  //   }
-  //   return;
-  // }
-  
   // Mention panel navigation
   if (showMentionPanel.value) {
     e.stopPropagation();
@@ -442,11 +582,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        navigateList('down');
+        navigateMentionList('down');
         break;
       case 'ArrowUp':
         e.preventDefault();
-        navigateList('up');
+        navigateMentionList('up');
         break;
       case 'Enter':
         e.preventDefault();
@@ -458,73 +598,78 @@ const handleKeyDown = (e: KeyboardEvent) => {
         e.preventDefault();
         showMentionPanel.value = false;
         break;
+      case 'Tab':
+        e.preventDefault();
+        if (filteredMentionOptions.value.length > 0) {
+          selectMention(filteredMentionOptions.value[selectedMentionIndex.value]);
+        }
+        break;
     }
     return;
-  }
-  
-  // History navigation
-  if (showHistory.value) {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter') {
-      e.stopPropagation();
-    }
-    
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (selectedHistoryIndex.value < props.history.length - 1) {
-        selectedHistoryIndex.value++;
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (selectedHistoryIndex.value > 0) {
-        selectedHistoryIndex.value--;
-      }
-    } else if (e.key === 'Enter' && selectedHistoryIndex.value >= 0) {
-      e.preventDefault();
-      selectHistory(props.history[selectedHistoryIndex.value]);
-    } else if (e.key === 'Escape') {
-      showHistory.value = false;
-    }
-    return;
-  }
-  
-  // Backspace to delete last tag when input is empty
-  if (e.key === 'Backspace' && !inputText.value && selectedTags.value.length > 0) {
-    removeTag(selectedTags.value.length - 1);
   }
 
-  // 普通输入模式下按 Enter，提交搜索
-  if (e.key === 'Enter' && !showMentionPanel.value && !showHistory.value) {
-    // Skip if input is incomplete @ tag (starts with @ and no space)
-    const trimmedInput = inputText.value.trim();
-    const isIncompleteAtTag = trimmedInput.startsWith('@') && !trimmedInput.includes(' ');
-    const fullQuery = selectedTags.value.map(t => `@${t.value}`).join(' ') +
-      (selectedTags.value.length && inputText.value ? ' ' : '') + inputText.value;
-    if (fullQuery.trim() && !isIncompleteAtTag) {
+  // Handle Backspace to delete selected tag
+  if (e.key === 'Backspace') {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      // Check if a tag is selected
+      if (!range.collapsed) {
+        const container = range.commonAncestorContainer;
+        const tagSpan = container.nodeType === Node.ELEMENT_NODE
+          ? container as HTMLElement
+          : container.parentElement;
+
+        if (tagSpan?.classList.contains('inline-tag')) {
+          e.preventDefault();
+          tagSpan.remove();
+          updateSearchQuery();
+          return;
+        }
+      }
+
+      // Check if cursor is right after a tag
+      if (range.collapsed && range.startOffset === 0) {
+        const node = range.startContainer;
+        const prevNode = node.previousSibling;
+        if (prevNode && prevNode.nodeType === Node.ELEMENT_NODE) {
+          const el = prevNode as HTMLElement;
+          if (el.classList.contains('inline-tag')) {
+            e.preventDefault();
+            el.remove();
+            updateSearchQuery();
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  // Enter to commit search
+  if (e.key === 'Enter' && !e.shiftKey && !showMentionPanel.value) {
+    e.preventDefault();
+    const fullQuery = getTextContent();
+    if (fullQuery.trim()) {
       emit('search-commit', fullQuery);
     }
-    showHistory.value = false;
   }
 };
 
-// 监听 modelValue 变化，同步更新内部状态（用于外部如标签点击时更新）
+// Watch modelValue changes
 watch(() => props.modelValue, (newValue) => {
-  // 如果正在显示候选面板，说明用户正在输入标签，不要自动解析
-  if (showMentionPanel.value) {
-    return;
-  }
+  // Don't update if mention panel is open
+  if (showMentionPanel.value) return;
 
-  // 解析 query 为 tags 和 inputText
+  // Parse query to tags and text
   const parts = newValue.split(/\s+/);
   const newTags: { value: string; type: 'type' | 'tag' }[] = [];
   let remainingText = '';
-  let hasIncompleteAt = false;
 
   parts.forEach(part => {
     if (part.startsWith('@')) {
       const value = part.slice(1);
-      // 只有 @ 没有内容的情况是正在输入的标签，保留在 inputText 中
-      if (!value) {
-        hasIncompleteAt = true;
+      // @ 后面紧跟空格表示搜索 "@" 符号，不是标签
+      if (!value || newValue.includes('@ ')) {
         remainingText += (remainingText ? ' ' : '') + part;
         return;
       }
@@ -538,8 +683,11 @@ watch(() => props.modelValue, (newValue) => {
     }
   });
 
-  selectedTags.value = newTags;
-  inputText.value = remainingText;
+  // Update editor content
+  const currentText = getTextContent();
+  if (currentText !== newValue) {
+    setEditorContent(newTags, remainingText);
+  }
 }, { immediate: true });
 
 onUnmounted(() => {
@@ -580,56 +728,8 @@ defineExpose({ focus: focusInput });
   margin-right: 8px;
 }
 
-.search-content {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-width: 0;
-}
-
-/* Tags */
-.search-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background: #e6f7ff;
-  border: 1px solid #91d5ff;
-  border-radius: 4px;
-  font-size: 13px;
-  color: #1890ff;
-  font-weight: 500;
-}
-
-.search-tag.is-type {
-  background: #f6ffed;
-  border-color: #b7eb8f;
-  color: #52c41a;
-}
-
-.tag-remove {
-  width: 14px;
-  height: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.1);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 10px;
-  color: inherit;
-  padding: 0;
-}
-
-.tag-remove:hover {
-  background: rgba(0, 0, 0, 0.2);
-}
-
-/* Input */
-input {
+/* Contenteditable Editor */
+.search-editor {
   flex: 1;
   min-width: 60px;
   padding: 4px;
@@ -638,10 +738,60 @@ input {
   font-size: 13px;
   outline: none;
   color: #262626;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-input::placeholder {
+.search-editor:empty::before {
+  content: attr(placeholder);
   color: #8c8c8c;
+  pointer-events: none;
+}
+
+.search-editor:focus {
+  outline: none;
+}
+
+/* Inline Tags */
+:deep(.inline-tag) {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #1890ff;
+  font-weight: 500;
+  margin: 0 2px;
+  cursor: default;
+  user-select: none;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+:deep(.inline-tag.is-type) {
+  background: #f6ffed;
+  border-color: #b7eb8f;
+  color: #52c41a;
+}
+
+:deep(.inline-tag:hover) {
+  background: #bae7ff;
+  border-color: #69c0ff;
+}
+
+:deep(.inline-tag.is-type:hover) {
+  background: #d9f7be;
+  border-color: #95de64;
+}
+
+:deep(.inline-tag.selected) {
+  background: #ff4d4f;
+  border-color: #ff7875;
+  color: #fff;
 }
 
 /* Clear button */
@@ -685,19 +835,15 @@ input::placeholder {
   font-weight: 500;
 }
 
-/* Dropdown */
+/* Dropdown - Fixed position */
 .search-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
   background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-  z-index: 1000;
-  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border: 1px solid #f0f0f0;
   overflow: hidden;
+  min-width: 200px;
+  max-width: 280px;
 }
 
 .dropdown-header {
@@ -715,19 +861,6 @@ input::placeholder {
   color: #bfbfbf;
 }
 
-.clear-btn-text {
-  font-size: 11px;
-  color: #8c8c8c;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 2px 6px;
-}
-
-.clear-btn-text:hover {
-  color: #ff4d4f;
-}
-
 .dropdown-empty {
   padding: 20px;
   text-align: center;
@@ -735,53 +868,49 @@ input::placeholder {
   font-size: 13px;
 }
 
-/* Mention list (vertical layout) */
+/* Mention list - 简洁风格 */
 .mention-list {
   display: flex;
   flex-direction: column;
-  padding: 4px;
-  max-height: 280px;
+  padding: 4px 0;
+  max-height: 240px;
   overflow-y: auto;
 }
 
 .mention-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  margin: 2px 6px;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 0 4px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
-  color: #333333;
+  font-size: 13px;
+  color: #262626;
   background: transparent;
-  transition: all 0.15s ease;
-  min-height: 36px;
+  transition: background 0.1s ease;
+  min-height: 32px;
 }
 
-/* hover 效果 */
 .mention-item:hover {
-  background: #f0f5ff;
+  background: #f5f5f5;
 }
 
-/* active/选中状态 - 醒目的高亮 */
 .mention-item.active {
-  background: #e6f0ff;
-  color: #1a73e8;
-  font-weight: 500;
-  box-shadow: inset 0 0 0 1px #4285f4;
+  background: #262626;
+  color: #fff;
 }
 
 .mention-item-icon {
-  font-size: 16px;
+  font-size: 14px;
   flex-shrink: 0;
-  width: 22px;
+  width: 18px;
   text-align: center;
-  opacity: 0.85;
+  color: #8c8c8c;
 }
 
 .mention-item.active .mention-item-icon {
-  opacity: 1;
+  color: #fff;
 }
 
 .mention-item-name {
@@ -789,64 +918,18 @@ input::placeholder {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: inherit;
-  color: inherit;
-}
-
-.mention-item.active .mention-item-name {
-  color: #1a73e8;
+  font-weight: 400;
 }
 
 .mention-item-meta {
-  font-size: 12px;
-  color: #888888;
+  font-size: 11px;
+  color: #bfbfbf;
   flex-shrink: 0;
   margin-left: auto;
-  padding-left: 12px;
+  padding-left: 8px;
 }
 
 .mention-item.active .mention-item-meta {
-  color: #5c9cfc;
-}
-
-/* History list */
-.history-list {
-  max-height: 180px;
-  overflow-y: auto;
-}
-
-.history-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.15s;
-}
-
-.history-item:hover,
-.history-item.active {
-  background: #f5f5f5;
-}
-
-.history-text {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.history-delete {
-  background: transparent;
-  border: none;
-  color: #bfbfbf;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 6px;
-}
-
-.history-delete:hover {
-  color: #ff4d4f;
+  color: #d9d9d9;
 }
 </style>
