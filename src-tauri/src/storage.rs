@@ -85,8 +85,6 @@ impl Database {
                 "UPDATE clipboard_history SET tags = '[\"收藏\"]' WHERE is_favorite = 1 AND tags IS NULL",
                 [],
             )?;
-            // 删除旧列（SQLite 不支持直接 DROP COLUMN，需要重建表）
-            // 这里简化处理，保留旧列但不使用
         }
 
         // 设置表
@@ -163,11 +161,6 @@ impl Database {
     }
 
     /// 添加剪贴板记录
-    ///
-    /// # 参数
-    /// - `item`: 要添加的剪贴板项
-    /// - `auto_sort`: 是否根据设置自动排序（将重复项置顶）
-    /// - `is_internal_copy`: 是否是软件内部复制。内部复制不会更新时间戳，外部复制（来自系统剪贴板）会更新时间戳
     pub fn add_clipboard_item(
         &self,
         item: &ClipboardItem,
@@ -192,9 +185,6 @@ impl Database {
             .map(|t| serde_json::to_string(t).ok())
             .flatten();
 
-        // 决定是否更新重复项的时间戳：
-        // - auto_sort 启用时：总是更新时间戳（无论内部还是外部复制）
-        // - auto_sort 禁用时：仅外部复制更新时间戳（已存在的数据置顶），内部复制保持原位
         let should_update_timestamp = auto_sort || !is_internal_copy;
 
         let conflict_sql = if should_update_timestamp {
@@ -229,7 +219,6 @@ impl Database {
             ],
         )?;
 
-        // 如果发生 ON CONFLICT DO NOTHING，需要返回已存在项的 ID
         let id: i64 = conn.query_row(
             "SELECT id FROM clipboard_history WHERE content_hash = ?1",
             params![item.content_hash],
@@ -300,11 +289,9 @@ impl Database {
 
     /// 搜索历史记录
     pub fn search_history(&self, query: &str, limit: i64) -> Result<Vec<ClipboardItem>> {
-        use crate::fuzzy_search::fuzzy_match;
-
         let conn = self.conn.lock().unwrap();
+        let query_lower = query.to_lowercase();
 
-        // 先获取所有记录，然后在内存中进行模糊搜索
         let mut stmt = conn.prepare(
             "SELECT id, content_type, content, created_at, content_hash, text_content, metadata, file_paths, thumbnail_path, tags
              FROM clipboard_history
@@ -356,12 +343,12 @@ impl Database {
             })?
             .filter_map(|item| item.ok())
             .filter(|item| {
-                // 应用模糊搜索过滤
-                fuzzy_match(query, &item.content)
+                let content_lower = item.content.to_lowercase();
+                content_lower.contains(&query_lower)
                     || (item
                         .tags
                         .as_ref()
-                        .map_or(false, |tags| tags.iter().any(|tag| fuzzy_match(query, tag))))
+                        .map_or(false, |tags| tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))))
             })
             .take(limit as usize)
             .collect();
@@ -370,67 +357,76 @@ impl Database {
     }
 
     /// 高级搜索历史记录（支持标签和类型过滤）
-    ///
-    /// 搜索策略：
-    /// 1. 首先使用 SQL 进行预过滤（类型、时间范围）
-    /// 2. 对结果应用模糊搜索（内容、标签匹配）
-    /// 3. 支持多关键词 AND 匹配
+    /// 
+    /// 优化策略：
+    /// 1. 标签过滤：使用 SQL LIKE 在数据库层面过滤（JSON 数组格式: ["tag1","tag2"]）
+    /// 2. 内容过滤：使用 SQL LIKE 在数据库层面过滤 content 和 text_content
+    /// 3. 只返回匹配的记录，避免大量数据传输
     pub fn search_history_advanced(&self, request: &AdvancedSearchRequest) -> Result<Vec<ClipboardItem>> {
-        use crate::fuzzy_search::fuzzy_match;
-
         let conn = self.conn.lock().unwrap();
 
-        // 构建 SQL 查询条件
-        let mut conditions: Vec<String> = vec!["1=1".to_string()]; // 基础条件，方便后续追加
-        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+        let target_limit = request.limit.unwrap_or(50);
+
+        // 构建 SQL 条件
+        let mut conditions: Vec<String> = vec!["1=1".to_string()];
+        let mut sql_params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
 
         // 类型过滤
         if !request.types.is_empty() {
-            let type_placeholders: Vec<String> = (0..request.types.len())
+            let placeholders: Vec<String> = (0..request.types.len())
                 .map(|i| format!("?{}", i + 1))
                 .collect();
-            conditions.push(format!(
-                "content_type IN ({})",
-                type_placeholders.join(", ")
-            ));
+            conditions.push(format!("content_type IN ({})", placeholders.join(", ")));
             for t in &request.types {
-                params.push(Box::new(format!("{:?}", t).to_lowercase()));
+                let type_str = format!("{:?}", t).to_lowercase();
+                sql_params.push(Box::new(type_str));
             }
         }
 
-        // 关键词过滤：在 SQL 层面使用 LIKE 进行预过滤
-        // 这样可以从整个数据库中找到匹配的记录，而不是只在前2000条中查找
+        // 标签过滤：使用 LIKE 匹配 JSON 数组格式（不区分大小写）
+        // 例如: LOWER(tags) LIKE '%"nekotick-api"%' 匹配 {"nekotick-api"}
+        for tag in &request.tags {
+            let tag_pattern = format!("%\"{}\"%", tag.to_lowercase());
+            conditions.push("LOWER(tags) LIKE ?".to_string());
+            sql_params.push(Box::new(tag_pattern));
+        }
+
+        // 关键词过滤（不区分大小写）：
+        // - HTML类型：只用 text_content（纯文本提取内容）过滤
+        // - 其他类型：用 content 过滤
         if !request.keywords.is_empty() {
-            // 构建关键词 LIKE 条件 (content OR text_content OR file_paths)
-            let keyword_conditions: Vec<String> = request.keywords.iter().map(|_| {
-                "(content LIKE ? OR text_content LIKE ? OR file_paths LIKE ?)".to_string()
-            }).collect();
-            conditions.push(format!("({})", keyword_conditions.join(" AND ")));
+            let mut content_conditions: Vec<String> = vec![];
 
-            // 为每个关键词添加 3 个参数（content, text_content, file_paths）
             for keyword in &request.keywords {
-                let pattern = format!("%{}%", keyword);
-                params.push(Box::new(pattern.clone()));
-                params.push(Box::new(pattern.clone()));
-                params.push(Box::new(pattern));
+                let keyword_lower = keyword.to_lowercase();
+                let keyword_pattern = format!("%{}%", keyword_lower);
+
+                // HTML类型用 text_content
+                content_conditions.push("(content_type = 'html' AND LOWER(text_content) LIKE ?)".to_string());
+                sql_params.push(Box::new(keyword_pattern.clone()));
+
+                // 非HTML类型用 content
+                content_conditions.push("(content_type != 'html' AND LOWER(content) LIKE ?)".to_string());
+                sql_params.push(Box::new(keyword_pattern));
             }
+
+            conditions.push(format!("({})", content_conditions.join(" OR ")));
         }
 
-        // SQL 查询：使用 WHERE 条件在数据库层面过滤
         let sql = format!(
             "SELECT id, content_type, content, created_at, content_hash, text_content, metadata, file_paths, thumbnail_path, tags
              FROM clipboard_history
              WHERE {}
              ORDER BY created_at DESC
-             LIMIT 1000",
-            conditions.join(" AND ")
+             LIMIT {}",
+            conditions.join(" AND "),
+            target_limit
         );
 
         let mut stmt = conn.prepare(&sql)?;
 
-        // 执行查询
-        let items = stmt
-            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
+        let items: Vec<ClipboardItem> = stmt
+            .query_map(rusqlite::params_from_iter(sql_params.iter()), |row| {
                 let content_type_str: String = row.get(1)?;
                 let content_type = match content_type_str.as_str() {
                     "text" => ClipboardContentType::Text,
@@ -472,72 +468,9 @@ impl Database {
                 })
             })?
             .filter_map(|item| item.ok())
-            .filter(|item| {
-                // 标签过滤：要求所有指定标签都匹配
-                if !request.tags.is_empty() {
-                    let item_tags = item.tags.as_ref().map_or(vec![], |t| t.clone());
-                    let all_tags_match = request.tags.iter().all(|tag| {
-                        item_tags.iter().any(|item_tag| {
-                            item_tag.to_lowercase() == tag.to_lowercase()
-                        })
-                    });
-                    if !all_tags_match {
-                        return false;
-                    }
-                }
-
-                // 关键词过滤：所有关键词都必须匹配
-                if !request.keywords.is_empty() {
-                    let search_text = match item.content_type {
-                        ClipboardContentType::Html => {
-                            // HTML 类型：去除 HTML 标签后再搜索
-                            item.content.replace(|c: char| c == '<' || c == '>', " ")
-                                .replace(|c: char| c.is_whitespace(), " ")
-                        }
-                        _ => item.content.clone(),
-                    };
-
-                    let all_keywords_match = request.keywords.iter().all(|keyword| {
-                        // 在内容中搜索
-                        if fuzzy_match(keyword, &search_text) {
-                            return true;
-                        }
-                        // 在文件路径中搜索
-                        if let Some(paths) = &item.file_paths {
-                            let path_text = paths.join(" ");
-                            if fuzzy_match(keyword, &path_text) {
-                                return true;
-                            }
-                        }
-                        // 在缩略图路径中搜索（图片类型）
-                        if let Some(thumb) = &item.thumbnail_path {
-                            if fuzzy_match(keyword, thumb) {
-                                return true;
-                            }
-                        }
-                        false
-                    });
-
-                    if !all_keywords_match {
-                        return false;
-                    }
-                }
-
-                true
-            })
-            .collect::<Vec<_>>();
-
-        // 分页：在过滤后应用 limit 和 offset
-        let offset = request.offset.unwrap_or(0) as usize;
-        let limit = request.limit.unwrap_or(200) as usize;
-
-        let paginated_items: Vec<ClipboardItem> = items
-            .into_iter()
-            .skip(offset)
-            .take(limit)
             .collect();
 
-        Ok(paginated_items)
+        Ok(items)
     }
 
     /// 删除单条记录
@@ -583,17 +516,16 @@ impl Database {
         }
 
         let mut result: Vec<(String, i64)> = tag_counts.into_iter().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1)); // 按使用次数降序
+        result.sort_by(|a, b| b.1.cmp(&a.1));
 
         Ok(result)
     }
 
-    /// 清空历史 (支持按条数或日期)
+    /// 清空历史
     pub fn clear_history(&self, request: &ClearHistoryRequest) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
 
         let rows_affected = if let Some(keep_count) = request.keep_count {
-            // 按条数保留
             conn.execute(
                 "DELETE FROM clipboard_history
                  WHERE id NOT IN (
@@ -604,38 +536,23 @@ impl Database {
                 params![keep_count],
             )?
         } else if let Some(keep_days) = request.keep_days {
-            // 按日期保留
             let cutoff_date = chrono::Utc::now() - chrono::Duration::days(keep_days);
             conn.execute(
                 "DELETE FROM clipboard_history WHERE created_at < ?1",
                 params![cutoff_date.to_rfc3339()],
             )?
         } else {
-            // 全部清空
             conn.execute("DELETE FROM clipboard_history", [])?
         };
 
         Ok(rows_affected as i64)
     }
 
-    /// 启动时自动清理 - 支持排除标签的清理
-    ///
-    /// 清理逻辑：
-    /// 1. 获取没有标签的记录数量
-    /// 2. 如果超过 max_history_count，删除最旧的记录（保留有标签的）
-    /// 3. 删除超过 auto_cleanup_days 的记录（保留有标签的）
-    ///
-    /// # 参数
-    /// - `max_history_count`: 最大历史记录数
-    /// - `auto_cleanup_days`: 自动清理天数 (0 表示不按日期清理)
-    ///
-    /// # 返回
-    /// - 清理的记录数量
+    /// 启动时自动清理
     pub fn startup_cleanup(&self, max_history_count: i64, auto_cleanup_days: i64) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
         let mut total_deleted = 0i64;
 
-        // 步骤1: 按数量清理 - 删除没有标签的最旧记录
         let count_without_tags: i64 = conn.query_row(
             "SELECT COUNT(*) FROM clipboard_history WHERE tags IS NULL OR tags = '' OR tags = 'null'",
             [],
@@ -645,7 +562,6 @@ impl Database {
         if count_without_tags > max_history_count {
             let to_delete_count = count_without_tags - max_history_count;
 
-            // 删除最旧的没有标签的记录
             let rows_affected = conn.execute(
                 "DELETE FROM clipboard_history
                  WHERE id IN (
@@ -659,7 +575,6 @@ impl Database {
             total_deleted += rows_affected as i64;
         }
 
-        // 步骤2: 按日期清理 - 删除超过天数的没有标签的记录
         if auto_cleanup_days > 0 {
             let cutoff_date = chrono::Utc::now() - chrono::Duration::days(auto_cleanup_days);
 
@@ -741,7 +656,6 @@ impl Database {
                         settings.focus_search_on_activate = v;
                     }
                 }
-                // 向后兼容：读取旧设置
                 "auto_focus_search" => {
                     if let Ok(v) = value.parse() {
                         settings.focus_search_on_activate = v;
@@ -788,16 +702,6 @@ impl Database {
                 }
                 "number_key_shortcut" => settings.number_key_shortcut = value,
                 "pin_shortcut" => settings.pin_shortcut = value,
-                // 忽略已移除的设置字段（保持向后兼容）
-                "window_width"
-                | "window_height"
-                | "scroll_to_top_on_activate"
-                | "switch_to_all_on_activate"
-                | "clear_search_on_activate"
-                | "auto_favorite"
-                | "blacklist_apps" => {
-                    // 这些字段已移除，忽略即可
-                }
                 _ => {}
             }
         }
@@ -813,43 +717,19 @@ impl Database {
             ("max_history_count", settings.max_history_count.to_string()),
             ("auto_cleanup_days", settings.auto_cleanup_days.to_string()),
             ("window_position", settings.window_position.clone()),
-            (
-                "window_pos_x",
-                settings
-                    .window_pos_x
-                    .map(|v| v.to_string())
-                    .unwrap_or_default(),
-            ),
-            (
-                "window_pos_y",
-                settings
-                    .window_pos_y
-                    .map(|v| v.to_string())
-                    .unwrap_or_default(),
-            ),
+            ("window_pos_x", settings.window_pos_x.map(|v| v.to_string()).unwrap_or_default()),
+            ("window_pos_y", settings.window_pos_y.map(|v| v.to_string()).unwrap_or_default()),
             ("smart_activate", settings.smart_activate.to_string()),
             ("copy_sound", settings.copy_sound.to_string()),
             ("search_position", settings.search_position.clone()),
-            (
-                "focus_search_on_activate",
-                settings.focus_search_on_activate.to_string(),
-            ),
+            ("focus_search_on_activate", settings.focus_search_on_activate.to_string()),
             ("click_action", settings.click_action.clone()),
             ("double_click_action", settings.double_click_action.clone()),
             ("paste_shortcut", settings.paste_shortcut.clone()),
-            (
-                "hide_window_after_copy",
-                settings.hide_window_after_copy.to_string(),
-            ),
+            ("hide_window_after_copy", settings.hide_window_after_copy.to_string()),
             ("image_ocr", settings.image_ocr.to_string()),
-            (
-                "copy_as_plain_text",
-                settings.copy_as_plain_text.to_string(),
-            ),
-            (
-                "paste_as_plain_text",
-                settings.paste_as_plain_text.to_string(),
-            ),
+            ("copy_as_plain_text", settings.copy_as_plain_text.to_string()),
+            ("paste_as_plain_text", settings.paste_as_plain_text.to_string()),
             ("confirm_delete", settings.confirm_delete.to_string()),
             ("auto_sort", settings.auto_sort.to_string()),
             ("hotkey", settings.hotkey.clone()),

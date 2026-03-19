@@ -340,9 +340,9 @@ const handleSmartActivate = async () => {
 // 异步搜索结果
 const filteredHistory = ref<ClipboardItemType[]>([]);
 const isSearching = ref(false);
-const searchOffset = ref(0); // 搜索分页偏移量
+const searchOffset = ref(0); // 搜索分页偏移量（Rust内部每次扫描200条）
 const searchHasMore = ref(true); // 搜索是否还有更多数据
-const SEARCH_PAGE_SIZE = 200; // 每页加载数量
+const ITEMS_PER_PAGE = 50; // 每次返回给前端的数量
 
 // 防抖工具函数
 function debounce<T extends (...args: Parameters<T>) => void>(
@@ -390,33 +390,35 @@ const performSearch = async (query: string, isLoadMore = false) => {
       searchRequest = {
         keywords: pinnedParsed.keywords,
         tags: pinnedParsed.tags,
+        // 后端使用 snake_case 序列化，所以发送小写的类型名
         types: pinnedParsed.types.map(t => {
           const typeMap: Record<string, string> = {
-            'text': 'Text', 'html': 'Html', 'rtf': 'Rtf',
-            'image': 'Image', 'file': 'File', 'folder': 'Folder', 'files': 'Files'
+            'text': 'text', 'html': 'html', 'rtf': 'rtf',
+            'image': 'image', 'file': 'file', 'folder': 'folder', 'files': 'files'
           };
-          return typeMap[t] || 'Text';
+          return typeMap[t] || 'text';
         }),
-        limit: SEARCH_PAGE_SIZE,
+        limit: ITEMS_PER_PAGE,
         offset: searchOffset.value
       };
     } else {
-      searchRequest = { keywords: [], tags: [], types: [], limit: SEARCH_PAGE_SIZE, offset: 0 };
+      searchRequest = { keywords: [], tags: [], types: [], limit: ITEMS_PER_PAGE, offset: 0 };
     }
   } else if (activeTab.value !== "all" && !parsed.isValid) {
     // Tab 过滤（非搜索状态）
+    // 后端使用 snake_case 序列化，所以发送小写的类型名
     const typeMap: Record<string, string[]> = {
-      'file': ['File', 'Folder', 'Files'],
-      'text': ['Text', 'Html', 'Rtf'],
-      'image': ['Image'],
+      'file': ['file', 'folder', 'files'],
+      'text': ['text', 'html', 'rtf'],
+      'image': ['image'],
     };
-    const types = typeMap[activeTab.value] || [activeTab.value.charAt(0).toUpperCase() + activeTab.value.slice(1)];
+    const types = typeMap[activeTab.value] || [activeTab.value.toLowerCase()];
 
     searchRequest = {
       keywords: [],
       tags: [],
       types: types,
-      limit: SEARCH_PAGE_SIZE,
+      limit: ITEMS_PER_PAGE,
       offset: searchOffset.value
     };
   } else if (parsed.isValid) {
@@ -424,27 +426,31 @@ const performSearch = async (query: string, isLoadMore = false) => {
     searchRequest = {
       keywords: parsed.keywords,
       tags: parsed.tags,
+      // 后端使用 snake_case 序列化，所以发送小写的类型名
       types: parsed.types.map(t => {
         const typeMap: Record<string, string> = {
-          'text': 'Text', 'html': 'Html', 'rtf': 'Rtf',
-          'image': 'Image', 'file': 'File', 'folder': 'Folder', 'files': 'Files'
+          'text': 'text', 'html': 'html', 'rtf': 'rtf',
+          'image': 'image', 'file': 'file', 'folder': 'folder', 'files': 'files'
         };
-        return typeMap[t] || 'Text';
+        return typeMap[t] || 'text';
       }),
-      limit: SEARCH_PAGE_SIZE,
+      limit: ITEMS_PER_PAGE,
       offset: searchOffset.value
     };
   } else {
     // 无搜索条件，显示全部
     if (!isLoadMore) {
-      filteredHistory.value = history.value.slice(0, SEARCH_PAGE_SIZE);
-      searchHasMore.value = history.value.length > SEARCH_PAGE_SIZE;
+      filteredHistory.value = history.value.slice(0, ITEMS_PER_PAGE);
+      searchHasMore.value = history.value.length > ITEMS_PER_PAGE;
     }
     return;
   }
 
-  // 执行搜索
-  isSearching.value = true;
+  // 执行搜索：只有新搜索才显示加载状态，加载更多时不显示
+  // 避免 DynamicScroller 被销毁重建导致滚动位置丢失
+  if (!isLoadMore) {
+    isSearching.value = true;
+  }
   try {
     const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
       request: searchRequest
@@ -459,8 +465,8 @@ const performSearch = async (query: string, isLoadMore = false) => {
     }
 
     // 更新分页状态
-    searchOffset.value += SEARCH_PAGE_SIZE;
-    searchHasMore.value = results.length === SEARCH_PAGE_SIZE;
+    searchOffset.value += ITEMS_PER_PAGE;
+    searchHasMore.value = results.length === ITEMS_PER_PAGE;
   } finally {
     isSearching.value = false;
   }
@@ -479,7 +485,7 @@ const loadMoreResults = async () => {
   } else {
     // 全部模式：从历史记录中加载更多
     const currentLength = filteredHistory.value.length;
-    const moreItems = history.value.slice(currentLength, currentLength + SEARCH_PAGE_SIZE);
+    const moreItems = history.value.slice(currentLength, currentLength + ITEMS_PER_PAGE);
     if (moreItems.length > 0) {
       filteredHistory.value = [...filteredHistory.value, ...moreItems];
     }
@@ -492,18 +498,18 @@ const loadMoreResults = async () => {
 const debouncedSearch = debounce(performSearch, 250);
 
 // 搜索处理
-const handleSmartSearch = async (query: string) => {
+const handleSmartSearch = async (query: string, shouldScrollToTop = true) => {
   searchQuery.value = query;
 
   // 立即执行搜索（不防抖）
   await performSearch(query);
 
   nextTick(() => {
-    // 使用虚拟滚动器滚动到顶部
-    if (scrollerRef.value) {
+    // 只有需要时才滚动到顶部（新搜索时滚动，加载更多时不滚动）
+    if (shouldScrollToTop && scrollerRef.value) {
       scrollerRef.value.scrollToItem(0, "start");
     }
-    if (filteredHistory.value.length > 0) {
+    if (filteredHistory.value.length > 0 && selectedIndex.value < 0) {
       selectedIndex.value = 0;
     }
   });
@@ -1064,8 +1070,8 @@ watch(filteredHistory, () => {
 watch(history, () => {
   if (!searchQuery.value && activeTab.value === 'all') {
     // 初始状态，显示全部
-    filteredHistory.value = history.value.slice(0, SEARCH_PAGE_SIZE);
-    searchHasMore.value = history.value.length > SEARCH_PAGE_SIZE;
+    filteredHistory.value = history.value.slice(0, ITEMS_PER_PAGE);
+    searchHasMore.value = history.value.length > ITEMS_PER_PAGE;
   }
 }, { immediate: true });
 
