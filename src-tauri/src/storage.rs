@@ -394,23 +394,24 @@ impl Database {
         // 关键词过滤（不区分大小写）：
         // - HTML类型：只用 text_content（纯文本提取内容）过滤
         // - 其他类型：用 content 过滤
+        // - 多个关键词之间是 AND 关系（必须同时匹配所有关键词）
         if !request.keywords.is_empty() {
-            let mut content_conditions: Vec<String> = vec![];
+            let mut keyword_groups: Vec<String> = vec![];
 
             for keyword in &request.keywords {
                 let keyword_lower = keyword.to_lowercase();
                 let keyword_pattern = format!("%{}%", keyword_lower);
 
-                // HTML类型用 text_content
-                content_conditions.push("(content_type = 'html' AND LOWER(text_content) LIKE ?)".to_string());
+                // 每个关键词作为一个组：(HTML条件 OR 非HTML条件)
+                // 组内是 OR（匹配 HTML 内容或非 HTML 内容）
+                // 组间是 AND（所有关键词都必须匹配）
+                let group = "(content_type = 'html' AND LOWER(text_content) LIKE ?) OR (content_type != 'html' AND LOWER(content) LIKE ?)".to_string();
+                keyword_groups.push(format!("({})", group));
                 sql_params.push(Box::new(keyword_pattern.clone()));
-
-                // 非HTML类型用 content
-                content_conditions.push("(content_type != 'html' AND LOWER(content) LIKE ?)".to_string());
                 sql_params.push(Box::new(keyword_pattern));
             }
 
-            conditions.push(format!("({})", content_conditions.join(" OR ")));
+            conditions.push(format!("({})", keyword_groups.join(" AND ")));
         }
 
         let sql = format!(
