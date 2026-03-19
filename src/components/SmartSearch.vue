@@ -775,6 +775,17 @@ const handleKeyDown = (e: KeyboardEvent) => {
       emit('search-commit', fullQuery);
     }
   }
+
+  // Escape 清空搜索（仅当有内容时）
+  if (e.key === 'Escape' && !showMentionPanel.value) {
+    const hasSearchContent = hasContent.value;
+    if (hasSearchContent) {
+      e.preventDefault();
+      e.stopPropagation(); // 阻止事件传播到 window，避免触发窗口隐藏
+      clearAll();
+    }
+    // 如果搜索框已为空，不处理，让父组件（ClipboardList）处理隐藏窗口
+  }
 };
 
 // ============ Watchers & Lifecycle ============

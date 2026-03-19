@@ -883,8 +883,17 @@ const handleKeyDown = async (e: KeyboardEvent) => {
     return;
   }
 
-  // Esc 关闭窗口（保存当前状态）
+  // Esc 处理：先检查搜索框状态
   if (e.key === "Escape") {
+    // 如果搜索框有内容，先清空搜索框（不隐藏窗口）
+    const query = searchQuery.value.trim();
+    if (query) {
+      e.preventDefault();
+      searchQuery.value = "";
+      handleSmartSearch(""); // 触发搜索以显示所有历史
+      return;
+    }
+    // 搜索框已为空，隐藏窗口
     e.preventDefault();
     // 保存当前状态
     savedSearchQuery.value = searchQuery.value;
