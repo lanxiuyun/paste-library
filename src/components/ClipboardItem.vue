@@ -177,7 +177,7 @@ import type { ClipboardItem } from '@/types';
 
 interface Props {
   item: ClipboardItem;
-  index: number;
+  index?: number;
   isSelected?: boolean;
   isHighlighted?: boolean;
   showTags?: boolean;
@@ -185,6 +185,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  index: -1,
   showTags: true,
   highlightKeywords: () => [],
 });
