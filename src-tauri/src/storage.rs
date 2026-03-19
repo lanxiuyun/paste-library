@@ -398,13 +398,31 @@ impl Database {
             }
         }
 
-        // SQL 查询：先按时间排序获取最近记录
+        // 关键词过滤：在 SQL 层面使用 LIKE 进行预过滤
+        // 这样可以从整个数据库中找到匹配的记录，而不是只在前2000条中查找
+        if !request.keywords.is_empty() {
+            // 构建关键词 LIKE 条件 (content OR text_content OR file_paths)
+            let keyword_conditions: Vec<String> = request.keywords.iter().map(|_| {
+                "(content LIKE ? OR text_content LIKE ? OR file_paths LIKE ?)".to_string()
+            }).collect();
+            conditions.push(format!("({})", keyword_conditions.join(" AND ")));
+
+            // 为每个关键词添加 3 个参数（content, text_content, file_paths）
+            for keyword in &request.keywords {
+                let pattern = format!("%{}%", keyword);
+                params.push(Box::new(pattern.clone()));
+                params.push(Box::new(pattern.clone()));
+                params.push(Box::new(pattern));
+            }
+        }
+
+        // SQL 查询：使用 WHERE 条件在数据库层面过滤
         let sql = format!(
             "SELECT id, content_type, content, created_at, content_hash, text_content, metadata, file_paths, thumbnail_path, tags
              FROM clipboard_history
              WHERE {}
              ORDER BY created_at DESC
-             LIMIT 2000",
+             LIMIT 1000",
             conditions.join(" AND ")
         );
 
@@ -507,10 +525,19 @@ impl Database {
 
                 true
             })
-            .take(request.limit.unwrap_or(100) as usize)
+            .collect::<Vec<_>>();
+
+        // 分页：在过滤后应用 limit 和 offset
+        let offset = request.offset.unwrap_or(0) as usize;
+        let limit = request.limit.unwrap_or(200) as usize;
+
+        let paginated_items: Vec<ClipboardItem> = items
+            .into_iter()
+            .skip(offset)
+            .take(limit)
             .collect();
 
-        Ok(items)
+        Ok(paginated_items)
     }
 
     /// 删除单条记录

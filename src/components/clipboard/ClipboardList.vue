@@ -89,19 +89,6 @@
           />
         </DynamicScrollerItem>
       </DynamicScroller>
-
-      <!-- 加载更多指示器 -->
-      <div v-if="isSearching && searchHasMore && filteredHistory.length > 0" class="loading-more">
-        <svg class="loading-spinner-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
-        </svg>
-        <span>加载更多...</span>
-      </div>
-
-      <!-- 没有更多数据提示 -->
-      <div v-else-if="!searchHasMore && filteredHistory.length >= 200" class="no-more-data">
-        没有更多数据了
-      </div>
     </div>
 
     <!-- 右键上下文菜单 -->

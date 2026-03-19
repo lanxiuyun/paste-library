@@ -102,6 +102,8 @@ pub struct AdvancedSearchRequest {
     pub types: Vec<ClipboardContentType>,
     /// 返回数量限制
     pub limit: Option<i64>,
+    /// 分页偏移量
+    pub offset: Option<i64>,
 }
 
 /// 获取历史记录的请求
