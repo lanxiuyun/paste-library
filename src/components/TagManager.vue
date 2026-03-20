@@ -41,27 +41,39 @@
             <!-- 项目信息预览区 -->
             <div v-if="item" class="item-preview-section">
               <div class="item-preview-card">
-                <!-- 类型图标 -->
+                <!-- 类型图标或图片缩略图 -->
                 <div class="preview-type-icon" :class="item.content_type">
+                  <!-- 图片缩略图 -->
+                  <img
+                    v-if="item.content_type === 'image' && item.thumbnail_path"
+                    :src="convertFileSrc(item.thumbnail_path)"
+                    class="preview-thumbnail"
+                    alt="图片缩略图"
+                  />
+                  <div
+                    v-else-if="item.content_type === 'image'"
+                    class="preview-icon-wrapper"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <path d="M21 15l-5-5L5 21" />
+                    </svg>
+                  </div>
+                  <!-- 其他类型图标 -->
                   <svg
-                    v-if="item.content_type === 'text'"
+                    v-else-if="item.content_type === 'text'"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
                   >
                     <path d="M4 7V4h16v3M4 11h16M4 15h16M4 19h16" />
-                  </svg>
-                  <svg
-                    v-else-if="item.content_type === 'image'"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <path d="M21 15l-5-5L5 21" />
                   </svg>
                   <svg
                     v-else-if="
@@ -504,7 +516,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getTagStyle } from "@/utils/tagColors";
 import type { ClipboardItem, ClipboardContentType } from "@/types";
 
@@ -1244,6 +1256,28 @@ onUnmounted(() => {
 .preview-type-icon.rtf {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+/* 图片缩略图 */
+.preview-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+/* 图标包装器 */
+.preview-icon-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-icon-wrapper svg {
+  width: 18px;
+  height: 18px;
 }
 
 .preview-content {
