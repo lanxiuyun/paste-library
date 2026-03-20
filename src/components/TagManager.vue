@@ -1,11 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="fade">
-      <div
-        v-if="visible"
-        class="tag-manager-overlay"
-        @click="close"
-      >
+      <div v-if="visible" class="tag-manager-overlay" @click="close">
         <Transition name="scale">
           <div
             v-if="visible"
@@ -16,15 +12,28 @@
             <!-- 标题栏 -->
             <div class="tag-manager-header">
               <div class="header-title">
-                <svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                <svg
+                  class="title-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                  />
                 </svg>
                 <h3>管理标签</h3>
               </div>
               <button class="close-btn" @click="close" aria-label="关闭">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
@@ -34,37 +43,76 @@
               <div class="item-preview-card">
                 <!-- 类型图标 -->
                 <div class="preview-type-icon" :class="item.content_type">
-                  <svg v-if="item.content_type === 'text'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 7V4h16v3M4 11h16M4 15h16M4 19h16"/>
+                  <svg
+                    v-if="item.content_type === 'text'"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M4 7V4h16v3M4 11h16M4 15h16M4 19h16" />
                   </svg>
-                  <svg v-else-if="item.content_type === 'image'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <path d="M21 15l-5-5L5 21"/>
+                  <svg
+                    v-else-if="item.content_type === 'image'"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
                   </svg>
-                  <svg v-else-if="item.content_type === 'file' || item.content_type === 'files'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/>
-                    <path d="M13 2v7h7"/>
+                  <svg
+                    v-else-if="
+                      item.content_type === 'file' ||
+                      item.content_type === 'files'
+                    "
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"
+                    />
+                    <path d="M13 2v7h7" />
                   </svg>
-                  <svg v-else-if="item.content_type === 'folder'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                  <svg
+                    v-else-if="item.content_type === 'folder'"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"
+                    />
                   </svg>
-                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <path d="M7 7h10M7 12h10M7 17h10"/>
+                  <svg
+                    v-else
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M7 7h10M7 12h10M7 17h10" />
                   </svg>
                 </div>
 
                 <!-- 内容预览 -->
                 <div class="preview-content">
-                  <div class="preview-type">{{ getContentTypeLabel(item.content_type) }}</div>
+                  <div class="preview-type">
+                    {{ getContentTypeLabel(item.content_type) }}
+                  </div>
                   <div class="preview-text" :title="item.content">
                     {{ getContentPreview(item) }}
                   </div>
                   <div class="preview-meta">
-                    <span class="item-id">#{{ item.id }}</span>
-                    <span class="separator">·</span>
-                    <span class="item-time">{{ formatTime(item.created_at) }}</span>
+                    <span class="item-time">{{
+                      formatTime(item.created_at)
+                    }}</span>
                   </div>
                 </div>
               </div>
@@ -96,16 +144,24 @@
                         class="tag-chip selected"
                         :style="getTagStyle(tag)"
                       >
-                        <span class="tag-dot" :style="{ backgroundColor: getTagStyle(tag).color }"></span>
+                        <span
+                          class="tag-dot"
+                          :style="{ backgroundColor: getTagStyle(tag).color }"
+                        ></span>
                         {{ tag }}
                         <button
                           class="remove-btn"
                           @click.stop="removeTag(tag)"
                           aria-label="移除标签"
                         >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18"/>
-                            <line x1="6" y1="6" x2="18" y2="18"/>
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.5"
+                          >
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
                           </svg>
                         </button>
                       </span>
@@ -113,8 +169,16 @@
 
                     <!-- 空状态 -->
                     <div v-if="selectedTags.length === 0" class="empty-state">
-                      <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                      <svg
+                        class="empty-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      >
+                        <path
+                          d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                        />
                       </svg>
                       <span>暂无标签，从右侧选择或创建新标签</span>
                     </div>
@@ -127,10 +191,22 @@
                     <span class="section-title">创建新标签</span>
                   </div>
                   <div class="create-tag-box" ref="createBoxRef">
-                    <div class="create-input-wrapper" :class="{ 'has-error': createError, 'focused': isInputFocused }">
-                      <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"/>
-                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    <div
+                      class="create-input-wrapper"
+                      :class="{
+                        'has-error': createError,
+                        focused: isInputFocused,
+                      }"
+                    >
+                      <svg
+                        class="input-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
                       <input
                         ref="inputRef"
@@ -143,39 +219,74 @@
                         @input="handleTagInput"
                         @keydown="handleTagKeyDown"
                       />
-                      <span class="char-count" :class="{ 'near-limit': newTagName.length > 15 }">
+                      <span
+                        class="char-count"
+                        :class="{ 'near-limit': newTagName.length > 15 }"
+                      >
                         {{ newTagName.length }}/20
                       </span>
                     </div>
 
                     <!-- 标签补全下拉面板 - 使用 Teleport 到 body 避免被任何父容器裁剪 -->
                     <Teleport to="body">
-                      <Transition :name="autocompleteDirection === 'up' ? 'slide-up' : 'slide-down'">
+                      <Transition
+                        :name="
+                          autocompleteDirection === 'up'
+                            ? 'slide-up'
+                            : 'slide-down'
+                        "
+                      >
                         <div
-                          v-if="showTagAutocomplete && tagAutocompleteOptions.length > 0"
+                          v-if="
+                            showTagAutocomplete &&
+                            tagAutocompleteOptions.length > 0
+                          "
                           class="tag-autocomplete-panel"
-                          :class="{ 'direction-up': autocompleteDirection === 'up' }"
+                          :class="{
+                            'direction-up': autocompleteDirection === 'up',
+                          }"
                           :style="autocompletePanelStyle"
                           @mousedown.prevent
                         >
                           <div class="autocomplete-header">
                             <span>匹配 "{{ newTagName.trim() }}"</span>
-                            <span class="autocomplete-hint">↑↓ 选择 · Enter 确认</span>
+                            <span class="autocomplete-hint"
+                              >↑↓ 选择 · Enter 确认</span
+                            >
                           </div>
-                          <div ref="autocompleteListRef" class="autocomplete-list">
+                          <div
+                            ref="autocompleteListRef"
+                            class="autocomplete-list"
+                          >
                             <div
                               v-for="(tag, index) in tagAutocompleteOptions"
                               :key="tag.name"
                               class="autocomplete-item"
-                              :class="{ active: selectedAutocompleteIndex === index }"
+                              :class="{
+                                active: selectedAutocompleteIndex === index,
+                              }"
                               @click="selectAutocompleteTag(tag)"
                               @mouseenter="selectedAutocompleteIndex = index"
                             >
-                              <span class="item-dot" :style="{ backgroundColor: getTagStyle(tag.name).color }"></span>
+                              <span
+                                class="item-dot"
+                                :style="{
+                                  backgroundColor: getTagStyle(tag.name).color,
+                                }"
+                              ></span>
                               <span class="item-name">{{ tag.name }}</span>
-                              <span class="item-count">{{ tag.count }} 个条目</span>
-                              <svg v-if="isTagSelected(tag.name)" class="item-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                <polyline points="20 6 9 17 4 12"/>
+                              <span class="item-count"
+                                >{{ tag.count }} 个条目</span
+                              >
+                              <svg
+                                v-if="isTagSelected(tag.name)"
+                                class="item-check"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                              >
+                                <polyline points="20 6 9 17 4 12" />
                               </svg>
                             </div>
                           </div>
@@ -185,10 +296,15 @@
 
                     <Transition name="slide-down">
                       <div v-if="createError" class="error-message">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <circle cx="12" cy="12" r="10"/>
-                          <line x1="12" y1="8" x2="12" y2="12"/>
-                          <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
                         </svg>
                         {{ createError }}
                       </div>
@@ -198,9 +314,14 @@
                       :disabled="!canCreateTag"
                       @click="createNewTag"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"/>
-                        <line x1="5" y1="12" x2="19" y2="12"/>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
                       创建标签
                     </button>
@@ -218,9 +339,15 @@
 
                   <!-- 搜索框 -->
                   <div class="search-box">
-                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="11" cy="11" r="8"/>
-                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    <svg
+                      class="search-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
                     <input
                       v-model="searchQuery"
@@ -233,9 +360,14 @@
                       @click="searchQuery = ''"
                       aria-label="清除搜索"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
                       </svg>
                     </button>
                   </div>
@@ -267,7 +399,11 @@
 
                   <!-- 标签列表 -->
                   <div class="tags-scroll-area" ref="tagsScrollArea">
-                    <TransitionGroup name="tag-list" tag="div" class="tags-grid">
+                    <TransitionGroup
+                      name="tag-list"
+                      tag="div"
+                      class="tags-grid"
+                    >
                       <button
                         v-for="tag in displayedTags"
                         :key="tag.name"
@@ -277,7 +413,12 @@
                         :disabled="isTagSelected(tag.name)"
                         @click="addTag(tag.name)"
                       >
-                        <span class="tag-dot" :style="{ backgroundColor: getTagStyle(tag.name).color }"></span>
+                        <span
+                          class="tag-dot"
+                          :style="{
+                            backgroundColor: getTagStyle(tag.name).color,
+                          }"
+                        ></span>
                         <span class="tag-name">{{ tag.name }}</span>
                         <span class="tag-count">{{ tag.count }}</span>
                         <svg
@@ -288,18 +429,29 @@
                           stroke="currentColor"
                           stroke-width="2.5"
                         >
-                          <polyline points="20 6 9 17 4 12"/>
+                          <polyline points="20 6 9 17 4 12" />
                         </svg>
                       </button>
                     </TransitionGroup>
 
                     <!-- 空状态 -->
-                    <div v-if="displayedTags.length === 0" class="empty-state tags-empty">
-                      <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <circle cx="11" cy="11" r="8"/>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    <div
+                      v-if="displayedTags.length === 0"
+                      class="empty-state tags-empty"
+                    >
+                      <svg
+                        class="empty-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
                       </svg>
-                      <span>{{ searchQuery ? '未找到匹配的标签' : '暂无可用标签' }}</span>
+                      <span>{{
+                        searchQuery ? "未找到匹配的标签" : "暂无可用标签"
+                      }}</span>
                       <button
                         v-if="searchQuery && canCreateTag"
                         class="create-suggestion"
@@ -316,18 +468,28 @@
             <!-- 底部按钮 -->
             <div class="tag-manager-footer">
               <div class="footer-hint">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="16" x2="12" y2="12"/>
-                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
                 </svg>
                 <span>点击标签即可添加或移除</span>
               </div>
               <div class="footer-actions">
                 <button class="btn secondary" @click="close">取消</button>
                 <button class="btn primary" @click="save">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
                   </svg>
                   保存 ({{ selectedTags.length }})
                 </button>
@@ -341,10 +503,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
-import { getTagStyle } from '@/utils/tagColors';
-import type { ClipboardItem, ClipboardContentType } from '@/types';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import { getTagStyle } from "@/utils/tagColors";
+import type { ClipboardItem, ClipboardContentType } from "@/types";
 
 interface TagInfo {
   name: string;
@@ -360,18 +522,18 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  'update:visible': [value: boolean];
-  'save': [itemId: number, tags: string[]];
+  "update:visible": [value: boolean];
+  save: [itemId: number, tags: string[]];
 }>();
 
 // 本地状态
 const selectedTags = ref<string[]>([]);
 const availableTags = ref<TagInfo[]>([]);
-const newTagName = ref('');
-const createError = ref('');
+const newTagName = ref("");
+const createError = ref("");
 const isLoading = ref(false);
-const searchQuery = ref('');
-const filterMode = ref<'all' | 'popular' | 'recent'>('all');
+const searchQuery = ref("");
+const filterMode = ref<"all" | "popular" | "recent">("all");
 const isInputFocused = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const tagsScrollArea = ref<HTMLElement | null>(null);
@@ -388,11 +550,11 @@ let autocompleteBlurTimer: number | null = null;
 const autocompletePanelPosition = ref({ left: 0, top: 0, width: 0 });
 
 // 面板展开方向
-const autocompleteDirection = ref<'up' | 'down'>('down');
+const autocompleteDirection = ref<"up" | "down">("down");
 
 // 补全面板样式 - 使用 fixed 定位避免被裁剪
 const autocompletePanelStyle = computed(() => ({
-  position: 'fixed' as const,
+  position: "fixed" as const,
   left: `${autocompletePanelPosition.value.left}px`,
   top: `${autocompletePanelPosition.value.top}px`,
   width: `${autocompletePanelPosition.value.width}px`,
@@ -402,7 +564,9 @@ const autocompletePanelStyle = computed(() => ({
 // 计算属性
 const canCreateTag = computed(() => {
   const name = newTagName.value.trim();
-  return name.length > 0 && name.length <= 20 && !selectedTags.value.includes(name);
+  return (
+    name.length > 0 && name.length <= 20 && !selectedTags.value.includes(name)
+  );
 });
 
 // 标签补全选项（过滤掉已选择的，按使用次数排序）
@@ -411,8 +575,8 @@ const tagAutocompleteOptions = computed(() => {
   if (!query) return [];
 
   return availableTags.value
-    .filter(tag => !selectedTags.value.includes(tag.name)) // 排除已选择的
-    .filter(tag => tag.name.toLowerCase().includes(query)) // 匹配输入
+    .filter((tag) => !selectedTags.value.includes(tag.name)) // 排除已选择的
+    .filter((tag) => tag.name.toLowerCase().includes(query)) // 匹配输入
     .sort((a, b) => b.count - a.count) // 按使用次数排序
     .slice(0, 6); // 最多显示6个
 });
@@ -424,20 +588,22 @@ const filteredTags = computed(() => {
   // 搜索过滤
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase().trim();
-    tags = tags.filter(tag => tag.name.toLowerCase().includes(query));
+    tags = tags.filter((tag) => tag.name.toLowerCase().includes(query));
   }
 
   // 模式过滤
   switch (filterMode.value) {
-    case 'popular':
+    case "popular":
       tags = tags.sort((a, b) => b.count - a.count).slice(0, 20);
       break;
-    case 'recent':
-      tags = tags.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 20);
+    case "recent":
+      tags = tags
+        .sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
+        .slice(0, 20);
       break;
     default:
       // all: 按名称排序
-      tags = tags.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+      tags = tags.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
   }
 
   return tags;
@@ -446,27 +612,30 @@ const filteredTags = computed(() => {
 // 显示的标签（排除已选择的，更简洁）
 const displayedTags = computed(() => {
   // 只显示未选中的标签
-  return filteredTags.value.filter(tag => !isTagSelected(tag.name));
+  return filteredTags.value.filter((tag) => !isTagSelected(tag.name));
 });
 
 // 监听弹窗显示状态
-watch(() => props.visible, async (newVisible) => {
-  if (newVisible && props.item) {
-    // 弹窗打开时，初始化已选标签
-    selectedTags.value = [...(props.item.tags || [])];
-    newTagName.value = '';
-    createError.value = '';
-    searchQuery.value = '';
-    filterMode.value = 'all';
-    showTagAutocomplete.value = false;
-    // 加载所有可用标签
-    await loadAllTags();
-    // 聚焦搜索框
-    nextTick(() => {
-      inputRef.value?.focus();
-    });
+watch(
+  () => props.visible,
+  async (newVisible) => {
+    if (newVisible && props.item) {
+      // 弹窗打开时，初始化已选标签
+      selectedTags.value = [...(props.item.tags || [])];
+      newTagName.value = "";
+      createError.value = "";
+      searchQuery.value = "";
+      filterMode.value = "all";
+      showTagAutocomplete.value = false;
+      // 加载所有可用标签
+      await loadAllTags();
+      // 聚焦搜索框
+      nextTick(() => {
+        inputRef.value?.focus();
+      });
+    }
   }
-});
+);
 
 // 监听补全面板显示状态，更新位置
 watch(showTagAutocomplete, (isShowing) => {
@@ -482,14 +651,14 @@ watch(showTagAutocomplete, (isShowing) => {
 const loadAllTags = async () => {
   try {
     isLoading.value = true;
-    const tags = await invoke<[string, number][]>('get_all_tags');
+    const tags = await invoke<[string, number][]>("get_all_tags");
     availableTags.value = tags.map(([name, count]) => ({
       name,
       count,
       lastUsed: Date.now() - Math.random() * 86400000 * 30, // 模拟最近使用数据
     }));
   } catch (error) {
-    console.error('Failed to load tags:', error);
+    console.error("Failed to load tags:", error);
   } finally {
     isLoading.value = false;
   }
@@ -525,7 +694,9 @@ const removeTag = (tagName: string) => {
 
 /** 更新补全面板位置 - 智能判断向上或向下展开 */
 const updateAutocompletePosition = () => {
-  const wrapper = createBoxRef.value?.querySelector('.create-input-wrapper') as HTMLElement;
+  const wrapper = createBoxRef.value?.querySelector(
+    ".create-input-wrapper"
+  ) as HTMLElement;
   const tagManager = tagManagerRef.value;
   if (!wrapper || !tagManager) return;
 
@@ -541,7 +712,7 @@ const updateAutocompletePosition = () => {
 
   // 判断向下还是向上展开
   const shouldShowAbove = spaceBelow < panelHeight && spaceAbove > spaceBelow;
-  autocompleteDirection.value = shouldShowAbove ? 'up' : 'down';
+  autocompleteDirection.value = shouldShowAbove ? "up" : "down";
 
   autocompletePanelPosition.value = {
     left: rect.left,
@@ -583,7 +754,7 @@ const handleInputBlur = () => {
 
 /** 处理输入事件 */
 const handleTagInput = () => {
-  createError.value = '';
+  createError.value = "";
   // 延迟更新位置，避免输入法或布局变化影响
   requestAnimationFrame(() => {
     updateAutocompletePosition();
@@ -604,7 +775,7 @@ const selectAutocompleteTag = (tag: TagInfo) => {
     selectedTags.value.push(tag.name);
   }
 
-  newTagName.value = '';
+  newTagName.value = "";
   showTagAutocomplete.value = false;
 
   // 保持输入框聚焦
@@ -614,12 +785,18 @@ const selectAutocompleteTag = (tag: TagInfo) => {
 };
 
 /** 键盘导航补全列表 */
-const navigateAutocomplete = (direction: 'up' | 'down') => {
+const navigateAutocomplete = (direction: "up" | "down") => {
   const max = tagAutocompleteOptions.value.length - 1;
-  if (direction === 'up') {
-    selectedAutocompleteIndex.value = Math.max(0, selectedAutocompleteIndex.value - 1);
+  if (direction === "up") {
+    selectedAutocompleteIndex.value = Math.max(
+      0,
+      selectedAutocompleteIndex.value - 1
+    );
   } else {
-    selectedAutocompleteIndex.value = Math.min(max, selectedAutocompleteIndex.value + 1);
+    selectedAutocompleteIndex.value = Math.min(
+      max,
+      selectedAutocompleteIndex.value + 1
+    );
   }
 
   // 滚动选中项到可视区域
@@ -627,16 +804,18 @@ const navigateAutocomplete = (direction: 'up' | 'down') => {
     const listEl = autocompleteListRef.value;
     if (!listEl) return;
 
-    const activeItem = listEl.querySelector('.autocomplete-item.active') as HTMLElement;
+    const activeItem = listEl.querySelector(
+      ".autocomplete-item.active"
+    ) as HTMLElement;
     if (!activeItem) return;
 
     const listRect = listEl.getBoundingClientRect();
     const itemRect = activeItem.getBoundingClientRect();
 
     if (itemRect.top < listRect.top) {
-      activeItem.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      activeItem.scrollIntoView({ block: "start", behavior: "smooth" });
     } else if (itemRect.bottom > listRect.bottom) {
-      activeItem.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      activeItem.scrollIntoView({ block: "end", behavior: "smooth" });
     }
   });
 };
@@ -646,27 +825,28 @@ const handleTagKeyDown = (e: KeyboardEvent) => {
   // 补全面板打开时的键盘导航
   if (showTagAutocomplete.value && tagAutocompleteOptions.value.length > 0) {
     switch (e.key) {
-      case 'ArrowDown':
+      case "ArrowDown":
         e.preventDefault();
         e.stopPropagation();
-        navigateAutocomplete('down');
+        navigateAutocomplete("down");
         return;
-      case 'ArrowUp':
+      case "ArrowUp":
         e.preventDefault();
         e.stopPropagation();
-        navigateAutocomplete('up');
+        navigateAutocomplete("up");
         return;
-      case 'Enter':
+      case "Enter":
         e.preventDefault();
         e.stopPropagation();
-        const selected = tagAutocompleteOptions.value[selectedAutocompleteIndex.value];
+        const selected =
+          tagAutocompleteOptions.value[selectedAutocompleteIndex.value];
         if (selected) {
           selectAutocompleteTag(selected);
         } else {
           createNewTag();
         }
         return;
-      case 'Escape':
+      case "Escape":
         e.preventDefault();
         e.stopPropagation();
         showTagAutocomplete.value = false;
@@ -675,7 +855,7 @@ const handleTagKeyDown = (e: KeyboardEvent) => {
   }
 
   // 没有补全面板时的回车创建
-  if (e.key === 'Enter') {
+  if (e.key === "Enter") {
     e.preventDefault();
     e.stopPropagation();
     createNewTag();
@@ -690,42 +870,42 @@ const clearAllSelected = () => {
 // 获取内容类型标签
 const getContentTypeLabel = (type: ClipboardContentType): string => {
   const labels: Record<ClipboardContentType, string> = {
-    'text': '文本',
-    'html': 'HTML',
-    'rtf': '富文本',
-    'image': '图片',
-    'file': '文件',
-    'folder': '文件夹',
-    'files': '多文件',
+    text: "文本",
+    html: "HTML",
+    rtf: "富文本",
+    image: "图片",
+    file: "文件",
+    folder: "文件夹",
+    files: "多文件",
   };
   return labels[type] || type;
 };
 
 // 获取内容预览
 const getContentPreview = (item: ClipboardItem): string => {
-  if (!item) return '';
+  if (!item) return "";
 
   switch (item.content_type) {
-    case 'text':
-    case 'html':
-    case 'rtf':
+    case "text":
+    case "html":
+    case "rtf":
       // 返回纯文本内容或截断后的 content
       const text = item.text_content || item.content;
-      return text.length > 80 ? text.slice(0, 80) + '...' : text;
+      return text.length > 80 ? text.slice(0, 80) + "..." : text;
 
-    case 'image':
+    case "image":
       if (item.metadata?.width && item.metadata?.height) {
         return `图片 ${item.metadata.width}×${item.metadata.height}`;
       }
-      return '图片';
+      return "图片";
 
-    case 'file':
-      return item.metadata?.file_name || '文件';
+    case "file":
+      return item.metadata?.file_name || "文件";
 
-    case 'folder':
-      return item.metadata?.folder_name || '文件夹';
+    case "folder":
+      return item.metadata?.folder_name || "文件夹";
 
-    case 'files':
+    case "files":
       const count = item.file_paths?.length || 0;
       return `${count} 个文件`;
 
@@ -743,16 +923,16 @@ const formatTime = (timeStr: string): string => {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return '刚刚';
+  if (diffMins < 1) return "刚刚";
   if (diffMins < 60) return `${diffMins}分钟前`;
   if (diffHours < 24) return `${diffHours}小时前`;
   if (diffDays < 7) return `${diffDays}天前`;
 
-  return date.toLocaleDateString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  return date.toLocaleDateString("zh-CN", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
 
@@ -762,12 +942,12 @@ const createNewTag = () => {
   if (!name) return;
 
   if (name.length > 20) {
-    createError.value = '标签名称不能超过20个字符';
+    createError.value = "标签名称不能超过20个字符";
     return;
   }
 
   if (selectedTags.value.includes(name)) {
-    createError.value = '该标签已存在';
+    createError.value = "该标签已存在";
     return;
   }
 
@@ -775,12 +955,12 @@ const createNewTag = () => {
   selectedTags.value.push(name);
 
   // 如果不在可用标签列表中，添加进去
-  if (!availableTags.value.some(t => t.name === name)) {
+  if (!availableTags.value.some((t) => t.name === name)) {
     availableTags.value.push({ name, count: 0, lastUsed: Date.now() });
   }
 
-  newTagName.value = '';
-  createError.value = '';
+  newTagName.value = "";
+  createError.value = "";
 
   // 聚焦回输入框
   nextTick(() => {
@@ -792,26 +972,26 @@ const createNewTag = () => {
 const createAndAddTag = () => {
   newTagName.value = searchQuery.value.trim();
   createNewTag();
-  searchQuery.value = '';
+  searchQuery.value = "";
 };
 
 // 关闭弹窗
 const close = () => {
-  emit('update:visible', false);
+  emit("update:visible", false);
 };
 
 // 保存标签
 const save = async () => {
   if (props.item) {
     try {
-      await invoke('update_tags', {
+      await invoke("update_tags", {
         id: props.item.id,
         tags: selectedTags.value.length > 0 ? selectedTags.value : null,
       });
-      emit('save', props.item.id, selectedTags.value);
+      emit("save", props.item.id, selectedTags.value);
       close();
     } catch (error) {
-      console.error('Failed to update tags:', error);
+      console.error("Failed to update tags:", error);
     }
   }
 };
@@ -821,38 +1001,40 @@ onMounted(() => {
     loadAllTags();
   }
   // 监听窗口变化，更新补全面板位置
-  window.addEventListener('resize', updateAutocompletePosition);
-  window.addEventListener('scroll', updateAutocompletePosition, true);
+  window.addEventListener("resize", updateAutocompletePosition);
+  window.addEventListener("scroll", updateAutocompletePosition, true);
 });
 
 onUnmounted(() => {
   if (autocompleteBlurTimer) {
     clearTimeout(autocompleteBlurTimer);
   }
-  window.removeEventListener('resize', updateAutocompletePosition);
-  window.removeEventListener('scroll', updateAutocompletePosition, true);
+  window.removeEventListener("resize", updateAutocompletePosition);
+  window.removeEventListener("scroll", updateAutocompletePosition, true);
 });
 </script>
 
 <style scoped>
 /* ===== 基础变量 ===== */
 .tag-manager {
-  --color-primary: #0D9488;
-  --color-primary-light: #14B8A6;
-  --color-primary-bg: #F0FDFA;
-  --color-cta: #F97316;
-  --color-cta-hover: #EA580C;
-  --color-text: #134E4A;
-  --color-text-muted: #64748B;
-  --color-text-light: #94A3B8;
-  --color-border: #E2E8F0;
-  --color-border-light: #F1F5F9;
-  --color-white: #FFFFFF;
-  --color-error: #EF4444;
-  --color-error-bg: #FEF2F2;
+  --color-primary: #0d9488;
+  --color-primary-light: #14b8a6;
+  --color-primary-bg: #f0fdfa;
+  --color-cta: #f97316;
+  --color-cta-hover: #ea580c;
+  --color-text: #134e4a;
+  --color-text-muted: #64748b;
+  --color-text-light: #94a3b8;
+  --color-border: #e2e8f0;
+  --color-border-light: #f1f5f9;
+  --color-white: #ffffff;
+  --color-error: #ef4444;
+  --color-error-bg: #fef2f2;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
-  --shadow-lg: 0 8px 12px -2px rgb(0 0 0 / 0.08), 0 3px 5px -2px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.08),
+    0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 8px 12px -2px rgb(0 0 0 / 0.08),
+    0 3px 5px -2px rgb(0 0 0 / 0.06);
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -952,7 +1134,7 @@ onUnmounted(() => {
 .tag-manager {
   background: var(--color-white);
   border-radius: var(--radius-lg);
-  width: 640px;
+  width: 90%;
   max-width: 100%;
   max-height: 80vh;
   display: flex;
@@ -1034,34 +1216,34 @@ onUnmounted(() => {
 }
 
 .preview-type-icon.text {
-  background: #E0F2FE;
-  color: #0284C7;
+  background: #e0f2fe;
+  color: #0284c7;
 }
 
 .preview-type-icon.image {
-  background: #FCE7F3;
-  color: #BE185D;
+  background: #fce7f3;
+  color: #be185d;
 }
 
 .preview-type-icon.file {
-  background: #FEF3C7;
-  color: #B45309;
+  background: #fef3c7;
+  color: #b45309;
 }
 
 .preview-type-icon.folder {
-  background: #D1FAE5;
+  background: #d1fae5;
   color: #047857;
 }
 
 .preview-type-icon.files {
-  background: #F3E8FF;
-  color: #7C3AED;
+  background: #f3e8ff;
+  color: #7c3aed;
 }
 
 .preview-type-icon.html,
 .preview-type-icon.rtf {
-  background: #DBEAFE;
-  color: #1D4ED8;
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .preview-content {
@@ -1103,7 +1285,8 @@ onUnmounted(() => {
 }
 
 .preview-meta .item-id {
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
   background: var(--color-border-light);
   padding: 1px 5px;
   border-radius: 3px;
@@ -1225,9 +1408,10 @@ onUnmounted(() => {
 /* ===== 标签补全下拉面板（全局样式，因 Teleport 到 body） ===== */
 :global(.tag-autocomplete-panel) {
   background: #ffffff !important;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  box-shadow: 0 6px 10px -2px rgba(0, 0, 0, 0.08), 0 3px 4px -2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 10px -2px rgba(0, 0, 0, 0.08),
+    0 3px 4px -2px rgba(0, 0, 0, 0.06);
   overflow: hidden;
   max-height: 180px;
 }
@@ -1238,14 +1422,14 @@ onUnmounted(() => {
   align-items: center;
   padding: 6px 10px;
   font-size: 10px;
-  color: #64748B;
-  background: #F8FAFC;
-  border-bottom: 1px solid #E2E8F0;
+  color: #64748b;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 :global(.tag-autocomplete-panel .autocomplete-hint) {
   font-size: 9px;
-  color: #94A3B8;
+  color: #94a3b8;
 }
 
 :global(.tag-autocomplete-panel .autocomplete-list) {
@@ -1264,17 +1448,17 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 120ms ease;
   font-size: 12px;
-  color: #134E4A;
+  color: #134e4a;
   background: transparent;
   margin: 1px 0;
 }
 
 :global(.tag-autocomplete-panel .autocomplete-item:hover) {
-  background: #F0FDFA;
+  background: #f0fdfa;
 }
 
 :global(.tag-autocomplete-panel .autocomplete-item.active) {
-  background: #0D9488 !important;
+  background: #0d9488 !important;
   color: #ffffff !important;
 }
 
@@ -1299,7 +1483,7 @@ onUnmounted(() => {
 
 :global(.tag-autocomplete-panel .item-count) {
   font-size: 10px;
-  color: #94A3B8;
+  color: #94a3b8;
   flex-shrink: 0;
 }
 
@@ -1319,12 +1503,14 @@ onUnmounted(() => {
 }
 
 :global(.tag-autocomplete-panel .autocomplete-list::-webkit-scrollbar-thumb) {
-  background: #E2E8F0;
+  background: #e2e8f0;
   border-radius: 3px;
 }
 
-:global(.tag-autocomplete-panel .autocomplete-list::-webkit-scrollbar-thumb:hover) {
-  background: #94A3B8;
+:global(
+    .tag-autocomplete-panel .autocomplete-list::-webkit-scrollbar-thumb:hover
+  ) {
+  background: #94a3b8;
 }
 
 /* 向上展开时的样式调整 */
@@ -1334,7 +1520,7 @@ onUnmounted(() => {
 
 :global(.tag-autocomplete-panel.direction-up .autocomplete-header) {
   border-bottom: none;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid #e2e8f0;
   order: 1;
 }
 
