@@ -630,11 +630,6 @@ const handleQuickAction = async (action: string, item: ClipboardItemType) => {
       drawerItem.value = item;
       drawerVisible.value = true;
       break;
-    case "copy":
-      await restoreToClipboard(item, {
-        copyAsPlainText: settings.value.copy_as_plain_text,
-      });
-      break;
     case "delete":
       await handleDelete(item);
       break;
