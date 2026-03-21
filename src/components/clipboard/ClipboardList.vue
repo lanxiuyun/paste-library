@@ -566,50 +566,69 @@ const showPasteFeedback = (itemId: number) => {
   }, 500);
 };
 
-// 项目点击处理
-const handleItemClick = async (item: ClipboardItemType, index: number) => {
-  selectedIndex.value = index;
+// 剪贴板操作类型
+type ClipboardAction = "copy" | "paste";
 
-  const clickAction = settings.value.click_action;
-  if (clickAction === "none") {
-    return;
-  }
+// 统一的剪贴板操作入口
+const executeClipboardAction = async (
+  item: ClipboardItemType,
+  action: ClipboardAction,
+  options: {
+    copyAsPlainText?: boolean;
+    showFeedback?: boolean;
+    hideWindow?: boolean;
+  } = {},
+) => {
+  const {
+    copyAsPlainText = settings.value.copy_as_plain_text,
+    showFeedback = true,
+    hideWindow = settings.value.hide_window_after_copy,
+  } = options;
 
-  const copyAsPlainText = settings.value.copy_as_plain_text;
+  // 1. 恢复到剪贴板
   await restoreToClipboard(item, { copyAsPlainText });
 
-  // 显示粘贴反馈（绿色高亮）
-  showPasteFeedback(item.id);
+  // 2. 显示视觉反馈（可选）
+  if (showFeedback) {
+    showPasteFeedback(item.id);
+  }
 
-  if (clickAction === "paste") {
+  // 3. 执行后续操作
+  if (action === "paste") {
     await simulatePaste(item.id);
-  } else if (settings.value.hide_window_after_copy) {
+  } else if (hideWindow) {
     await invoke("hide_clipboard_window");
   }
 };
 
-const handleItemDoubleClick = async (
+// 项目点击/双击通用处理
+const handleItemAction = async (
   item: ClipboardItemType,
   index: number,
+  actionType: "click" | "doubleClick",
 ) => {
   selectedIndex.value = index;
 
-  const doubleClickAction = settings.value.double_click_action;
-  if (doubleClickAction === "none") {
+  const action =
+    actionType === "click"
+      ? settings.value.click_action
+      : settings.value.double_click_action;
+
+  if (action === "none") {
     return;
   }
 
-  const copyAsPlainText = settings.value.copy_as_plain_text;
-  await restoreToClipboard(item, { copyAsPlainText });
+  await executeClipboardAction(item, action);
+};
 
-  // 显示粘贴反馈（绿色高亮）
-  showPasteFeedback(item.id);
+// 单击处理
+const handleItemClick = (item: ClipboardItemType, index: number) => {
+  handleItemAction(item, index, "click");
+};
 
-  if (doubleClickAction === "paste") {
-    await simulatePaste(item.id);
-  } else if (settings.value.hide_window_after_copy) {
-    await invoke("hide_clipboard_window");
-  }
+// 双击处理
+const handleItemDoubleClick = (item: ClipboardItemType, index: number) => {
+  handleItemAction(item, index, "doubleClick");
 };
 
 const handleItemContextMenu = (
@@ -665,19 +684,11 @@ const cancelDelete = () => {
 
 // Drawer 处理
 const handleDrawerCopy = async (item: ClipboardItemType) => {
-  await restoreToClipboard(item, {
-    copyAsPlainText: settings.value.copy_as_plain_text,
-  });
-  if (settings.value.hide_window_after_copy) {
-    await invoke("hide_clipboard_window");
-  }
+  await executeClipboardAction(item, "copy");
 };
 
 const handleDrawerPaste = async (item: ClipboardItemType) => {
-  await restoreToClipboard(item, {
-    copyAsPlainText: settings.value.copy_as_plain_text,
-  });
-  await simulatePaste();
+  await executeClipboardAction(item, "paste");
 };
 
 const handleSaveAsNew = async (content: string, type: string) => {
@@ -743,22 +754,10 @@ const handleContextMenuAction = async (
 ) => {
   switch (action) {
     case "copy":
-      await restoreToClipboard(item, {
-        copyAsPlainText: settings.value.copy_as_plain_text,
-      });
-      // 显示粘贴反馈
-      showPasteFeedback(item.id);
-      if (settings.value.hide_window_after_copy) {
-        await invoke("hide_clipboard_window");
-      }
+      await executeClipboardAction(item, "copy");
       break;
     case "paste":
-      await restoreToClipboard(item, {
-        copyAsPlainText: settings.value.copy_as_plain_text,
-      });
-      // 显示粘贴反馈
-      showPasteFeedback(item.id);
-      await simulatePaste(item.id);
+      await executeClipboardAction(item, "paste");
       break;
     case "tag":
       tagManagerItem.value = item;
@@ -927,12 +926,7 @@ const handleKeyDown = async (e: KeyboardEvent) => {
     e.preventDefault();
     const item = filteredHistory.value[selectedIndex.value];
     if (item) {
-      await restoreToClipboard(item, {
-        copyAsPlainText: settings.value.copy_as_plain_text,
-      });
-      // 显示粘贴反馈
-      showPasteFeedback(item.id);
-      await simulatePaste(item.id);
+      await executeClipboardAction(item, "paste");
     }
     return;
   }
@@ -970,12 +964,7 @@ const handleKeyDown = async (e: KeyboardEvent) => {
         e.preventDefault();
         const item = filteredHistory.value[index];
         if (item) {
-          await restoreToClipboard(item, {
-            copyAsPlainText: settings.value.copy_as_plain_text,
-          });
-          // 显示粘贴反馈
-          showPasteFeedback(item.id);
-          await simulatePaste(item.id);
+          await executeClipboardAction(item, "paste");
         }
       }
     }
