@@ -25,7 +25,11 @@
         <button
           class="pin-mode-btn"
           :class="{ 'is-pinned': isPinned }"
-          :title="isPinned ? '取消钉住' : `钉住面板 (${settings.pin_shortcut || 'Ctrl+Shift+P'})`"
+          :title="
+            isPinned
+              ? '取消钉住'
+              : `钉住面板 (${settings.pin_shortcut || 'Ctrl+Shift+P'})`
+          "
           @click="togglePinMode"
         >
           <!-- 使用 Lucide 图标 -->
@@ -47,8 +51,20 @@
     <div ref="listContainerRef" class="list-container" tabindex="-1">
       <!-- 搜索加载指示器 -->
       <div v-if="isSearching" class="search-loading">
-        <svg class="loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
+        <svg
+          class="loading-spinner"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="10"
+            stroke-dasharray="60"
+            stroke-dashoffset="20"
+          />
         </svg>
         <span>搜索中...</span>
       </div>
@@ -82,7 +98,9 @@
             :highlight-keywords="parsedQuery.keywords"
             @click="handleItemClick"
             @dblclick="handleItemDoubleClick"
-            @contextmenu="(event: MouseEvent) => handleItemContextMenu(event, item, index)"
+            @contextmenu="
+              (event: MouseEvent) => handleItemContextMenu(event, item, index)
+            "
             @quick-action="handleQuickAction"
             @remove-tag="handleRemoveTag"
             @tag-click="handleTagClick"
@@ -126,26 +144,25 @@
 
 <script setup lang="ts">
 import { useClipboard } from "@/composables/useClipboard";
-import { useSettings } from "@/composables/useSettings";
 import { usePinMode } from "@/composables/usePinMode";
+import { useSettings } from "@/composables/useSettings";
 import {
   addSearchHistory,
   clearSearchHistory,
   getSearchHistory,
-  matchItemWithQuery,
   parseSearchQuery,
   removeSearchHistory as removeSearchHistoryItem,
   type ParsedQuery,
 } from "@/composables/useSmartSearch";
 import type { ClipboardItem as ClipboardItemType, PinnedSearch } from "@/types";
+import { decodeHtmlEntities } from "@/utils/htmlUtils";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { BookmarkPlus, Pin as PinIcon } from "lucide-vue-next";
 import { writeText } from "tauri-plugin-clipboard-x-api";
-import { decodeHtmlEntities } from "@/utils/htmlUtils";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { DynamicScroller, DynamicScrollerItem } from "vue-virtual-scroller";
-import { Pin as PinIcon, PinOff as PinOffIcon, BookmarkPlus } from "lucide-vue-next";
 import ClipboardItem from "../ClipboardItem.vue";
 import ContextMenu from "../ContextMenu.vue";
 import DrawerEditor from "../DrawerEditor.vue";
@@ -157,7 +174,6 @@ import TabBar from "./TabBar.vue";
 
 const {
   history,
-  lastCopyTime,
   init: initClipboard,
   loadHistory,
   deleteItem,
@@ -172,7 +188,7 @@ const smartSearchRef = ref<InstanceType<typeof SmartSearch> | null>(null);
 const searchQuery = ref("");
 const searchHistory = ref<string[]>([]);
 const parsedQuery = computed<ParsedQuery>(() =>
-  parseSearchQuery(searchQuery.value)
+  parseSearchQuery(searchQuery.value),
 );
 
 // 标签相关
@@ -187,12 +203,7 @@ const pinnedSearches = ref<PinnedSearch[]>([]);
 const PINNED_SEARCH_STORAGE_KEY = "paste_library_pinned_searches";
 
 // 列表状态
-const loading = ref(false);
-const hasMore = ref(true);
-const offset = ref(0);
-const limit = 50;
 const selectedIndex = ref(-1);
-const listContainerRef = ref<HTMLElement | null>(null);
 const scrollerRef = ref<InstanceType<typeof DynamicScroller> | null>(null);
 
 // 右键菜单状态
@@ -253,7 +264,7 @@ const savePinnedSearches = () => {
   try {
     localStorage.setItem(
       PINNED_SEARCH_STORAGE_KEY,
-      JSON.stringify(pinnedSearches.value)
+      JSON.stringify(pinnedSearches.value),
     );
   } catch {
     // 忽略存储错误
@@ -317,24 +328,9 @@ watch(activeTab, (key) => {
   // 不再自动清除搜索条件
 });
 
-// 智能激活
-const handleSmartActivate = async () => {
+// 窗口聚焦时聚焦搜索框
+const handleWindowFocus = async () => {
   smartSearchRef.value?.focus();
-
-  if (settings.value.smart_activate) {
-    const timeDiff = Date.now() - lastCopyTime.value;
-
-    if (timeDiff < 3000) {
-      searchQuery.value = "";
-      await handleSmartSearch("");
-
-      if (listContainerRef.value) {
-        listContainerRef.value.scrollTop = 0;
-      }
-
-      activeTab.value = "all";
-    }
-  }
 };
 
 // 异步搜索结果
@@ -343,18 +339,6 @@ const isSearching = ref(false);
 const searchOffset = ref(0); // 搜索分页偏移量（Rust内部每次扫描200条）
 const searchHasMore = ref(true); // 搜索是否还有更多数据
 const ITEMS_PER_PAGE = 50; // 每次返回给前端的数量
-
-// 防抖工具函数
-function debounce<T extends (...args: Parameters<T>) => void>(
-  fn: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  let timer: number | null = null;
-  return (...args: Parameters<T>) => {
-    if (timer) clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args), delay);
-  };
-}
 
 /**
  * 执行异步搜索（调用 Rust 后端）
@@ -373,7 +357,7 @@ const performSearch = async (query: string, isLoadMore = false) => {
 
   // 如果有钉住搜索，使用钉住的查询
   const pinnedSearch = pinnedSearches.value.find(
-    (ps) => ps.id === activeTab.value
+    (ps) => ps.id === activeTab.value,
   );
 
   let searchRequest: {
@@ -391,26 +375,37 @@ const performSearch = async (query: string, isLoadMore = false) => {
         keywords: pinnedParsed.keywords,
         tags: pinnedParsed.tags,
         // 后端使用 snake_case 序列化，所以发送小写的类型名
-        types: pinnedParsed.types.map(t => {
+        types: pinnedParsed.types.map((t) => {
           const typeMap: Record<string, string> = {
-            'text': 'text', 'html': 'html', 'rtf': 'rtf',
-            'image': 'image', 'file': 'file', 'folder': 'folder', 'files': 'files'
+            text: "text",
+            html: "html",
+            rtf: "rtf",
+            image: "image",
+            file: "file",
+            folder: "folder",
+            files: "files",
           };
-          return typeMap[t] || 'text';
+          return typeMap[t] || "text";
         }),
         limit: ITEMS_PER_PAGE,
-        offset: searchOffset.value
+        offset: searchOffset.value,
       };
     } else {
-      searchRequest = { keywords: [], tags: [], types: [], limit: ITEMS_PER_PAGE, offset: 0 };
+      searchRequest = {
+        keywords: [],
+        tags: [],
+        types: [],
+        limit: ITEMS_PER_PAGE,
+        offset: 0,
+      };
     }
   } else if (activeTab.value !== "all" && !parsed.isValid) {
     // Tab 过滤（非搜索状态）
     // 后端使用 snake_case 序列化，所以发送小写的类型名
     const typeMap: Record<string, string[]> = {
-      'file': ['file', 'folder', 'files'],
-      'text': ['text', 'html', 'rtf'],
-      'image': ['image'],
+      file: ["file", "folder", "files"],
+      text: ["text", "html", "rtf"],
+      image: ["image"],
     };
     const types = typeMap[activeTab.value] || [activeTab.value.toLowerCase()];
 
@@ -419,7 +414,7 @@ const performSearch = async (query: string, isLoadMore = false) => {
       tags: [],
       types: types,
       limit: ITEMS_PER_PAGE,
-      offset: searchOffset.value
+      offset: searchOffset.value,
     };
   } else if (parsed.isValid) {
     // 普通搜索
@@ -427,15 +422,20 @@ const performSearch = async (query: string, isLoadMore = false) => {
       keywords: parsed.keywords,
       tags: parsed.tags,
       // 后端使用 snake_case 序列化，所以发送小写的类型名
-      types: parsed.types.map(t => {
+      types: parsed.types.map((t) => {
         const typeMap: Record<string, string> = {
-          'text': 'text', 'html': 'html', 'rtf': 'rtf',
-          'image': 'image', 'file': 'file', 'folder': 'folder', 'files': 'files'
+          text: "text",
+          html: "html",
+          rtf: "rtf",
+          image: "image",
+          file: "file",
+          folder: "folder",
+          files: "files",
         };
-        return typeMap[t] || 'text';
+        return typeMap[t] || "text";
       }),
       limit: ITEMS_PER_PAGE,
-      offset: searchOffset.value
+      offset: searchOffset.value,
     };
   } else {
     // 无搜索条件，显示全部
@@ -452,9 +452,12 @@ const performSearch = async (query: string, isLoadMore = false) => {
     isSearching.value = true;
   }
   try {
-    const results = await invoke<ClipboardItemType[]>("search_clipboard_advanced", {
-      request: searchRequest
-    });
+    const results = await invoke<ClipboardItemType[]>(
+      "search_clipboard_advanced",
+      {
+        request: searchRequest,
+      },
+    );
 
     if (isLoadMore) {
       // 加载更多：追加数据
@@ -479,23 +482,24 @@ const loadMoreResults = async () => {
   if (isSearching.value) return;
 
   // 如果有搜索条件或标签过滤，调用后端加载更多
-  if (searchQuery.value || activeTab.value !== 'all') {
+  if (searchQuery.value || activeTab.value !== "all") {
     if (!searchHasMore.value) return;
     await performSearch(searchQuery.value, true);
   } else {
     // 全部模式：从历史记录中加载更多
     const currentLength = filteredHistory.value.length;
-    const moreItems = history.value.slice(currentLength, currentLength + ITEMS_PER_PAGE);
+    const moreItems = history.value.slice(
+      currentLength,
+      currentLength + ITEMS_PER_PAGE,
+    );
     if (moreItems.length > 0) {
       filteredHistory.value = [...filteredHistory.value, ...moreItems];
     }
     // 更新是否有更多标志
-    searchHasMore.value = currentLength + moreItems.length < history.value.length;
+    searchHasMore.value =
+      currentLength + moreItems.length < history.value.length;
   }
 };
-
-// 防抖搜索（250ms 延迟）
-const debouncedSearch = debounce(performSearch, 250);
 
 // 搜索处理
 const handleSmartSearch = async (query: string, shouldScrollToTop = true) => {
@@ -586,7 +590,7 @@ const handleItemClick = async (item: ClipboardItemType, index: number) => {
 
 const handleItemDoubleClick = async (
   item: ClipboardItemType,
-  index: number
+  index: number,
 ) => {
   selectedIndex.value = index;
 
@@ -611,7 +615,7 @@ const handleItemDoubleClick = async (
 const handleItemContextMenu = (
   event: MouseEvent,
   item: ClipboardItemType,
-  index: number
+  index: number,
 ) => {
   contextMenuPosition.value = { x: event.clientX, y: event.clientY };
   contextMenuItem.value = item;
@@ -740,7 +744,7 @@ const copyFilePath = async (item: ClipboardItemType): Promise<void> => {
 // 上下文菜单动作
 const handleContextMenuAction = async (
   action: string,
-  item: ClipboardItemType
+  item: ClipboardItemType,
 ) => {
   switch (action) {
     case "copy":
@@ -767,7 +771,9 @@ const handleContextMenuAction = async (
       break;
     case "copyPlain":
       // 使用已存储的 text_content，或从 content 提取并解码 HTML 实体
-      const plainContent = item.text_content || decodeHtmlEntities(item.content.replace(/<[^>]*>/g, ""));
+      const plainContent =
+        item.text_content ||
+        decodeHtmlEntities(item.content.replace(/<[^>]*>/g, ""));
       await restoreToClipboard({
         ...item,
         content_type: "text",
@@ -779,7 +785,9 @@ const handleContextMenuAction = async (
       break;
     case "pastePlain":
       // 使用已存储的 text_content，或从 content 提取并解码 HTML 实体
-      const pastePlainContent = item.text_content || decodeHtmlEntities(item.content.replace(/<[^>]*>/g, ""));
+      const pastePlainContent =
+        item.text_content ||
+        decodeHtmlEntities(item.content.replace(/<[^>]*>/g, ""));
       await restoreToClipboard({
         ...item,
         content_type: "text",
@@ -868,14 +876,17 @@ const handleKeyDown = async (e: KeyboardEvent) => {
   const hasCtrl = shortcutParts.includes("ctrl");
   const hasShift = shortcutParts.includes("shift");
   const hasAlt = shortcutParts.includes("alt");
-  const hasMeta = shortcutParts.includes("meta") || shortcutParts.includes("cmd");
-  const keyPart = shortcutParts.find(p => !["ctrl", "shift", "alt", "meta", "cmd"].includes(p));
+  const hasMeta =
+    shortcutParts.includes("meta") || shortcutParts.includes("cmd");
+  const keyPart = shortcutParts.find(
+    (p) => !["ctrl", "shift", "alt", "meta", "cmd"].includes(p),
+  );
 
   if (
-    (hasCtrl === e.ctrlKey) &&
-    (hasShift === e.shiftKey) &&
-    (hasAlt === e.altKey) &&
-    (hasMeta === e.metaKey) &&
+    hasCtrl === e.ctrlKey &&
+    hasShift === e.shiftKey &&
+    hasAlt === e.altKey &&
+    hasMeta === e.metaKey &&
     e.key.toLowerCase() === (keyPart || "p")
   ) {
     e.preventDefault();
@@ -950,10 +961,10 @@ const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.metaKey) actualModifiers.push("meta");
 
       const allRequiredPressed = requiredModifiers.every((mod) =>
-        actualModifiers.includes(mod)
+        actualModifiers.includes(mod),
       );
       const noExtraModifiers = actualModifiers.every((mod) =>
-        requiredModifiers.includes(mod)
+        requiredModifiers.includes(mod),
       );
       shouldTrigger = allRequiredPressed && noExtraModifiers;
     }
@@ -1007,7 +1018,7 @@ onMounted(async () => {
   const unlistenFocus = await appWindow.listen("tauri://focus", () => {
     if (!hasActivated.value) {
       hasActivated.value = true;
-      handleSmartActivate();
+      handleWindowFocus();
       // 恢复保存的状态
       if (savedSearchQuery.value) {
         searchQuery.value = savedSearchQuery.value;
@@ -1029,15 +1040,21 @@ onMounted(async () => {
   });
 
   // 监听钉住模式变化
-  unlistenPinMode = await listen<{ pinned: boolean }>("pin-mode-changed", (event) => {
-    isPinned.value = event.payload.pinned;
-  });
+  unlistenPinMode = await listen<{ pinned: boolean }>(
+    "pin-mode-changed",
+    (event) => {
+      isPinned.value = event.payload.pinned;
+    },
+  );
 
   // 监听窗口透明度变化
-  unlistenOpacity = await listen<{ opacity: number }>("window-opacity-change", (event) => {
-    const opacity = event.payload.opacity;
-    document.body.style.opacity = String(opacity);
-  });
+  unlistenOpacity = await listen<{ opacity: number }>(
+    "window-opacity-change",
+    (event) => {
+      const opacity = event.payload.opacity;
+      document.body.style.opacity = String(opacity);
+    },
+  );
 
   (window as any).__unlistenFocus = unlistenFocus;
   (window as any).__unlistenBlur = unlistenBlur;
@@ -1078,13 +1095,17 @@ watch(filteredHistory, () => {
 });
 
 // 监听历史记录变化，初始化时加载
-watch(history, () => {
-  if (!searchQuery.value && activeTab.value === 'all') {
-    // 初始状态，显示全部
-    filteredHistory.value = history.value.slice(0, ITEMS_PER_PAGE);
-    searchHasMore.value = history.value.length > ITEMS_PER_PAGE;
-  }
-}, { immediate: true });
+watch(
+  history,
+  () => {
+    if (!searchQuery.value && activeTab.value === "all") {
+      // 初始状态，显示全部
+      filteredHistory.value = history.value.slice(0, ITEMS_PER_PAGE);
+      searchHasMore.value = history.value.length > ITEMS_PER_PAGE;
+    }
+  },
+  { immediate: true },
+);
 
 // 监听标签切换，重新搜索
 watch(activeTab, () => {
@@ -1126,8 +1147,12 @@ watch(activeTab, () => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .clipboard-list {

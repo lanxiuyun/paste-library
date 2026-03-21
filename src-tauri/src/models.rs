@@ -139,10 +139,6 @@ pub struct AppSettings {
     /// 窗口位置 Y 坐标 (remember 模式使用)
     pub window_pos_y: Option<i32>,
 
-    // 智能激活设置 (新增)
-    /// 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
-    pub smart_activate: bool,
-
     // 音效设置
     /// 复制音效
     pub copy_sound: bool,
@@ -199,9 +195,6 @@ impl Default for AppSettings {
             window_position: "remember".to_string(),
             window_pos_x: None,
             window_pos_y: None,
-
-            // 智能激活 (新增)
-            smart_activate: true,
 
             // 音效
             copy_sound: false,

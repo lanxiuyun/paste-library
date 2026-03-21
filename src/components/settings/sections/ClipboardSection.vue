@@ -11,15 +11,6 @@
         </select>
       </SettingItem>
 
-      <SettingItem
-        title="智能激活"
-        description="3秒内复制过内容时，激活窗口自动回到顶部、切换至全部、聚焦搜索框"
-      >
-        <label class="switch">
-          <input type="checkbox" v-model="form.smart_activate" />
-          <span class="slider"></span>
-        </label>
-      </SettingItem>
     </div>
 
     <h2 class="section-title">内容设置</h2>
@@ -58,12 +49,12 @@
         </select>
       </SettingItem>
 
-      <SettingItem title="图片OCR">
+      <!-- <SettingItem title="图片OCR">
         <label class="switch">
           <input type="checkbox" v-model="form.image_ocr" />
           <span class="slider"></span>
         </label>
-      </SettingItem>
+      </SettingItem> -->
 
       <SettingItem title="复制为纯文本" description="HTML格式在复制时仅保留纯文本内容">
         <label class="switch">

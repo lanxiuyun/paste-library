@@ -103,7 +103,6 @@ impl Database {
             ("window_position", "remember"),
             ("window_pos_x", ""),
             ("window_pos_y", ""),
-            ("smart_activate", "true"),
             ("copy_sound", "false"),
             ("search_position", "bottom"),
             ("focus_search_on_activate", "false"),
@@ -641,11 +640,6 @@ impl Database {
                         }
                     }
                 }
-                "smart_activate" => {
-                    if let Ok(v) = value.parse() {
-                        settings.smart_activate = v;
-                    }
-                }
                 "copy_sound" => {
                     if let Ok(v) = value.parse() {
                         settings.copy_sound = v;
@@ -720,7 +714,6 @@ impl Database {
             ("window_position", settings.window_position.clone()),
             ("window_pos_x", settings.window_pos_x.map(|v| v.to_string()).unwrap_or_default()),
             ("window_pos_y", settings.window_pos_y.map(|v| v.to_string()).unwrap_or_default()),
-            ("smart_activate", settings.smart_activate.to_string()),
             ("copy_sound", settings.copy_sound.to_string()),
             ("search_position", settings.search_position.clone()),
             ("focus_search_on_activate", settings.focus_search_on_activate.to_string()),

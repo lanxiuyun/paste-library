@@ -111,10 +111,6 @@ export interface AppSettings {
   /** 窗口位置 Y 坐标 (remember 模式使用) */
   window_pos_y?: number;
 
-  // 智能激活设置 (新增)
-  // 如果激活时间与上次复制间隔<5秒，自动回到顶部、切换全部、聚焦搜索
-  smart_activate: boolean;
-
   // 音效设置
   copy_sound: boolean;
 

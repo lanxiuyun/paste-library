@@ -13,9 +13,6 @@ const settings = ref<AppSettings>({
   window_pos_x: undefined,
   window_pos_y: undefined,
 
-  // 智能激活设置 (新增)
-  smart_activate: true,
-
   // 音效设置
   copy_sound: false,
 
