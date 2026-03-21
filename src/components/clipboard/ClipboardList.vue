@@ -595,7 +595,7 @@ const executeClipboardAction = async (
 
   // 3. 执行后续操作
   if (action === "paste") {
-    await simulatePaste(item.id);
+    await simulatePaste();
   } else if (hideWindow) {
     await invoke("hide_clipboard_window");
   }
@@ -682,7 +682,7 @@ const cancelDelete = () => {
   deleteConfirmVisible.value = false;
 };
 
-// Drawer 处理
+// Drawer 处理（注：Drawer 场景也启用粘贴反馈，让用户明确知道操作成功）
 const handleDrawerCopy = async (item: ClipboardItemType) => {
   await executeClipboardAction(item, "copy");
 };
@@ -763,32 +763,32 @@ const handleContextMenuAction = async (
       tagManagerItem.value = item;
       tagManagerVisible.value = true;
       break;
-    case "copyPlain":
-      // 使用已存储的 text_content，或从 content 提取并解码 HTML 实体
+    case "copyPlain": {
+      // 构造纯文本 item，然后走统一入口
       const plainContent =
         item.text_content ||
         decodeHtmlEntities(item.content.replace(/<[^>]*>/g, ""));
-      await restoreToClipboard({
+      const plainItem: ClipboardItemType = {
         ...item,
         content_type: "text",
         content: plainContent,
-      });
-      if (settings.value.hide_window_after_copy) {
-        await invoke("hide_clipboard_window");
-      }
+      };
+      await executeClipboardAction(plainItem, "copy", { copyAsPlainText: true });
       break;
-    case "pastePlain":
-      // 使用已存储的 text_content，或从 content 提取并解码 HTML 实体
+    }
+    case "pastePlain": {
+      // 构造纯文本 item，然后走统一入口
       const pastePlainContent =
         item.text_content ||
         decodeHtmlEntities(item.content.replace(/<[^>]*>/g, ""));
-      await restoreToClipboard({
+      const plainItem: ClipboardItemType = {
         ...item,
         content_type: "text",
         content: pastePlainContent,
-      });
-      await simulatePaste();
+      };
+      await executeClipboardAction(plainItem, "paste", { copyAsPlainText: true });
       break;
+    }
     case "delete":
       await handleDelete(item);
       break;
@@ -813,7 +813,7 @@ const handleContextMenuAction = async (
 };
 
 // 模拟粘贴
-const simulatePaste = async (itemId?: number): Promise<void> => {
+const simulatePaste = async (): Promise<void> => {
   try {
     // 默认模式下：关闭面板并重置状态
     // 钉住模式下：保持面板开启，不重置状态
@@ -853,6 +853,36 @@ const handleScroll = () => {
       loadMoreResults();
     }
   }, 100);
+};
+
+// 快捷键匹配辅助函数：检查键盘事件是否匹配指定的快捷键配置
+const matchesShortcut = (
+  e: KeyboardEvent,
+  shortcutConfig: string,
+): boolean => {
+  if (shortcutConfig === "none") {
+    return !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+  }
+
+  const requiredModifiers = shortcutConfig
+    .toLowerCase()
+    .split("+")
+    .map((s) => s.trim());
+
+  const actualModifiers: string[] = [];
+  if (e.ctrlKey) actualModifiers.push("ctrl");
+  if (e.altKey) actualModifiers.push("alt");
+  if (e.shiftKey) actualModifiers.push("shift");
+  if (e.metaKey) actualModifiers.push("meta");
+
+  const allRequiredPressed = requiredModifiers.every((mod) =>
+    actualModifiers.includes(mod),
+  );
+  const noExtraModifiers = actualModifiers.every((mod) =>
+    requiredModifiers.includes(mod),
+  );
+
+  return allRequiredPressed && noExtraModifiers;
 };
 
 // 键盘导航
@@ -934,31 +964,8 @@ const handleKeyDown = async (e: KeyboardEvent) => {
   // 数字键 1-9 快速粘贴
   if (e.key >= "1" && e.key <= "9") {
     const shortcut = settings.value.number_key_shortcut || "ctrl";
-    let shouldTrigger = false;
 
-    if (shortcut === "none") {
-      shouldTrigger = !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
-    } else {
-      const requiredModifiers = shortcut
-        .toLowerCase()
-        .split("+")
-        .map((s) => s.trim());
-      const actualModifiers: string[] = [];
-      if (e.ctrlKey) actualModifiers.push("ctrl");
-      if (e.altKey) actualModifiers.push("alt");
-      if (e.shiftKey) actualModifiers.push("shift");
-      if (e.metaKey) actualModifiers.push("meta");
-
-      const allRequiredPressed = requiredModifiers.every((mod) =>
-        actualModifiers.includes(mod),
-      );
-      const noExtraModifiers = actualModifiers.every((mod) =>
-        requiredModifiers.includes(mod),
-      );
-      shouldTrigger = allRequiredPressed && noExtraModifiers;
-    }
-
-    if (shouldTrigger) {
+    if (matchesShortcut(e, shortcut)) {
       const index = parseInt(e.key) - 1;
       if (index < filteredHistory.value.length) {
         e.preventDefault();
