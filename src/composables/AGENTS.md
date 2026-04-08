@@ -14,7 +14,6 @@ Shared Vue composition functions (hooks).
 | usePinMode.ts | Pin mode management | Controls blur auto-hide behavior and pin shortcut state |
 | useSettings.ts | Settings persistence | Tauri invoke, change events |
 | useSmartSearch.ts | Smart search logic | @tag/@type syntax, history |
-| useWindow.ts | Window visibility | Toggle, hide clipboard window |
 
 ## DETAILED DESCRIPTIONS
 
@@ -62,14 +61,6 @@ Pin 模式管理：
 - 错误处理
 - 配合 `convertFileSrc()` 加载本地图片
 
-### useWindow.ts (56 lines)
-
-窗口管理：
-- `toggleClipboardWindow()` - 显示/隐藏剪贴板窗口
-- `hideClipboardWindow()` - 隐藏窗口
-- 监听 `clipboard-window-blur` 事件同步前端可见状态
-- 不要在前端把 Pin 模式当成“永不隐藏”；手动隐藏仍然可能发生
-
 ### usePasteQueue.ts
 
 粘贴队列管理：
@@ -102,7 +93,6 @@ Pin 模式管理：
 |------|------|
 | Add new clipboard type | useContentType.ts |
 | Modify search behavior | useSmartSearch.ts |
-| Window management | useWindow.ts |
 | Pin mode toggle | usePinMode.ts |
 | Image loading issues | useImageLoader.ts |
 | Settings persistence | useSettings.ts |
@@ -114,4 +104,5 @@ Pin 模式管理：
 - No test framework yet
 - All state is component-local or Tauri-backed
 - Composables should be focused and single-responsibility
-- `usePinMode.ts` 与 `useWindow.ts` 需要和后端 `window_manager.rs` 的语义保持一致：Pin 仅影响 blur auto-hide
+- Window visibility/hide operations are done via direct `invoke()` calls in components, not through a dedicated composable
+- `usePinMode.ts` 需要和后端 `window_manager.rs` 的语义保持一致：Pin 仅影响 blur auto-hide

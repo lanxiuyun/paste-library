@@ -230,8 +230,7 @@ src/
   │   ├── usePasteQueue.ts       # Paste queue state management
   │   ├── usePinMode.ts          # Pin mode state (disables blur auto-hide, keeps paste open)
   │   ├── useSettings.ts         # Settings read/write via Tauri
-  │   ├── useSmartSearch.ts      # Smart search with @tag/@type syntax
-  │   └── useWindow.ts           # Window visibility state + blur event sync
+  │   └── useSmartSearch.ts      # Smart search with @tag/@type syntax
   ├── utils/                      # Utility functions
   ├── types/                     # TypeScript type definitions
   │   ├── index.ts               # Shared types (ClipboardItem, AppSettings, etc.)

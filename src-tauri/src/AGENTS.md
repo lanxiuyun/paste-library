@@ -48,4 +48,5 @@ Rust backend (Tauri commands).
   - `Pinned` only disables blur-triggered auto-hide
   - Manual hide paths still work in pinned mode: global shortcut toggle, `Esc`, and explicit `hide_clipboard_window`
   - Pin mode is not a separate positioning strategy; window position still follows normal settings (`remember` / `center` / `cursor`)
-- When changing clipboard window behavior, review both backend events (`clipboard-window-blur`, `pin-mode-changed`) and the frontend listeners that mirror window visibility state
+- `clipboard-window-blur` event has no payload (emitted as `()`); `pin-mode-changed` carries `{ pinned: bool }`
+- Clipboard window is always created with `always_on_top(true)`; pin mode does not manage always-on-top separately
