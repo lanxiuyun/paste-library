@@ -131,7 +131,8 @@ pnpm tauri build
 - Size: 800x600, resizable
 - Uses `skip_taskbar(true)` to hide from taskbar
 - Uses `always_on_top(true)` for floating behavior
-- Auto-hide on blur
+- Auto-hide on blur in standard mode
+- Pin mode only disables blur-triggered auto-hide; manual hide via hotkey, `Esc`, or explicit hide command still works
 
 **Key points**:
 - Use `data-tauri-drag-region` attribute for draggable areas
@@ -227,10 +228,10 @@ src/
   │   ├── useFileOperations.ts   # File open/reveal in folder operations
   │   ├── useImageLoader.ts      # Image loading with retry mechanism (5 retries)
   │   ├── usePasteQueue.ts       # Paste queue state management
-  │   ├── usePinMode.ts          # Pin mode (window stays open after paste)
+  │   ├── usePinMode.ts          # Pin mode state (disables blur auto-hide, keeps paste open)
   │   ├── useSettings.ts         # Settings read/write via Tauri
   │   ├── useSmartSearch.ts      # Smart search with @tag/@type syntax
-  │   └── useWindow.ts           # Window visibility toggle
+  │   └── useWindow.ts           # Window visibility state + blur event sync
   ├── utils/                      # Utility functions
   ├── types/                     # TypeScript type definitions
   │   ├── index.ts               # Shared types (ClipboardItem, AppSettings, etc.)
@@ -346,7 +347,8 @@ const imageSrc = computed(() => {
 - Registered in `lib.rs` setup with `tauri-plugin-global-shortcut`
 - Default hotkey: `Alt+V`
 - Toggles clipboard window visibility
-- Window auto-hides on blur via `on_window_event`
+- Window auto-hides on blur via `on_window_event` when not pinned
+- Pin shortcut is managed separately and only changes blur auto-hide behavior
 
 ---
 
@@ -360,6 +362,10 @@ const imageSrc = computed(() => {
 - **Global hotkey** (configurable via key recording) to show/hide clipboard window
 - **Settings panel** with left sidebar navigation
 - **Window management** (frameless clipboard, normal settings)
+- **Pin mode**:
+  - Disables blur-triggered auto-hide
+  - Keeps paste actions from hiding the window
+  - Does not disable manual hide actions like hotkey toggle or `Esc`
 - **Image/File clipboard support**:
   - Image thumbnails with dimensions display
   - File/folder icons with names
@@ -468,6 +474,7 @@ const imageSrc = computed(() => {
 
 **快捷键设置**:
 - 唤醒快捷键 (按键录制, 如: Alt+V, Win+Shift+C) ✅ 已实现
+- 钉住快捷键 (默认 `Ctrl+Shift+P`) ✅ 已实现
 
 ---
 
@@ -500,6 +507,7 @@ const imageSrc = computed(() => {
 - **Type strictness is critical**: The project has `strict: true` and `noUnusedLocals`; zero tolerance for `any` types
 - **Settings panel**: Normal window with title bar (decorations: true)
 - **Clipboard window**: Frameless, skip taskbar, always on top (decorations: false)
+- **Pin mode semantics**: only affects blur-triggered auto-hide; do not treat pin mode as a separate positioning or visibility mode
 - **Greenfield project**: Modern best practices take priority over legacy patterns
 - **Desktop-first UX**: Consider Windows/macOS/Linux platform differences in UI
 - **Global shortcut**: Configurable via key recording in settings (restart required to apply changes)

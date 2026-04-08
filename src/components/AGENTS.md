@@ -60,6 +60,7 @@ components/
 - 标签管理器弹窗
 - 固定搜索标签（可拖拽）
 - Pin 模式状态管理
+- `Esc` / 快捷键 / 粘贴动作与窗口状态联动
 
 ### ClipboardItem.vue
 
@@ -172,3 +173,8 @@ Tab 导航组件，214 行，包含：
 - Two root components: App.vue (settings), ClipboardView.vue (clipboard)
 - URL-based routing in main.ts: `/clipboard` → ClipboardView, else → App
 - ClipboardList.vue is the most complex component - handle with care
+- `ClipboardList.vue` 中的 Pin 语义要与后端保持一致：
+  - Pin 只阻止失焦自动隐藏
+  - `Esc` 仍可手动隐藏窗口
+  - 全局快捷键切换窗口时，Pin 不应阻止手动隐藏
+  - 粘贴动作在 Pin 模式下保持窗口开启

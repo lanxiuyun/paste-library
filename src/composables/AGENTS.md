@@ -11,7 +11,7 @@ Shared Vue composition functions (hooks).
 | useFileOperations.ts | File/folder operations | Open file, reveal in explorer |
 | useImageLoader.ts | Image loading with retry | 5 retry attempts, loading states |
 | usePasteQueue.ts | Paste queue state | Shopping cart mode for batch paste |
-| usePinMode.ts | Pin mode management | Window stays open after paste |
+| usePinMode.ts | Pin mode management | Controls blur auto-hide behavior and pin shortcut state |
 | useSettings.ts | Settings persistence | Tauri invoke, change events |
 | useSmartSearch.ts | Smart search logic | @tag/@type syntax, history |
 | useWindow.ts | Window visibility | Toggle, hide clipboard window |
@@ -51,6 +51,7 @@ Pin 模式管理：
 - `togglePinMode()` - 切换 Pin 模式
 - `setPinMode()` - 设置 Pin 状态
 - Pin 模式下窗口在粘贴后保持打开
+- Pin 模式只影响失焦自动隐藏，不会禁止快捷键、`Esc` 或显式隐藏命令
 - 默认快捷键：Ctrl+Shift+P
 
 ### useImageLoader.ts
@@ -66,7 +67,8 @@ Pin 模式管理：
 窗口管理：
 - `toggleClipboardWindow()` - 显示/隐藏剪贴板窗口
 - `hideClipboardWindow()` - 隐藏窗口
-- 监听 `clipboard-window-blur` 事件自动隐藏
+- 监听 `clipboard-window-blur` 事件同步前端可见状态
+- 不要在前端把 Pin 模式当成“永不隐藏”；手动隐藏仍然可能发生
 
 ### usePasteQueue.ts
 
@@ -112,3 +114,4 @@ Pin 模式管理：
 - No test framework yet
 - All state is component-local or Tauri-backed
 - Composables should be focused and single-responsibility
+- `usePinMode.ts` 与 `useWindow.ts` 需要和后端 `window_manager.rs` 的语义保持一致：Pin 仅影响 blur auto-hide
