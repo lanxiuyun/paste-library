@@ -143,12 +143,9 @@
 </template>
 
 <script setup lang="ts">
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { BookmarkPlus, Pin as PinIcon } from "lucide-vue-next";
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { DynamicScroller, DynamicScrollerItem } from "vue-virtual-scroller";
+// ============================================
+// Imports
+// ============================================
 import { useClipboard } from "@/composables/useClipboard";
 import { useClipboardList } from "@/composables/useClipboardList";
 import { useKeyboardNavigation } from "@/composables/useKeyboardNavigation";
@@ -163,6 +160,12 @@ import {
   getSearchHistory,
   removeSearchHistory as removeSearchHistoryItem,
 } from "@/composables/useSmartSearch";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { BookmarkPlus, Pin as PinIcon } from "lucide-vue-next";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { DynamicScroller, DynamicScrollerItem } from "vue-virtual-scroller";
 import ClipboardItem from "../ClipboardItem.vue";
 import ContextMenu from "../ContextMenu.vue";
 import DrawerEditor from "../DrawerEditor.vue";
@@ -172,6 +175,9 @@ import DeleteConfirmDialog from "./DeleteConfirmDialog.vue";
 import EmptyState from "./EmptyState.vue";
 import TabBar from "./TabBar.vue";
 
+// ============================================
+// Constants
+// ============================================
 const FIXED_TABS = [
   { key: "all", label: "全部" },
   { key: "text", label: "文本" },
@@ -179,19 +185,9 @@ const FIXED_TABS = [
   { key: "file", label: "文件" },
 ];
 
-type DynamicScrollerAdapter = {
-  scrollToItem: (index: number, position: string) => void;
-};
-
-const createScrollerAdapter = (
-  scroller: InstanceType<typeof DynamicScroller>,
-): DynamicScrollerAdapter => ({
-  scrollToItem: (index: number, position: string) => {
-    const normalizedPosition = position === "center" ? "center" : "start";
-    scroller.scrollToItem(index, normalizedPosition);
-  },
-});
-
+// ============================================
+// Core Composables
+// ============================================
 const {
   history,
   init: initClipboard,
@@ -203,6 +199,9 @@ const {
 const { settings } = useSettings();
 const { isPinned, togglePinMode, loadPinMode } = usePinMode();
 
+// ============================================
+// Refs & State
+// ============================================
 const smartSearchRef = ref<InstanceType<typeof SmartSearch> | null>(null);
 const scrollerRef = ref<InstanceType<typeof DynamicScroller> | null>(null);
 const searchQuery = ref("");
@@ -212,6 +211,9 @@ const hasActivated = ref(false);
 const savedSearchQuery = ref("");
 const savedScrollPosition = ref(0);
 
+// ============================================
+// Pinned Searches
+// ============================================
 const {
   pinnedSearches,
   canPinCurrentSearch,
@@ -221,15 +223,25 @@ const {
   reorderPinnedSearches,
 } = usePinnedSearches(activeTab, searchQuery);
 
-const scrollerForSearch = ref<DynamicScrollerAdapter | null>(null);
-watch(scrollerRef, (value) => {
-  scrollerForSearch.value = value ? createScrollerAdapter(value) : null;
+// ============================================
+// Search
+// ============================================
+const scrollerForSearch = ref<{
+  scrollToItem: (index: number, position: string) => void;
+} | null>(null);
+watch(scrollerRef, (val) => {
+  if (val) {
+    scrollerForSearch.value = {
+      scrollToItem: (index: number, position: string) => {
+        val.scrollToItem(index, position as any);
+      },
+    };
+  }
 });
 
-const selectedIndexFallback = ref(-1);
 const onSearchComplete = (resultCount: number) => {
-  if (resultCount > 0 && selectedIndexFallback.value < 0) {
-    selectedIndexFallback.value = 0;
+  if (resultCount > 0 && selectedIndex.value < 0) {
+    selectedIndex.value = 0;
   }
 };
 
@@ -240,7 +252,7 @@ const {
   parsedQuery,
   performSearch,
   loadMoreResults,
-  handleSmartSearch: handleSmartSearchInner,
+  handleSmartSearch: _handleSmartSearch,
 } = useSearch({
   activeTab,
   searchQuery,
@@ -250,17 +262,17 @@ const {
   onSearchComplete,
 });
 
-const handleSmartSearch = async (
-  query: string,
-  shouldScrollToTop = true,
-) => {
+// 搜索处理包装器
+const handleSmartSearch = async (query: string, shouldScrollToTop = true) => {
   searchQuery.value = query;
-  await handleSmartSearchInner(shouldScrollToTop);
+  await _handleSmartSearch(shouldScrollToTop);
 };
 
+// ============================================
+// Clipboard List Core
+// ============================================
 const resetPanelState = () => {
   searchQuery.value = "";
-  savedSearchQuery.value = "";
   activeTab.value = "all";
   selectedIndex.value = -1;
   if (scrollerRef.value) {
@@ -278,6 +290,7 @@ const {
   handleDrawerCopy,
   handleDrawerPaste,
   handleSaveAsNew,
+  handleDelete,
   confirmDelete,
   cancelDelete,
   handleTagManagerSave,
@@ -293,6 +306,7 @@ const {
   resetPanelState,
 });
 
+// 解构 UI 状态
 const {
   contextMenuVisible,
   contextMenuPosition,
@@ -302,38 +316,51 @@ const {
   tagManagerVisible,
   tagManagerItem,
   deleteConfirmVisible,
+  itemToDelete,
   highlightedItemId,
   selectedIndex,
 } = uiState;
 
-watch(selectedIndex, (value) => {
-  selectedIndexFallback.value = value;
-});
-
+// ============================================
+// Keyboard Navigation
+// ============================================
 const smartSearchForKeyboard = ref<{ focus: () => void } | null>(null);
-watch(smartSearchRef, (value) => {
-  smartSearchForKeyboard.value = value
-    ? {
-        focus: () => value.focus(),
-      }
-    : null;
+watch(smartSearchRef, (val) => {
+  if (val) {
+    smartSearchForKeyboard.value = {
+      focus: () => val.focus(),
+    };
+  }
 });
 
-const scrollerForKeyboard = ref<DynamicScrollerAdapter | null>(null);
-watch(scrollerRef, (value) => {
-  scrollerForKeyboard.value = value ? createScrollerAdapter(value) : null;
+const scrollerForKeyboard = ref<{
+  scrollToItem: (index: number, position: string) => void;
+} | null>(null);
+watch(scrollerRef, (val) => {
+  if (val) {
+    scrollerForKeyboard.value = {
+      scrollToItem: (index: number, position: string) => {
+        val.scrollToItem(index, position as any);
+      },
+    };
+  }
 });
 
-const handleEscape = async () => {
+const handleEscape = () => {
+  // 保存当前状态
   savedSearchQuery.value = searchQuery.value;
   savedScrollPosition.value = scrollerRef.value?.$el?.scrollTop || 0;
   selectedIndex.value = -1;
-  await invoke("hide_clipboard_window");
+  invoke("hide_clipboard_window");
+};
+
+const handleTogglePinMode = async () => {
+  await togglePinMode();
 };
 
 const handleClearSearch = async () => {
   searchQuery.value = "";
-  await handleSmartSearchInner(true);
+  await _handleSmartSearch(true);
 };
 
 const { handleKeyDown } = useKeyboardNavigation({
@@ -341,20 +368,28 @@ const { handleKeyDown } = useKeyboardNavigation({
   selectedIndex,
   searchQuery,
   settings,
+  isPinned,
   smartSearchRef: smartSearchForKeyboard,
   scrollerRef: scrollerForKeyboard,
   executeClipboardAction,
   onEscape: handleEscape,
-  onTogglePinMode: togglePinMode,
+  onTogglePinMode: handleTogglePinMode,
+  resetPanelState,
   handleSmartSearch: handleClearSearch,
 });
 
+// ============================================
+// Scroll Handler
+// ============================================
 const { handleScroll, cleanup: cleanupScroll } = useScrollHandler({
   isSearching,
   searchHasMore,
   loadMoreResults,
 });
 
+// ============================================
+// Search History
+// ============================================
 const loadSearchHistory = () => {
   searchHistory.value = getSearchHistory();
 };
@@ -377,6 +412,9 @@ const handleSearchCommit = (query: string) => {
   handleSmartSearch(query);
 };
 
+// ============================================
+// Tag Click
+// ============================================
 const handleTagClick = (tag: string) => {
   const tagQuery = `@${tag}`;
   const current = searchQuery.value.trim();
@@ -394,20 +432,25 @@ const handleTagClick = (tag: string) => {
   handleSmartSearch(searchQuery.value);
 };
 
+// ============================================
+// Window Focus
+// ============================================
 const handleWindowFocus = async () => {
   smartSearchRef.value?.focus();
 };
 
+// ============================================
+// Lifecycle
+// ============================================
 let cleanupClipboard: (() => void) | null = null;
 let unlistenPinMode: (() => void) | null = null;
 let unlistenOpacity: (() => void) | null = null;
-let unlistenFocus: (() => void) | null = null;
-let unlistenBlur: (() => void) | null = null;
 
 onMounted(async () => {
+  // 初始化剪贴板监听
   cleanupClipboard = initClipboard();
 
-  await loadHistory(settings.value.max_history_count, 0);
+  loadHistory(settings.value.max_history_count, 0);
   loadSearchHistory();
   loadPinnedSearches();
   loadPinMode();
@@ -418,10 +461,11 @@ onMounted(async () => {
   }
 
   const appWindow = getCurrentWindow();
-  unlistenFocus = await appWindow.listen("tauri://focus", () => {
+  const unlistenFocus = await appWindow.listen("tauri://focus", () => {
     if (!hasActivated.value) {
       hasActivated.value = true;
       handleWindowFocus();
+      // 恢复保存的状态
       if (savedSearchQuery.value) {
         searchQuery.value = savedSearchQuery.value;
         nextTick(() => {
@@ -433,40 +477,60 @@ onMounted(async () => {
     }
   });
 
-  unlistenBlur = await appWindow.listen("tauri://blur", () => {
+  const unlistenBlur = await appWindow.listen("tauri://blur", () => {
     hasActivated.value = false;
+    // 保存当前状态
     savedSearchQuery.value = searchQuery.value;
     savedScrollPosition.value = scrollerRef.value?.$el?.scrollTop || 0;
     selectedIndex.value = -1;
   });
 
+  // 监听钉住模式变化
   unlistenPinMode = await listen<{ pinned: boolean }>(
     "pin-mode-changed",
     (event) => {
       isPinned.value = event.payload.pinned;
-    },
+    }
   );
 
+  // 监听窗口透明度变化
   unlistenOpacity = await listen<{ opacity: number }>(
     "window-opacity-change",
     (event) => {
       const opacity = event.payload.opacity;
       document.body.style.opacity = String(opacity);
-    },
+    }
   );
+
+  (window as any).__unlistenFocus = unlistenFocus;
+  (window as any).__unlistenBlur = unlistenBlur;
 });
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
   cleanupScroll();
-  unlistenFocus?.();
-  unlistenBlur?.();
-  unlistenPinMode?.();
-  unlistenOpacity?.();
-  cleanupClipboard?.();
+  if ((window as any).__unlistenFocus) {
+    (window as any).__unlistenFocus();
+  }
+  if ((window as any).__unlistenBlur) {
+    (window as any).__unlistenBlur();
+  }
+  if (unlistenPinMode) {
+    unlistenPinMode();
+  }
+  if (unlistenOpacity) {
+    unlistenOpacity();
+  }
+  if (cleanupClipboard) {
+    cleanupClipboard();
+  }
   hasActivated.value = false;
 });
 
+// ============================================
+// Watchers
+// ============================================
+// 监听过滤变化，重置选中状态
 watch(filteredHistory, () => {
   if (selectedIndex.value >= filteredHistory.value.length) {
     selectedIndex.value = filteredHistory.value.length > 0 ? 0 : -1;
@@ -475,17 +539,19 @@ watch(filteredHistory, () => {
   }
 });
 
+// 监听历史记录变化，初始化时加载
 watch(
   history,
   () => {
     if (!searchQuery.value && activeTab.value === "all") {
+      // 初始状态，显示全部
       filteredHistory.value = history.value.slice(0, 50);
-      searchHasMore.value = history.value.length > 50;
     }
   },
-  { immediate: true },
+  { immediate: true }
 );
 
+// 监听标签切换，重新搜索
 watch(activeTab, () => {
   performSearch();
 });
@@ -626,6 +692,11 @@ watch(activeTab, () => {
 .scroller {
   height: 100%;
   overflow-y: auto;
+}
+
+/* 虚拟滚动器项目容器样式 - 确保分割线正确显示 */
+.scroller :deep(.vue-recycle-scroller__item-wrapper) {
+  /* 虚拟滚动器内部包装器 */
 }
 
 .scroller :deep(.vue-recycle-scroller__item-view) {
