@@ -549,6 +549,7 @@ const handleTagClick = (tag: string) => {
 // 重置面板状态
 const resetPanelState = () => {
   searchQuery.value = "";
+  savedSearchQuery.value = "";
   activeTab.value = "all";
   selectedIndex.value = -1;
   if (scrollerRef.value) {
@@ -585,7 +586,7 @@ const executeClipboardAction = async (
     hideWindow = settings.value.hide_window_after_copy,
   } = options;
 
-  // 1. 恢复到剪贴板
+  // 1. 恢复到剪贴板（复制）
   await restoreToClipboard(item, { copyAsPlainText });
 
   // 2. 显示视觉反馈（可选）
@@ -593,11 +594,15 @@ const executeClipboardAction = async (
     showPasteFeedback(item.id);
   }
 
-  // 3. 执行后续操作
+  // 不是Pin 模式下，执行了复制/粘贴操作后，自动隐藏
+  if (!isPinned.value && (action === "paste" || hideWindow)) {
+    await invoke("hide_clipboard_window");
+    resetPanelState();
+  }
+
+  // 3. 粘贴必须放在最后执行，确保焦点已回到目标输入框
   if (action === "paste") {
     await simulatePaste();
-  } else if (hideWindow) {
-    await invoke("hide_clipboard_window");
   }
 };
 
@@ -815,14 +820,6 @@ const handleContextMenuAction = async (
 // 模拟粘贴
 const simulatePaste = async (): Promise<void> => {
   try {
-    // 默认模式下：关闭面板并重置状态
-    // 钉住模式下：保持面板开启，不重置状态
-    if (!isPinned.value) {
-      await invoke("hide_clipboard_window");
-      // 重置面板状态
-      resetPanelState();
-    }
-
     await new Promise((resolve) => setTimeout(resolve, 100));
     await invoke("simulate_paste", {
       pasteShortcut: settings.value.paste_shortcut,
