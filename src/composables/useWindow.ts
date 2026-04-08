@@ -17,7 +17,6 @@ export function useWindow() {
   const hideClipboardWindow = async (): Promise<void> => {
     try {
       await invoke('hide_clipboard_window');
-      isClipboardVisible.value = false;
     } catch (error) {
       console.error('Failed to hide clipboard window:', error);
     }

@@ -1,8 +1,7 @@
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::Mutex;
-use tauri::Manager;
 use tauri::Emitter;
+use tauri::Manager;
 
 use crate::models::AppSettings;
 use crate::platform;
@@ -13,7 +12,6 @@ const WINDOW_WIDTH: f64 = 800.0;
 const WINDOW_HEIGHT: f64 = 600.0;
 const BLUR_DELAY_MS: u64 = 150;
 const FOCUS_DELAY_MS: u64 = 50;
-const PROTECTION_PERIOD_MS: u128 = 250;
 const WINDOW_MARGIN: i32 = 100;
 
 /// 将 Tauri 错误转换为 String 的宏
@@ -121,6 +119,10 @@ impl WindowManager {
         *pin_mode = new_mode;
         drop(pin_mode);
 
+        if pinned {
+            *self.pending_hide.lock().await = false;
+        }
+
         if let Some(window) = app.get_webview_window("clipboard") {
             if pinned {
                 map_err!(window.set_always_on_top(true))?;
@@ -139,32 +141,6 @@ impl WindowManager {
         Ok(new_pinned)
     }
 
-    /// 钉住模式：保持窗口在用户上次移动后的位置
-    /// 钉住模式不强制固定到右上角，而是保持用户自定义位置
-    async fn position_window_pinned(&self, window: &tauri::WebviewWindow) -> Result<(), String> {
-        let settings = self.settings.lock().await;
-
-        if let (Some(x), Some(y)) = (settings.window_pos_x, settings.window_pos_y) {
-            let size = map_err!(window.outer_size())?;
-            let screen = map_err!(window.primary_monitor())?;
-
-            if let Some(screen) = screen {
-                let (pos_x, pos_y) = clamp_window_position(
-                    x, y,
-                    size.width as i32, size.height as i32,
-                    screen.size().width as i32, screen.size().height as i32,
-                    WINDOW_MARGIN,
-                );
-
-                map_err!(window.set_position(tauri::Position::Physical(
-                    tauri::PhysicalPosition::new(pos_x, pos_y)
-                )))?;
-            }
-        }
-
-        Ok(())
-    }
-
     pub async fn toggle_clipboard_window(&self, app: &tauri::AppHandle) -> Result<bool, String> {
         let label = "clipboard";
 
@@ -172,16 +148,11 @@ impl WindowManager {
             let is_visible = map_err!(window.is_visible())?;
 
             if is_visible {
+                self.save_window_position(&window).await?;
                 map_err!(window.hide())?;
                 Ok(false)
             } else {
-                let pin_mode = self.get_pin_mode().await;
-                if pin_mode.is_pinned() {
-                    self.position_window_pinned(&window).await?;
-                    map_err!(window.set_always_on_top(true))?;
-                } else {
-                    self.position_window(&window).await?;
-                }
+                self.position_window(&window).await?;
                 map_err!(window.show())?;
                 map_err!(window.set_focus())?;
                 Ok(true)
@@ -192,14 +163,14 @@ impl WindowManager {
     }
 
     pub async fn hide_clipboard_window(&self, app: &tauri::AppHandle) -> Result<(), String> {
+        *self.pending_hide.lock().await = false;
+
         if let Some(window) = app.get_webview_window("clipboard") {
             self.save_window_position(&window).await?;
             map_err!(window.hide())?;
         }
-        let pin_mode = self.get_pin_mode().await;
-        let _ = app.emit("clipboard-window-blur", serde_json::json!({
-            "reset": !pin_mode.is_pinned()
-        }));
+
+        Self::emit_window_blur(app);
         Ok(())
     }
 
@@ -333,17 +304,13 @@ impl WindowManager {
 
     /// 设置窗口事件处理
     async fn setup_window_events(&self, window: &tauri::WebviewWindow, app: &tauri::AppHandle) {
-        let window_created_at = Instant::now();
-        eprintln!("[DEBUG] Clipboard window created at {:?}, protection period: {}ms",
-            window_created_at, PROTECTION_PERIOD_MS);
-
         let state_refs = self.get_state_refs();
         let app_handle = app.clone();
 
         // 失焦事件处理
         window.on_window_event(move |event| {
             if let tauri::WindowEvent::Focused(false) = event {
-                Self::handle_blur_event(&app_handle, state_refs.clone(), window_created_at);
+                Self::handle_blur_event(&app_handle, state_refs.clone());
             }
         });
 
@@ -358,32 +325,18 @@ impl WindowManager {
     }
 
     /// 处理窗口失焦事件
-    fn handle_blur_event(app: &tauri::AppHandle, state: StateRefs, created_at: Instant) {
-        let elapsed_ms = created_at.elapsed().as_millis();
-        eprintln!("[DEBUG] Blur event received, elapsed since creation: {}ms", elapsed_ms);
-
+    fn handle_blur_event(app: &tauri::AppHandle, state: StateRefs) {
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             *state.pending_hide.lock().await = true;
             tokio::time::sleep(tokio::time::Duration::from_millis(BLUR_DELAY_MS)).await;
 
-            if !*state.pending_hide.lock().await {
-                eprintln!("[DEBUG] Hide operation was cancelled by focus event");
-                return;
-            }
-
-            let Some(win) = app.get_webview_window("clipboard") else { return };
-            let Ok(false) = win.is_focused() else {
-                eprintln!("[DEBUG] Window regained focus, skip hiding");
+            let Some(window) = Self::resolve_blur_hide_window(&app, &state).await else {
                 return;
             };
 
-            let pin_mode = *state.pin_mode.lock().await;
-            eprintln!("[DEBUG] Window blur confirmed after {}ms, pin_mode: {:?}", BLUR_DELAY_MS, pin_mode);
-
-            let _ = Self::save_window_position_internal(&state, &win).await;
-            let _ = win.hide();
-            let _ = app.emit("clipboard-window-blur", serde_json::json!({ "reset": !pin_mode.is_pinned() }));
+            let _ = Self::hide_window_after_blur(&state, &window).await;
+            Self::emit_window_blur(&app);
         });
     }
 
@@ -395,22 +348,52 @@ impl WindowManager {
 
             let Some(win) = app.get_webview_window("clipboard") else { return };
             let Ok(true) = win.is_focused() else {
-                eprintln!("[DEBUG] Focus event: window not actually focused, skipping");
                 return;
             };
 
             *state.pending_hide.lock().await = false;
-            eprintln!("[DEBUG] Window focus confirmed");
         });
+    }
+
+    async fn resolve_blur_hide_window(
+        app: &tauri::AppHandle,
+        state: &StateRefs,
+    ) -> Option<tauri::WebviewWindow> {
+        if !*state.pending_hide.lock().await {
+            return None;
+        }
+
+        let window = app.get_webview_window("clipboard")?;
+        let Ok(false) = window.is_focused() else {
+            return None;
+        };
+
+        if state.pin_mode.lock().await.is_pinned() {
+            return None;
+        }
+
+        Some(window)
+    }
+
+    async fn hide_window_after_blur(
+        state: &StateRefs,
+        window: &tauri::WebviewWindow,
+    ) -> Result<(), String> {
+        *state.pending_hide.lock().await = false;
+        Self::save_window_position_internal(state, window).await?;
+        map_err!(window.hide())?;
+        Ok(())
+    }
+
+    fn emit_window_blur(app: &tauri::AppHandle) {
+        let _ = app.emit("clipboard-window-blur", serde_json::json!({ "reset": true }));
     }
 
     /// 保存窗口位置（内部实现，使用 StateRefs）
     async fn save_window_position_internal(state: &StateRefs, window: &tauri::WebviewWindow) -> Result<(), String> {
-        let pin_mode = *state.pin_mode.lock().await;
         let settings = state.settings.lock().await;
 
-        let should_save = pin_mode.is_pinned() || settings.window_position == "remember";
-        if !should_save {
+        if settings.window_position != "remember" {
             return Ok(());
         }
         drop(settings);

@@ -928,13 +928,14 @@ const handleKeyDown = async (e: KeyboardEvent) => {
       handleSmartSearch(""); // 触发搜索以显示所有历史
       return;
     }
+
     // 搜索框已为空，隐藏窗口
     e.preventDefault();
     // 保存当前状态
     savedSearchQuery.value = searchQuery.value;
     savedScrollPosition.value = scrollerRef.value?.$el?.scrollTop || 0;
     selectedIndex.value = -1; // 清除高亮
-    invoke("hide_clipboard_window");
+    await invoke("hide_clipboard_window");
     return;
   }
 
