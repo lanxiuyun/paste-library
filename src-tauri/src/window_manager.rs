@@ -123,12 +123,6 @@ impl WindowManager {
             *self.pending_hide.lock().await = false;
         }
 
-        if let Some(window) = app.get_webview_window("clipboard") {
-            if pinned {
-                map_err!(window.set_always_on_top(true))?;
-            }
-        }
-
         let _ = app.emit("pin-mode-changed", serde_json::json!({ "pinned": pinned }));
         Ok(())
     }
@@ -148,7 +142,8 @@ impl WindowManager {
             let is_visible = map_err!(window.is_visible())?;
 
             if is_visible {
-                self.save_window_position(&window).await?;
+                *self.pending_hide.lock().await = false;
+                let _ = self.save_window_position(&window).await;
                 map_err!(window.hide())?;
                 Ok(false)
             } else {
@@ -386,7 +381,7 @@ impl WindowManager {
     }
 
     fn emit_window_blur(app: &tauri::AppHandle) {
-        let _ = app.emit("clipboard-window-blur", serde_json::json!({ "reset": true }));
+        let _ = app.emit("clipboard-window-blur", ());
     }
 
     /// 保存窗口位置（内部实现，使用 StateRefs）
