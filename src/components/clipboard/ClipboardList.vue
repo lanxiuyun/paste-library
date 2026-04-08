@@ -188,7 +188,7 @@ const smartSearchRef = ref<InstanceType<typeof SmartSearch> | null>(null);
 const searchQuery = ref("");
 const searchHistory = ref<string[]>([]);
 const parsedQuery = computed<ParsedQuery>(() =>
-  parseSearchQuery(searchQuery.value),
+  parseSearchQuery(searchQuery.value)
 );
 
 // 标签相关
@@ -264,7 +264,7 @@ const savePinnedSearches = () => {
   try {
     localStorage.setItem(
       PINNED_SEARCH_STORAGE_KEY,
-      JSON.stringify(pinnedSearches.value),
+      JSON.stringify(pinnedSearches.value)
     );
   } catch {
     // 忽略存储错误
@@ -357,7 +357,7 @@ const performSearch = async (query: string, isLoadMore = false) => {
 
   // 如果有钉住搜索，使用钉住的查询
   const pinnedSearch = pinnedSearches.value.find(
-    (ps) => ps.id === activeTab.value,
+    (ps) => ps.id === activeTab.value
   );
 
   let searchRequest: {
@@ -456,7 +456,7 @@ const performSearch = async (query: string, isLoadMore = false) => {
       "search_clipboard_advanced",
       {
         request: searchRequest,
-      },
+      }
     );
 
     if (isLoadMore) {
@@ -490,7 +490,7 @@ const loadMoreResults = async () => {
     const currentLength = filteredHistory.value.length;
     const moreItems = history.value.slice(
       currentLength,
-      currentLength + ITEMS_PER_PAGE,
+      currentLength + ITEMS_PER_PAGE
     );
     if (moreItems.length > 0) {
       filteredHistory.value = [...filteredHistory.value, ...moreItems];
@@ -578,7 +578,7 @@ const executeClipboardAction = async (
     copyAsPlainText?: boolean;
     showFeedback?: boolean;
     hideWindow?: boolean;
-  } = {},
+  } = {}
 ) => {
   const {
     copyAsPlainText = settings.value.copy_as_plain_text,
@@ -610,7 +610,7 @@ const executeClipboardAction = async (
 const handleItemAction = async (
   item: ClipboardItemType,
   index: number,
-  actionType: "click" | "doubleClick",
+  actionType: "click" | "doubleClick"
 ) => {
   selectedIndex.value = index;
 
@@ -639,7 +639,7 @@ const handleItemDoubleClick = (item: ClipboardItemType, index: number) => {
 const handleItemContextMenu = (
   event: MouseEvent,
   item: ClipboardItemType,
-  index: number,
+  index: number
 ) => {
   contextMenuPosition.value = { x: event.clientX, y: event.clientY };
   contextMenuItem.value = item;
@@ -755,7 +755,7 @@ const copyFilePath = async (item: ClipboardItemType): Promise<void> => {
 // 上下文菜单动作
 const handleContextMenuAction = async (
   action: string,
-  item: ClipboardItemType,
+  item: ClipboardItemType
 ) => {
   switch (action) {
     case "copy":
@@ -778,7 +778,9 @@ const handleContextMenuAction = async (
         content_type: "text",
         content: plainContent,
       };
-      await executeClipboardAction(plainItem, "copy", { copyAsPlainText: true });
+      await executeClipboardAction(plainItem, "copy", {
+        copyAsPlainText: true,
+      });
       break;
     }
     case "pastePlain": {
@@ -791,7 +793,9 @@ const handleContextMenuAction = async (
         content_type: "text",
         content: pastePlainContent,
       };
-      await executeClipboardAction(plainItem, "paste", { copyAsPlainText: true });
+      await executeClipboardAction(plainItem, "paste", {
+        copyAsPlainText: true,
+      });
       break;
     }
     case "delete":
@@ -853,10 +857,7 @@ const handleScroll = () => {
 };
 
 // 快捷键匹配辅助函数：检查键盘事件是否匹配指定的快捷键配置
-const matchesShortcut = (
-  e: KeyboardEvent,
-  shortcutConfig: string,
-): boolean => {
+const matchesShortcut = (e: KeyboardEvent, shortcutConfig: string): boolean => {
   if (shortcutConfig === "none") {
     return !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
   }
@@ -873,10 +874,10 @@ const matchesShortcut = (
   if (e.metaKey) actualModifiers.push("meta");
 
   const allRequiredPressed = requiredModifiers.every((mod) =>
-    actualModifiers.includes(mod),
+    actualModifiers.includes(mod)
   );
   const noExtraModifiers = actualModifiers.every((mod) =>
-    requiredModifiers.includes(mod),
+    requiredModifiers.includes(mod)
   );
 
   return allRequiredPressed && noExtraModifiers;
@@ -900,7 +901,7 @@ const handleKeyDown = async (e: KeyboardEvent) => {
   const hasMeta =
     shortcutParts.includes("meta") || shortcutParts.includes("cmd");
   const keyPart = shortcutParts.find(
-    (p) => !["ctrl", "shift", "alt", "meta", "cmd"].includes(p),
+    (p) => !["ctrl", "shift", "alt", "meta", "cmd"].includes(p)
   );
 
   if (
@@ -1033,7 +1034,7 @@ onMounted(async () => {
     "pin-mode-changed",
     (event) => {
       isPinned.value = event.payload.pinned;
-    },
+    }
   );
 
   // 监听窗口透明度变化
@@ -1042,7 +1043,7 @@ onMounted(async () => {
     (event) => {
       const opacity = event.payload.opacity;
       document.body.style.opacity = String(opacity);
-    },
+    }
   );
 
   (window as any).__unlistenFocus = unlistenFocus;
@@ -1093,7 +1094,7 @@ watch(
       searchHasMore.value = history.value.length > ITEMS_PER_PAGE;
     }
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 // 监听标签切换，重新搜索
