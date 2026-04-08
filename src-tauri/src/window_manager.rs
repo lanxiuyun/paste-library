@@ -301,20 +301,18 @@ impl WindowManager {
     async fn setup_window_events(&self, window: &tauri::WebviewWindow, app: &tauri::AppHandle) {
         let state_refs = self.get_state_refs();
         let app_handle = app.clone();
-
-        // 失焦事件处理
         window.on_window_event(move |event| {
-            if let tauri::WindowEvent::Focused(false) = event {
-                Self::handle_blur_event(&app_handle, state_refs.clone());
-            }
-        });
-
-        // 获得焦点事件处理
-        let state_refs_focus = self.get_state_refs();
-        let app_handle_focus = app.clone();
-        window.on_window_event(move |event| {
-            if let tauri::WindowEvent::Focused(true) = event {
-                Self::handle_focus_event(&app_handle_focus, state_refs_focus.clone());
+            match event {
+                tauri::WindowEvent::Focused(false) => {
+                    Self::handle_blur_event(&app_handle, state_refs.clone());
+                }
+                tauri::WindowEvent::Focused(true) => {
+                    Self::handle_focus_event(&app_handle, state_refs.clone());
+                }
+                tauri::WindowEvent::Moved(_) => {
+                    Self::handle_moved_event(state_refs.clone());
+                }
+                _ => {}
             }
         });
     }
@@ -347,6 +345,16 @@ impl WindowManager {
             };
 
             *state.pending_hide.lock().await = false;
+        });
+    }
+
+    /// 处理窗口移动事件
+    fn handle_moved_event(state: StateRefs) {
+        tauri::async_runtime::spawn(async move {
+            let mut pending_hide = state.pending_hide.lock().await;
+            if *pending_hide {
+                *pending_hide = false;
+            }
         });
     }
 
