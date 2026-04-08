@@ -1,5 +1,6 @@
 mod clipboard;
 mod models;
+mod platform;
 mod storage;
 mod window_manager;
 mod shortcut_manager;
@@ -384,16 +385,6 @@ async fn toggle_pin_mode(
 ) -> Result<bool, String> {
     let state = state.lock().await;
     state.window_manager.toggle_pin_mode(&app).await
-}
-
-#[tauri::command]
-async fn set_window_opacity(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    app: tauri::AppHandle,
-    opacity: f32,
-) -> Result<(), String> {
-    let state = state.lock().await;
-    state.window_manager.set_window_opacity(&app, opacity).await
 }
 
 #[tauri::command]
@@ -796,7 +787,6 @@ pub fn run() {
             get_pin_mode,
             set_pin_mode,
             toggle_pin_mode,
-            set_window_opacity,
             update_pin_shortcut,
         ])
         .run(tauri::generate_context!())
