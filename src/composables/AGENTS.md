@@ -26,6 +26,7 @@ Shared Vue composition functions (hooks).
 - `restoreToClipboard()` - 恢复条目到剪贴板（支持纯文本模式）
 - 处理多种类型：text, html, rtf, image, file, folder, files
 - 区分内部复制 vs 外部复制（用于智能激活）
+- 图片恢复到系统剪贴板时需要考虑 Windows 11 下的句柄竞争；`writeImage()` 失败时优先做短暂重试/退避，而不是立刻判定为路径问题
 
 ### useSmartSearch.ts (397 lines)
 
@@ -106,3 +107,5 @@ Pin 模式管理：
 - Composables should be focused and single-responsibility
 - Window visibility/hide operations are done via direct `invoke()` calls in components, not through a dedicated composable
 - `usePinMode.ts` 需要和后端 `window_manager.rs` 的语义保持一致：Pin 仅影响 blur auto-hide
+- `useClipboard.ts` 的 `restoreToClipboard()` 要保持现有粘贴顺序：先恢复系统剪贴板，再由上层隐藏窗口/切焦点，最后执行 `simulatePaste()`
+- 图片粘贴失败如果出现 `OSError(1418): 线程没有打开的剪贴板`，优先按 Windows 剪贴板竞争处理

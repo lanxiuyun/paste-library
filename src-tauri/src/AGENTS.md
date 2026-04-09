@@ -52,5 +52,12 @@ Rust backend (Tauri commands).
   - `simulate_paste` is an async Tauri command: use `tokio::time::sleep(...).await`, not `std::thread::sleep`
   - Keep `AppState` lock scope as small as possible in `simulate_paste`; do not hold the outer mutex across unrelated awaits
   - In `Pinned`, try to restore the clipboard window even if the native paste step fails, otherwise continuous multi-item paste breaks
+- Async lock safety:
+  - Do not call `blocking_lock()` from code already running inside Tokio runtime tasks; it can panic with `Cannot block the current thread from within a runtime`
+  - `startup_cleanup` must stay async and read settings via `lock().await`
+  - For spawned startup tasks, clone the needed manager/state first, then release the outer `AppState` lock before awaiting longer work
+- Windows clipboard caveat:
+  - `tauri-plugin-clipboard-x` ultimately relies on `clipboard-rs`; writing image/PNG clipboard data on Windows 11 may intermittently fail with `OSError(1418): 线程没有打开的剪贴板`
+  - Treat this as clipboard handle contention/timing first; avoid assuming the stored image path is invalid
 - `clipboard-window-blur` event has no payload (emitted as `()`); `pin-mode-changed` carries `{ pinned: bool }`
 - Clipboard window is always created with `always_on_top(true)`; pin mode does not manage always-on-top separately

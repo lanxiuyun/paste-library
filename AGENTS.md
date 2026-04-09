@@ -513,6 +513,10 @@ const imageSrc = computed(() => {
   - In non-`Pinned` mode, `copy` only hides/resets when `hide_window_after_copy` is enabled
   - In `Pinned` mode, frontend should not hide/reset after `copy` or `paste`
   - Frontend must execute `simulatePaste()` as the final step so focus can return to the target input before the native paste shortcut fires
+- **Windows image paste caveat**:
+ - `tauri-plugin-clipboard-x` uses `clipboard-rs` underneath; on Windows 11, writing PNG/image content can intermittently fail with `OSError(1418): 线程没有打开的剪贴板`
+ - When restoring an image item to the system clipboard, prefer short retry/backoff instead of assuming the first `writeImage()` call will succeed
+ - Treat this as a clipboard handle timing/competition issue, not as a bad image path by default
 - **Greenfield project**: Modern best practices take priority over legacy patterns
 - **Desktop-first UX**: Consider Windows/macOS/Linux platform differences in UI
 - **Global shortcut**: Configurable via key recording in settings (restart required to apply changes)
