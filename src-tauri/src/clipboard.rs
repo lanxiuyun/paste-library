@@ -8,6 +8,7 @@ use crate::models::{
 };
 use crate::storage::Database;
 
+#[derive(Clone)]
 pub struct ClipboardManager {
     database: Arc<Database>,
     settings: Arc<Mutex<AppSettings>>,
@@ -190,8 +191,8 @@ impl ClipboardManager {
     /// 
     /// # 返回
     /// - 清理的记录数量
-    pub fn startup_cleanup(&self) -> Result<i64, String> {
-        let settings = self.settings.blocking_lock();
+    pub async fn startup_cleanup(&self) -> Result<i64, String> {
+        let settings = self.settings.lock().await;  // 防止启动时，数据库被锁定，导致无法访问数据库
         let max_history_count = settings.max_history_count;
         let auto_cleanup_days = settings.auto_cleanup_days;
         drop(settings);

@@ -627,8 +627,12 @@ pub fn run() {
             // 启动时自动清理（保留有标签的记录）
             let app_state_for_cleanup = app_state.clone();
             tauri::async_runtime::spawn(async move {
-                let state = app_state_for_cleanup.lock().await;
-                match state.clipboard_manager.startup_cleanup() {
+                let clipboard_manager = {
+                    let state = app_state_for_cleanup.lock().await;  // 防止启动时，数据库被锁定，导致无法访问数据库
+                    state.clipboard_manager.clone()
+                };
+
+                match clipboard_manager.startup_cleanup().await {
                     Ok(count) => {
                         if count > 0 {
                             println!("启动时自动清理完成，清理了 {} 条记录", count);
