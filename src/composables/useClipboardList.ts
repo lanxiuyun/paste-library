@@ -105,7 +105,6 @@ export function useClipboardList(options: UseClipboardListOptions) {
   // 模拟粘贴
   const simulatePaste = async (): Promise<void> => {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 100));
       await invoke("simulate_paste", {
         pasteShortcut: settings.value.paste_shortcut,
       });

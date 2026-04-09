@@ -520,7 +520,7 @@ async fn simulate_paste(
         }
 
         // 2. 等待焦点转移
-        sleep(Duration::from_millis(200)).await;
+        sleep(Duration::from_millis(80)).await;
 
         // 3. 执行粘贴操作
         let paste_result = do_paste(&paste_shortcut);
@@ -553,7 +553,7 @@ async fn simulate_paste(
     }
 
     // 默认模式：等待窗口隐藏
-    sleep(Duration::from_millis(200)).await;
+    sleep(Duration::from_millis(80)).await;
     do_paste(&paste_shortcut)
 }
 
