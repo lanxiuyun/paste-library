@@ -266,8 +266,10 @@ const resetDefaultList = () => {
 const resetPanelState = () => {
   searchQuery.value = "";
   savedSearchQuery.value = "";
+  savedScrollPosition.value = 0;
   activeTab.value = "all";
   resetDefaultList();
+  selectedIndexFallback.value = -1;
   selectedIndex.value = -1;
   if (scrollerRef.value) {
     scrollerRef.value.scrollToItem(0, "start");
@@ -313,7 +315,9 @@ const {
 } = uiState;
 
 watch(selectedIndex, (value) => {
-  selectedIndexFallback.value = value;
+  if (value >= 0 && hasActivated.value) {
+    selectedIndexFallback.value = value;
+  }
 });
 
 const smartSearchForKeyboard = ref<{ focus: () => void } | null>(null);
@@ -333,6 +337,7 @@ watch(scrollerRef, (value) => {
 const handleEscape = async () => {
   savedSearchQuery.value = searchQuery.value;
   savedScrollPosition.value = scrollerRef.value?.$el?.scrollTop || 0;
+  hasActivated.value = false;
   selectedIndex.value = -1;
   await invoke("hide_clipboard_window");
 };
@@ -430,12 +435,27 @@ onMounted(async () => {
       handleWindowFocus();
       if (savedSearchQuery.value) {
         searchQuery.value = savedSearchQuery.value;
-        nextTick(() => {
-          if (scrollerRef.value && savedScrollPosition.value > 0) {
-            scrollerRef.value.$el.scrollTop = savedScrollPosition.value;
-          }
-        });
       }
+      nextTick(() => {
+        if (filteredHistory.value.length === 0) {
+          selectedIndex.value = -1;
+          return;
+        }
+
+        const restoredIndex =
+          selectedIndexFallback.value >= 0
+            ? Math.min(
+                selectedIndexFallback.value,
+                filteredHistory.value.length - 1,
+              )
+            : 0;
+
+        selectedIndex.value = restoredIndex;
+
+        if (scrollerRef.value && savedScrollPosition.value > 0) {
+          scrollerRef.value.$el.scrollTop = savedScrollPosition.value;
+        }
+      });
     }
   });
 
@@ -475,9 +495,14 @@ onUnmounted(() => {
 
 watch(filteredHistory, () => {
   if (selectedIndex.value >= filteredHistory.value.length) {
-    selectedIndex.value = filteredHistory.value.length > 0 ? 0 : -1;
+    selectedIndex.value =
+      filteredHistory.value.length > 0 ? filteredHistory.value.length - 1 : -1;
   } else if (selectedIndex.value < 0 && filteredHistory.value.length > 0) {
-    selectedIndex.value = 0;
+    const fallbackIndex =
+      selectedIndexFallback.value >= 0
+        ? Math.min(selectedIndexFallback.value, filteredHistory.value.length - 1)
+        : 0;
+    selectedIndex.value = fallbackIndex;
   }
 });
 
