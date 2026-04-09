@@ -55,6 +55,7 @@ components/
 - 搜索集成（异步调用 Rust 后端）
 - Tab 过滤（全部/文本/图片/文件）
 - 键盘导航（↑/↓/Enter/1-9/Esc）
+- 窗口重新呼出后恢复上次键盘选中项与滚动位置
 - 右键上下文菜单
 - 抽屉编辑器集成
 - 标签管理器弹窗
@@ -178,6 +179,7 @@ Tab 导航组件，214 行，包含：
   - `Esc` 仍可手动隐藏窗口
   - 全局快捷键切换窗口时，Pin 不应阻止手动隐藏
   - 粘贴动作在 Pin 模式下保持窗口开启
+  - 仅在明确重置面板状态时才清空键盘选中记忆；普通失焦/重新呼出应恢复上次选中项与滚动位置
   - `executeClipboardAction()` 中，非 Pin 模式下 `paste` 必须无条件隐藏并重置；`copy` 是否隐藏由 `hide_window_after_copy` 决定
   - `executeClipboardAction()` 中，Pin 模式下 `copy` / `paste` 都不应隐藏窗口，也不应调用 `resetPanelState()`
   - `simulatePaste()` 必须放在动作流最后执行；如果先触发原生粘贴，再隐藏窗口/切换焦点，内容可能会粘贴不到目标输入框

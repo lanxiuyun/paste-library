@@ -413,6 +413,7 @@ const imageSrc = computed(() => {
   - **Search auto-scroll to top**: Auto scroll to top on search text change
   - **Right-click item highlight**: Show selected state on right-click context menu
   - **Keyboard navigation auto-scroll**: Auto scroll to keep selected item visible
+  - **Keyboard selection restore on reopen**: Restore the last selected item and scroll position when the clipboard window is reopened, unless the panel state is explicitly reset
 - **UI Polish**:
   - Hidden unfinished features (paste queue) for cleaner UI
   - Simplified quick action buttons (detail/delete only)
@@ -513,6 +514,7 @@ const imageSrc = computed(() => {
   - In non-`Pinned` mode, `copy` only hides/resets when `hide_window_after_copy` is enabled
   - In `Pinned` mode, frontend should not hide/reset after `copy` or `paste`
   - Frontend must execute `simulatePaste()` as the final step so focus can return to the target input before the native paste shortcut fires
+  - Reopening the clipboard window after a normal hide/blur should restore the last keyboard-selected item and scroll position; only explicit panel reset flows should clear that memory
 - **Windows image paste caveat**:
  - `tauri-plugin-clipboard-x` uses `clipboard-rs` underneath; on Windows 11, writing PNG/image content can intermittently fail with `OSError(1418): 线程没有打开的剪贴板`
  - When restoring an image item to the system clipboard, prefer short retry/backoff instead of assuming the first `writeImage()` call will succeed
