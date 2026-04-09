@@ -196,6 +196,27 @@ export function useClipboard() {
     await clearHistory(0, undefined);
   };
 
+  const sleep = (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+
+  const restoreImageToClipboard = async (imagePath: string): Promise<void> => {
+    const maxAttempts = 4;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        await writeImage(imagePath);
+        return;
+      } catch (error) {
+        if (attempt === maxAttempts) {
+          throw error;
+        }
+
+        // Windows 11 下图片写入剪贴板偶发句柄竞争，短暂退避后重试。
+        await sleep(100);
+      }
+    }
+  };
+
   const restoreToClipboard = async (item: ClipboardItem, options?: { copyAsPlainText?: boolean }): Promise<void> => {
     // 标记为应用内复制（这样 handleClipboardChange 就不会更新 lastCopyTime）
     isInternalCopy.value = true;
@@ -231,7 +252,7 @@ export function useClipboard() {
         case 'image':
           // 图片类型：使用缩略图路径或内容路径
           if (item.thumbnail_path) {
-            await writeImage(item.thumbnail_path);
+            await restoreImageToClipboard(item.thumbnail_path);
           }
           break;
         case 'file':
