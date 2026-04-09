@@ -258,10 +258,16 @@ const handleSmartSearch = async (
   await handleSmartSearchInner(shouldScrollToTop);
 };
 
+const resetDefaultList = () => {
+  filteredHistory.value = history.value.slice(0, 50);
+  searchHasMore.value = history.value.length > 50;
+};
+
 const resetPanelState = () => {
   searchQuery.value = "";
   savedSearchQuery.value = "";
   activeTab.value = "all";
+  resetDefaultList();
   selectedIndex.value = -1;
   if (scrollerRef.value) {
     scrollerRef.value.scrollToItem(0, "start");
@@ -479,8 +485,7 @@ watch(
   history,
   () => {
     if (!searchQuery.value && activeTab.value === "all") {
-      filteredHistory.value = history.value.slice(0, 50);
-      searchHasMore.value = history.value.length > 50;
+      resetDefaultList();
     }
   },
   { immediate: true },
