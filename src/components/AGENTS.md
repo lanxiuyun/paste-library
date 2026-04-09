@@ -178,3 +178,6 @@ Tab 导航组件，214 行，包含：
   - `Esc` 仍可手动隐藏窗口
   - 全局快捷键切换窗口时，Pin 不应阻止手动隐藏
   - 粘贴动作在 Pin 模式下保持窗口开启
+  - `executeClipboardAction()` 中，非 Pin 模式下 `paste` 必须无条件隐藏并重置；`copy` 是否隐藏由 `hide_window_after_copy` 决定
+  - `executeClipboardAction()` 中，Pin 模式下 `copy` / `paste` 都不应隐藏窗口，也不应调用 `resetPanelState()`
+  - `simulatePaste()` 必须放在动作流最后执行；如果先触发原生粘贴，再隐藏窗口/切换焦点，内容可能会粘贴不到目标输入框

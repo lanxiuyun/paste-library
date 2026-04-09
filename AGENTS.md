@@ -363,7 +363,8 @@ const imageSrc = computed(() => {
 - **Window management** (frameless clipboard, normal settings)
 - **Pin mode**:
   - Disables blur-triggered auto-hide
-  - Keeps paste actions from hiding the window
+  - In `Pinned`, frontend copy/paste actions do not proactively hide or reset the clipboard panel
+  - For continuous paste, backend `simulate_paste` temporarily hides the window, pastes to the previously focused app, then restores and refocuses the clipboard window
   - Does not disable manual hide actions like hotkey toggle or `Esc`
 - **Image/File clipboard support**:
   - Image thumbnails with dimensions display
@@ -507,6 +508,11 @@ const imageSrc = computed(() => {
 - **Settings panel**: Normal window with title bar (decorations: true)
 - **Clipboard window**: Frameless, skip taskbar, always on top (decorations: false)
 - **Pin mode semantics**: only affects blur-triggered auto-hide; do not treat pin mode as a separate positioning or visibility mode
+- **Clipboard action semantics**:
+  - In non-`Pinned` mode, `paste` always hides/resets the clipboard window before invoking the paste shortcut
+  - In non-`Pinned` mode, `copy` only hides/resets when `hide_window_after_copy` is enabled
+  - In `Pinned` mode, frontend should not hide/reset after `copy` or `paste`
+  - Frontend must execute `simulatePaste()` as the final step so focus can return to the target input before the native paste shortcut fires
 - **Greenfield project**: Modern best practices take priority over legacy patterns
 - **Desktop-first UX**: Consider Windows/macOS/Linux platform differences in UI
 - **Global shortcut**: Configurable via key recording in settings (restart required to apply changes)

@@ -502,41 +502,39 @@ async fn simulate_paste(
     app: tauri::AppHandle,
     paste_shortcut: String,
 ) -> Result<(), String> {
-    use std::thread;
-    use std::time::Duration;
+    use tokio::time::{sleep, Duration};
 
-    // 检查是否在钉住模式
-    let state = state.lock().await;
-    let pin_mode = state.window_manager.get_pin_mode().await;
-    
-    if pin_mode.is_pinned() {
+    // 只在读取 Pin 状态时短暂持有 AppState 锁，避免跨 await 长时间占用
+    let is_pinned = {
+        let state = state.lock().await;
+        state.window_manager.get_pin_mode().await.is_pinned()
+    };
+
+    if is_pinned {
         // 钉住模式下：临时隐藏窗口让焦点回到之前的窗口，执行粘贴后再显示
         eprintln!("[DEBUG] simulate_paste in pinned mode: hiding window temporarily");
-        
+
         // 1. 临时隐藏窗口（让焦点回到之前的窗口）
         if let Some(window) = app.get_webview_window("clipboard") {
             window.hide().map_err(|e| e.to_string())?;
         }
-        
-        drop(state);
-        
+
         // 2. 等待焦点转移
-        thread::sleep(Duration::from_millis(200));
-        
+        sleep(Duration::from_millis(200)).await;
+
         // 3. 执行粘贴操作
-        do_paste(&paste_shortcut)?;
-        
-        // 4. 粘贴完成后恢复窗口显示
-        if let Some(window) = app.get_webview_window("clipboard") {
+        let paste_result = do_paste(&paste_shortcut);
+
+        // 4. 无论粘贴是否成功，都尽量恢复窗口，保持连续粘贴体验
+        let restore_result = if let Some(window) = app.get_webview_window("clipboard") {
             window.show().map_err(|e| e.to_string())?;
             window.set_focus().map_err(|e| e.to_string())?;
-        }
-        
+
         // 5. 恢复置顶状态
-        #[cfg(target_os = "windows")]
-        {
-            use winapi::um::winuser::{SetWindowPos, HWND_TOPMOST, SWP_NOSIZE, SWP_NOMOVE, SWP_NOACTIVATE};
-            if let Some(window) = app.get_webview_window("clipboard") {
+            #[cfg(target_os = "windows")]
+            {
+                use winapi::um::winuser::{SetWindowPos, HWND_TOPMOST, SWP_NOMOVE, SWP_NOACTIVATE, SWP_NOSIZE};
+
                 if let Ok(hwnd) = window.hwnd() {
                     let hwnd = hwnd.0 as *mut winapi::shared::windef::HWND__;
                     unsafe {
@@ -544,15 +542,19 @@ async fn simulate_paste(
                     }
                 }
             }
-        }
-        
-        return Ok(());
-    } else {
-        // 默认模式：等待窗口隐藏
-        drop(state);
-        thread::sleep(Duration::from_millis(200));
-        do_paste(&paste_shortcut)
+
+            Ok(())
+        } else {
+            Ok(())
+        };
+
+        paste_result?;
+        return restore_result;
     }
+
+    // 默认模式：等待窗口隐藏
+    sleep(Duration::from_millis(200)).await;
+    do_paste(&paste_shortcut)
 }
 
 #[tauri::command]

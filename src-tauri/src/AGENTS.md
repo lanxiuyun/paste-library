@@ -48,5 +48,9 @@ Rust backend (Tauri commands).
   - `Pinned` only disables blur-triggered auto-hide
   - Manual hide paths still work in pinned mode: global shortcut toggle, `Esc`, and explicit `hide_clipboard_window`
   - Pin mode is not a separate positioning strategy; window position still follows normal settings (`remember` / `center` / `cursor`)
+  - For continuous paste in `Pinned`, `simulate_paste` should temporarily hide the clipboard window, wait for focus to return to the previous app, perform the native paste shortcut, then restore and refocus the clipboard window
+  - `simulate_paste` is an async Tauri command: use `tokio::time::sleep(...).await`, not `std::thread::sleep`
+  - Keep `AppState` lock scope as small as possible in `simulate_paste`; do not hold the outer mutex across unrelated awaits
+  - In `Pinned`, try to restore the clipboard window even if the native paste step fails, otherwise continuous multi-item paste breaks
 - `clipboard-window-blur` event has no payload (emitted as `()`); `pin-mode-changed` carries `{ pinned: bool }`
 - Clipboard window is always created with `always_on_top(true)`; pin mode does not manage always-on-top separately
