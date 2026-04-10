@@ -1,11 +1,23 @@
 <template>
-  <button
-    class="hotkey-record-btn"
-    :class="{ 'recording': isRecording, 'has-value': modelValue && !isRecording, 'small': size === 'small' }"
+  <div
+    class="hotkey-recorder"
+    :class="{ recording: isRecording }"
     @click="toggleRecording"
   >
-    {{ displayText }}
-  </button>
+    <template v-if="isRecording">
+      <span class="recording-text">请按下快捷键...</span>
+    </template>
+    <template v-else-if="displayKeys.length > 0">
+      <span v-for="(key, i) in displayKeys" :key="i" class="key-badge">{{ key }}</span>
+      <span v-if="isModifierOnly" class="key-suffix">1~9</span>
+    </template>
+    <template v-else-if="isModifierOnly && modelValue === 'none'">
+      <span class="key-hint">直接按数字键</span>
+    </template>
+    <template v-else>
+      <span class="key-hint">{{ emptyText }}</span>
+    </template>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -22,7 +34,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   size: 'default',
   recordingText: '请按下快捷键...',
-  emptyText: '点击录制',
+  emptyText: '点击录制快捷键',
   isModifierOnly: false,
 });
 
@@ -33,20 +45,13 @@ const emit = defineEmits<{
 
 const isRecording = ref(false);
 
-const displayText = computed(() => {
-  if (isRecording.value) {
-    return props.recordingText;
+const displayKeys = computed<string[]>(() => {
+  if (!props.modelValue || props.modelValue === 'none') return [];
+  if (props.isModifierOnly) {
+    return props.modelValue.split('+').map(s => s.charAt(0).toUpperCase() + s.slice(1));
   }
-  if (props.modelValue) {
-    return props.isModifierOnly ? formatModifierShortcut(props.modelValue) : props.modelValue;
-  }
-  return props.emptyText;
+  return props.modelValue.split('+');
 });
-
-const formatModifierShortcut = (shortcut: string): string => {
-  if (!shortcut || shortcut === 'none') return '直接按数字键';
-  return shortcut.split('+').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('+') + '+数字键';
-};
 
 const toggleRecording = () => {
   if (isRecording.value) {
@@ -78,13 +83,11 @@ const handleKeyRecord = (e: KeyboardEvent) => {
 
   let key = e.key;
 
-  // 忽略单独的修饰键
   if (key === 'Control' || key === 'Alt' || key === 'Shift' || key === 'Meta') {
     return;
   }
 
   if (props.isModifierOnly) {
-    // 如果是数字键，使用当前的修饰键组合
     const keyLower = key.toLowerCase();
     if (keyLower >= '1' && keyLower <= '9') {
       const value = modifiers.length === 0 ? 'none' : modifiers.join('+');
@@ -94,17 +97,14 @@ const handleKeyRecord = (e: KeyboardEvent) => {
       return;
     }
 
-    // 按其他键也停止录制并保存当前修饰键状态
     const value = modifiers.length === 0 ? 'none' : modifiers.join('+');
     emit('update:modelValue', value);
     emit('record', value);
     stopRecording();
   } else {
-    // 标准化按键名称
     if (key === ' ') key = 'Space';
     if (key.length === 1) key = key.toUpperCase();
 
-    // 组合快捷键
     const hotkeyParts = [...modifiers, key];
     const hotkeyString = hotkeyParts.join('+');
 
@@ -122,48 +122,64 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.hotkey-record-btn {
-  min-width: 120px;
-  padding: 8px 16px;
-  border: 2px dashed #d9d9d9;
-  border-radius: 4px;
-  background: #fafafa;
+.hotkey-recorder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.hotkey-recorder:hover {
+  background: #f0f0f0;
+}
+
+.hotkey-recorder.recording {
+  background: #fff7e6;
+}
+
+.key-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fff;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 13px;
-  color: #8c8c8c;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
-}
-
-.hotkey-record-btn:hover {
-  border-color: #262626;
+  font-weight: 500;
   color: #262626;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.hotkey-record-btn.recording {
-  border-color: #fa8c16;
-  border-style: solid;
-  background: #fff7e6;
+.key-suffix {
+  font-size: 13px;
+  font-weight: 500;
+  color: #8c8c8c;
+  margin-left: 2px;
+}
+
+.key-hint {
+  font-size: 13px;
+  color: #bfbfbf;
+  padding: 4px 0;
+}
+
+.recording-text {
+  font-size: 13px;
   color: #fa8c16;
-  animation: pulse 1s infinite;
+  padding: 4px 0;
+  animation: blink 1s ease-in-out infinite;
 }
 
-.hotkey-record-btn.has-value {
-  border-style: solid;
-  border-color: #52c41a;
-  background: #f6ffed;
-  color: #52c41a;
-}
-
-.hotkey-record-btn.small {
-  min-width: 100px;
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-@keyframes pulse {
+@keyframes blink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  50% { opacity: 0.5; }
 }
 </style>
