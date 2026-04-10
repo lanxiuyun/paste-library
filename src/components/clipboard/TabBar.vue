@@ -5,9 +5,13 @@
         v-for="(tab, index) in allTabs"
         :key="tab.key"
         class="tab-btn"
-        :class="{ active: modelValue === tab.key, 'is-pinned': tab.isPinned, 'is-fixed': !tab.isPinned }"
+        :class="{
+          active: isTabActive(tab),
+          'is-pinned': tab.isPinned,
+          'is-fixed': !tab.isPinned,
+        }"
         :draggable="tab.isPinned"
-        @click="handleTabClick(tab.key)"
+        @click="tab.isPinned ? handlePinnedClick(tab.key) : handleTabClick(tab.key)"
         @dragstart="handleDragStart($event, index)"
         @dragover="handleDragOver($event, index)"
         @drop="handleDrop($event, index)"
@@ -37,7 +41,8 @@ interface Tab {
 }
 
 interface Props {
-  modelValue: string;
+  activeFixedTab: string;
+  activePinnedIds: string[];
   fixedTabs: { key: string; label: string }[];
   pinnedSearches: PinnedSearch[];
 }
@@ -45,7 +50,8 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  'update:modelValue': [key: string];
+  'tab-click': [key: string];
+  'pinned-click': [id: string];
   'unpin': [id: string];
   'reorder': [fromIndex: number, toIndex: number];
 }>();
@@ -63,8 +69,19 @@ const allTabs = computed<Tab[]>(() => {
   return [...fixedTabs, ...pinnedTabs];
 });
 
+const isTabActive = (tab: Tab) => {
+  if (tab.isPinned) {
+    return props.activePinnedIds.includes(tab.key);
+  }
+  return props.activeFixedTab === tab.key;
+};
+
 const handleTabClick = (key: string) => {
-  emit('update:modelValue', key);
+  emit('tab-click', key);
+};
+
+const handlePinnedClick = (id: string) => {
+  emit('pinned-click', id);
 };
 
 const handleUnpin = (key: string) => {

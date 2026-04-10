@@ -32,6 +32,7 @@ Shared Vue composition functions (hooks).
 
 智能搜索功能：
 - `parseSearchQuery()` - 解析 @tag/@type 语法
+- `removeTypeTokensFromQuery()` - 从查询中移除所有类型 token，供固定 tab 切换使用
 - `matchItemWithQuery()` - 匹配条目与查询
 - `searchHistory` - 搜索历史管理（localStorage）
 - `highlightMatches()` - 高亮匹配文本
@@ -109,3 +110,7 @@ Pin 模式管理：
 - `usePinMode.ts` 需要和后端 `window_manager.rs` 的语义保持一致：Pin 仅影响 blur auto-hide
 - `useClipboard.ts` 的 `restoreToClipboard()` 要保持现有粘贴顺序：先恢复系统剪贴板，再由上层隐藏窗口/切焦点，最后执行 `simulatePaste()`
 - 图片粘贴失败如果出现 `OSError(1418): 线程没有打开的剪贴板`，优先按 Windows 剪贴板竞争处理
+- 搜索相关 composable 约束：
+  - `useSearch.ts` 只消费 `searchQuery`，不要恢复独立 tab 过滤分支
+  - `parseSearchQuery()` 是 fixed tab、自定义 tab、高亮态和后端搜索请求的共同基础
+  - 固定 tab 与自定义 tab 的交互应通过增删 query token 实现，而不是维护第二份筛选状态

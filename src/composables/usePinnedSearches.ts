@@ -1,10 +1,9 @@
 import type { PinnedSearch } from "@/types";
-import { computed, ref, watch, type Ref } from "vue";
+import { computed, ref, type Ref } from "vue";
 
 const PINNED_SEARCH_STORAGE_KEY = "paste_library_pinned_searches";
 
 export function usePinnedSearches(
-  activeTab: Ref<string>,
   searchQuery: Ref<string>,
 ) {
   const pinnedSearches = ref<PinnedSearch[]>([]);
@@ -55,17 +54,17 @@ export function usePinnedSearches(
 
     pinnedSearches.value.push(newPinned);
     savePinnedSearches();
-    activeTab.value = newPinned.id;
+    searchQuery.value = newPinned.query;
   };
 
   const unpinSearch = (id: string) => {
     const index = pinnedSearches.value.findIndex((ps) => ps.id === id);
     if (index > -1) {
+      const removedQuery = pinnedSearches.value[index].query;
       pinnedSearches.value.splice(index, 1);
       savePinnedSearches();
 
-      if (activeTab.value === id) {
-        activeTab.value = "all";
+      if (searchQuery.value.trim() === removedQuery) {
         searchQuery.value = "";
       }
     }
@@ -76,17 +75,6 @@ export function usePinnedSearches(
     pinnedSearches.value.splice(toIndex, 0, item);
     savePinnedSearches();
   };
-
-  // 监听标签切换：切换到固定搜索时同步搜索查询
-  watch(activeTab, (key) => {
-    const pinned = pinnedSearches.value.find((ps) => ps.id === key);
-    if (pinned) {
-      // 切换到固定搜索标签时，使用该固定搜索的查询
-      searchQuery.value = pinned.query;
-    }
-    // 切换到固定标签（all, text, image, file, folder）时，保留当前搜索查询
-    // 不再自动清除搜索条件
-  });
 
   return {
     pinnedSearches,

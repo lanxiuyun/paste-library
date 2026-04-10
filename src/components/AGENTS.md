@@ -53,13 +53,14 @@ components/
 核心列表组件，1169 行，包含：
 - 虚拟滚动列表（使用 vue-virtual-scroller）
 - 搜索集成（异步调用 Rust 后端）
-- Tab 过滤（全部/文本/图片/文件）
+- 统一搜索状态协调（`searchQuery` 是唯一过滤源）
+- 固定 Tab 类型筛选（全部/文本/图片/文件，对应 `@type` 开关）
+- 自定义钉住搜索 Tab（保存搜索条件、可拖拽、可 toggle）
 - 键盘导航（↑/↓/Enter/1-9/Esc）
 - 窗口重新呼出后恢复上次键盘选中项与滚动位置
 - 右键上下文菜单
 - 抽屉编辑器集成
 - 标签管理器弹窗
-- 固定搜索标签（可拖拽）
 - Pin 模式状态管理
 - `Esc` / 快捷键 / 粘贴动作与窗口状态联动
 
@@ -82,15 +83,16 @@ components/
 - `@type` 语法用于类型过滤（如 `@图片`, `@html`）
 - 内联标签渲染为彩色标签块
 - 搜索历史管理（localStorage）
+- 外部 `modelValue` 同步时会把 `@tag` / `@type` 重渲染为内联标签
 - 键盘导航：↑↓ 选择，Enter/Tab 确认，Esc 关闭
 
 ### TabBar.vue
 
 Tab 导航组件，214 行，包含：
 - 固定标签：全部/文本/图片/文件
-- 可拖拽的固定搜索标签
-- 标签激活状态管理
-- 关闭固定搜索按钮
+- 可拖拽的钉住搜索标签
+- 固定 tab 与钉住 tab 的激活态展示
+- 钉住搜索关闭按钮
 
 ### DrawerEditor.vue
 
@@ -174,6 +176,11 @@ Tab 导航组件，214 行，包含：
 - Two root components: App.vue (settings), ClipboardView.vue (clipboard)
 - URL-based routing in main.ts: `/clipboard` → ClipboardView, else → App
 - ClipboardList.vue is the most complex component - handle with care
+- `ClipboardList.vue` 的搜索设计已经改为类似 GitHub 的单一查询模型：
+  - 不要再引入独立的 `activeTab` 过滤状态
+  - 固定 tab 只负责切换 `@type`
+  - 自定义 tab 是保存搜索条件的 toggle，点击时应尽量保留其他已生效条件
+  - 固定 tab 和自定义 tab 可以同时高亮；高亮表示该条件当前正在搜索中
 - `ClipboardList.vue` 中的 Pin 语义要与后端保持一致：
   - Pin 只阻止失焦自动隐藏
   - `Esc` 仍可手动隐藏窗口

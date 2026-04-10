@@ -47,10 +47,13 @@
 
     <!-- 标签栏 -->
     <TabBar
-      v-model="activeTab"
+      :active-fixed-tab="activeFixedTab"
+      :active-pinned-ids="activePinnedIds"
       :fixed-tabs="FIXED_TABS"
       :pinned-searches="pinnedSearches"
-      @unpin="unpinSearch"
+      @tab-click="handleTabClick"
+      @pinned-click="handlePinnedTabClick"
+      @unpin="handleUnpinSearch"
       @reorder="reorderPinnedSearches"
     />
 
@@ -153,7 +156,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { BookmarkPlus, Pin as PinIcon, Settings as SettingsIcon } from "lucide-vue-next";
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { DynamicScroller, DynamicScrollerItem } from "vue-virtual-scroller";
 import { useClipboard } from "@/composables/useClipboard";
 import { useClipboardList } from "@/composables/useClipboardList";
@@ -167,6 +170,8 @@ import {
   addSearchHistory,
   clearSearchHistory,
   getSearchHistory,
+  parseSearchQuery,
+  removeTypeTokensFromQuery,
   removeSearchHistory as removeSearchHistoryItem,
 } from "@/composables/useSmartSearch";
 import ClipboardItem from "../ClipboardItem.vue";
@@ -184,6 +189,16 @@ const FIXED_TABS = [
   { key: "image", label: "图片" },
   { key: "file", label: "文件" },
 ];
+
+const TAB_TYPE_TOKEN: Record<string, string> = {
+  text: "文本",
+  image: "图片",
+  file: "文件",
+};
+
+const TEXT_TYPES = ["text", "html", "rtf"];
+const IMAGE_TYPES = ["image"];
+const FILE_TYPES = ["file", "files", "folder"];
 
 type DynamicScrollerAdapter = {
   scrollToItem: (index: number, position: string) => void;
@@ -229,7 +244,6 @@ const smartSearchRef = ref<InstanceType<typeof SmartSearch> | null>(null);
 const scrollerRef = ref<InstanceType<typeof DynamicScroller> | null>(null);
 const searchQuery = ref("");
 const searchHistory = ref<string[]>([]);
-const activeTab = ref("all");
 const hasActivated = ref(false);
 const savedSearchQuery = ref("");
 const savedScrollPosition = ref(0);
@@ -239,9 +253,9 @@ const {
   canPinCurrentSearch,
   loadPinnedSearches,
   pinCurrentSearch,
-  unpinSearch,
+  unpinSearch: unpinPinnedSearch,
   reorderPinnedSearches,
-} = usePinnedSearches(activeTab, searchQuery);
+} = usePinnedSearches(searchQuery);
 
 const scrollerForSearch = ref<DynamicScrollerAdapter | null>(null);
 watch(scrollerRef, (value) => {
@@ -260,17 +274,66 @@ const {
   isSearching,
   searchHasMore,
   parsedQuery,
-  performSearch,
   loadMoreResults,
   handleSmartSearch: handleSmartSearchInner,
 } = useSearch({
-  activeTab,
   searchQuery,
-  pinnedSearches,
   history,
   scrollerRef: scrollerForSearch,
   onSearchComplete,
 });
+
+const activePinnedIds = computed<string[]>(() => {
+  const currentParsed = parsedQuery.value;
+  if (!currentParsed.isValid) {
+    return [];
+  }
+
+  return pinnedSearches.value
+    .filter((ps) => {
+      const pinnedParsed = parseSearchQuery(ps.query);
+      if (!pinnedParsed.isValid) return false;
+
+      const tagsMatch = pinnedParsed.tags.every((t) =>
+        currentParsed.tags.some((ct) => ct.toLowerCase() === t.toLowerCase()),
+      );
+      const typesMatch = pinnedParsed.types.every((t) =>
+        currentParsed.types.includes(t),
+      );
+      const keywordsMatch = pinnedParsed.keywords.every((k) =>
+        currentParsed.keywords.some(
+          (ck) => ck.toLowerCase() === k.toLowerCase(),
+        ),
+      );
+
+      return tagsMatch && typesMatch && keywordsMatch;
+    })
+    .map((ps) => ps.id);
+});
+
+const derivedActiveTab = computed(() => {
+  const types = parsedQuery.value.types;
+
+  if (types.length === 0) {
+    return "all";
+  }
+
+  if (types.every((type) => TEXT_TYPES.includes(type))) {
+    return "text";
+  }
+
+  if (types.every((type) => IMAGE_TYPES.includes(type))) {
+    return "image";
+  }
+
+  if (types.every((type) => FILE_TYPES.includes(type))) {
+    return "file";
+  }
+
+  return "all";
+});
+
+const activeFixedTab = computed(() => derivedActiveTab.value);
 
 const handleSmartSearch = async (
   query: string,
@@ -289,7 +352,6 @@ const resetPanelState = () => {
   searchQuery.value = "";
   savedSearchQuery.value = "";
   savedScrollPosition.value = 0;
-  activeTab.value = "all";
   resetDefaultList();
   selectedIndexFallback.value = -1;
   selectedIndex.value = -1;
@@ -426,6 +488,92 @@ const handleTagClick = (tag: string) => {
   handleSmartSearch(searchQuery.value);
 };
 
+const handleTabClick = async (tabKey: string) => {
+  const queryWithoutTypes = removeTypeTokensFromQuery(searchQuery.value);
+  const typeToken = TAB_TYPE_TOKEN[tabKey];
+  const nextQuery = typeToken
+    ? `${queryWithoutTypes} @${typeToken}`.trim()
+    : queryWithoutTypes;
+
+  await handleSmartSearch(nextQuery);
+};
+
+const tokenizeQuery = (query: string) =>
+  query
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
+
+const mergeQueryTokens = (currentQuery: string, additionalQuery: string) => {
+  const currentTokens = tokenizeQuery(currentQuery);
+  const currentTokenSet = new Set(
+    currentTokens.map((token) => token.toLowerCase()),
+  );
+
+  const mergedTokens = [...currentTokens];
+  tokenizeQuery(additionalQuery).forEach((token) => {
+    const normalizedToken = token.toLowerCase();
+    if (currentTokenSet.has(normalizedToken)) {
+      return;
+    }
+
+    currentTokenSet.add(normalizedToken);
+    mergedTokens.push(token);
+  });
+
+  return mergedTokens.join(" ");
+};
+
+const removeQueryTokens = (currentQuery: string, removableQuery: string) => {
+  const removableTokenCounts = new Map<string, number>();
+  tokenizeQuery(removableQuery).forEach((token) => {
+    const normalizedToken = token.toLowerCase();
+    removableTokenCounts.set(
+      normalizedToken,
+      (removableTokenCounts.get(normalizedToken) ?? 0) + 1,
+    );
+  });
+
+  return tokenizeQuery(currentQuery)
+    .filter((token) => {
+      const normalizedToken = token.toLowerCase();
+      const remainingCount = removableTokenCounts.get(normalizedToken) ?? 0;
+
+      if (remainingCount <= 0) {
+        return true;
+      }
+
+      removableTokenCounts.set(normalizedToken, remainingCount - 1);
+      return false;
+    })
+    .join(" ");
+};
+
+const handlePinnedTabClick = async (pinnedId: string) => {
+  const pinnedSearch = pinnedSearches.value.find(
+    (item) => item.id === pinnedId,
+  );
+
+  if (!pinnedSearch) {
+    return;
+  }
+
+  const nextQuery = activePinnedIds.value.includes(pinnedId)
+    ? removeQueryTokens(searchQuery.value, pinnedSearch.query)
+    : mergeQueryTokens(searchQuery.value, pinnedSearch.query);
+
+  await handleSmartSearch(nextQuery);
+};
+
+const handleUnpinSearch = async (pinnedId: string) => {
+  const previousQuery = searchQuery.value;
+  unpinPinnedSearch(pinnedId);
+
+  if (searchQuery.value !== previousQuery) {
+    await handleSmartSearch(searchQuery.value);
+  }
+};
+
 const handleWindowFocus = async () => {
   smartSearchRef.value?.focus();
 };
@@ -547,16 +695,12 @@ watch(filteredHistory, () => {
 watch(
   history,
   () => {
-    if (!searchQuery.value && activeTab.value === "all") {
+    if (!searchQuery.value) {
       resetDefaultList();
     }
   },
   { immediate: true },
 );
-
-watch(activeTab, () => {
-  performSearch();
-});
 </script>
 
 <style scoped>

@@ -357,7 +357,7 @@ const imageSrc = computed(() => {
 - Real-time clipboard monitoring (text + HTML + image + files)
 - SQLite persistence with automatic deduplication (SHA256 hash)
 - Card-based UI with tabs (All/Text/Image/File/Favorite)
-- **Search functionality** (fuzzy search with pinyin, initials, fault tolerance)
+- **Search functionality** (fuzzy search with pinyin, initials, fault tolerance, `@tag` / `@type` mixed query)
 - **Global hotkey** (configurable via key recording) to show/hide clipboard window
 - **Settings panel** with left sidebar navigation
 - **Window management** (frameless clipboard, normal settings)
@@ -409,6 +409,7 @@ const imageSrc = computed(() => {
   - **Hide Window After Copy**: Auto-hide clipboard window after copy action
 - **Interaction Experience Enhancements**:
   - **focus_search_on_activate**: Auto-focus search box on window activation
+  - **Unified search state**: Search input is the single source of truth; fixed tabs and pinned tabs both toggle search conditions instead of maintaining a separate active tab state
   - **Smart Activate Optimization**: Distinguish system clipboard vs internal copy
   - **Search auto-scroll to top**: Auto scroll to top on search text change
   - **Right-click item highlight**: Show selected state on right-click context menu
@@ -515,6 +516,12 @@ const imageSrc = computed(() => {
   - In `Pinned` mode, frontend should not hide/reset after `copy` or `paste`
   - Frontend must execute `simulatePaste()` as the final step so focus can return to the target input before the native paste shortcut fires
   - Reopening the clipboard window after a normal hide/blur should restore the last keyboard-selected item and scroll position; only explicit panel reset flows should clear that memory
+- **Search / Tab semantics**:
+  - Do not reintroduce a separate `activeTab` source of truth for clipboard filtering
+  - `searchQuery` is the only filter state; UI highlights must be derived from `parseSearchQuery(searchQuery)`
+  - Fixed tabs (`全部/文本/图片/文件`) are type-filter toggles that add/remove the corresponding `@type`
+  - Pinned tabs are saved search-condition toggles; clicking can merge or remove that saved query from the current search instead of blindly replacing everything
+  - A highlighted tab should always mean "this condition is active in the current search"
 - **Windows image paste caveat**:
  - `tauri-plugin-clipboard-x` uses `clipboard-rs` underneath; on Windows 11, writing PNG/image content can intermittently fail with `OSError(1418): 线程没有打开的剪贴板`
  - When restoring an image item to the system clipboard, prefer short retry/backoff instead of assuming the first `writeImage()` call will succeed

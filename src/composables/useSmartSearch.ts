@@ -35,6 +35,10 @@ const TYPE_ALIASES: Record<string, ClipboardContentType[]> = {
   'folder': ['folder'],
 };
 
+function isTypeToken(value: string): boolean {
+  return Boolean(TYPE_ALIASES[value] || TYPE_ALIASES[value.toLowerCase()]);
+}
+
 /**
  * 解析搜索查询字符串
  * 
@@ -118,6 +122,15 @@ export function parseSearchQuery(query: string): ParsedQuery {
     raw: trimmed,
     isValid: keywords.length > 0 || uniqueTags.length > 0 || uniqueTypes.length > 0,
   };
+}
+
+export function removeTypeTokensFromQuery(query: string): string {
+  return query
+    .replace(/@([^\s@]+)/g, (match, value: string) => {
+      return isTypeToken(value) ? '' : match;
+    })
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**

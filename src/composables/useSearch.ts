@@ -1,4 +1,4 @@
-import type { ClipboardItem, PinnedSearch } from "@/types";
+import type { ClipboardItem } from "@/types";
 import { invoke } from "@tauri-apps/api/core";
 import { computed, nextTick, ref, type Ref } from "vue";
 import {
@@ -7,9 +7,7 @@ import {
 } from "@/composables/useSmartSearch";
 
 export interface SearchOptions {
-  activeTab: Ref<string>;
   searchQuery: Ref<string>;
-  pinnedSearches: Ref<PinnedSearch[]>;
   history: Ref<ClipboardItem[]>;
   onSearchComplete?: (resultCount: number) => void;
   scrollerRef?: Ref<{ scrollToItem: (index: number, position: string) => void } | null>;
@@ -28,8 +26,7 @@ export interface SearchState {
 const ITEMS_PER_PAGE = 50;
 
 export function useSearch(options: SearchOptions): SearchState {
-  const { activeTab, searchQuery, pinnedSearches, history, onSearchComplete, scrollerRef } =
-    options;
+  const { searchQuery, history, onSearchComplete, scrollerRef } = options;
 
   const filteredHistory = ref<ClipboardItem[]>([]);
   const isSearching = ref(false);
@@ -55,11 +52,6 @@ export function useSearch(options: SearchOptions): SearchState {
       searchHasMore.value = true;
     }
 
-    // 如果有钉住搜索，使用钉住的查询
-    const pinnedSearch = pinnedSearches.value.find(
-      (ps) => ps.id === activeTab.value,
-    );
-
     let searchRequest: {
       keywords: string[];
       tags: string[];
@@ -68,53 +60,7 @@ export function useSearch(options: SearchOptions): SearchState {
       offset: number;
     };
 
-    if (pinnedSearch) {
-      const pinnedParsed = parseSearchQuery(pinnedSearch.query);
-      if (pinnedParsed.isValid) {
-        searchRequest = {
-          keywords: pinnedParsed.keywords,
-          tags: pinnedParsed.tags,
-          types: pinnedParsed.types.map((t) => {
-            const typeMap: Record<string, string> = {
-              text: "text",
-              html: "html",
-              rtf: "rtf",
-              image: "image",
-              file: "file",
-              folder: "folder",
-              files: "files",
-            };
-            return typeMap[t] || "text";
-          }),
-          limit: ITEMS_PER_PAGE,
-          offset: searchOffset.value,
-        };
-      } else {
-        searchRequest = {
-          keywords: [],
-          tags: [],
-          types: [],
-          limit: ITEMS_PER_PAGE,
-          offset: 0,
-        };
-      }
-    } else if (activeTab.value !== "all" && !parsed.isValid) {
-      // Tab 过滤（非搜索状态）
-      const typeMap: Record<string, string[]> = {
-        file: ["file", "folder", "files"],
-        text: ["text", "html", "rtf"],
-        image: ["image"],
-      };
-      const types = typeMap[activeTab.value] || [activeTab.value.toLowerCase()];
-
-      searchRequest = {
-        keywords: [],
-        tags: [],
-        types,
-        limit: ITEMS_PER_PAGE,
-        offset: searchOffset.value,
-      };
-    } else if (parsed.isValid) {
+    if (parsed.isValid) {
       // 普通搜索
       searchRequest = {
         keywords: parsed.keywords,
@@ -181,7 +127,7 @@ export function useSearch(options: SearchOptions): SearchState {
     if (isSearching.value) return;
 
     // 如果有搜索条件或标签过滤，调用后端加载更多
-    if (searchQuery.value || activeTab.value !== "all") {
+    if (parsedQuery.value.isValid) {
       if (!searchHasMore.value) return;
       await performSearch(true);
     } else {
