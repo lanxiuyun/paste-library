@@ -15,7 +15,7 @@
         />
         <button
           v-if="canPinCurrentSearch"
-          class="pin-btn"
+          class="icon-btn"
           title="固定当前搜索"
           @click="pinCurrentSearch"
         >
@@ -23,8 +23,8 @@
         </button>
         <!-- 钉住模式按钮 -->
         <button
-          class="pin-mode-btn"
-          :class="{ 'is-pinned': isPinned }"
+          class="icon-btn"
+          :class="{ 'is-active': isPinned }"
           :title="
             isPinned
               ? '取消钉住'
@@ -32,8 +32,15 @@
           "
           @click="togglePinMode"
         >
-          <!-- 使用 Lucide 图标 -->
           <PinIcon :size="18" />
+        </button>
+        <!-- 设置按钮 -->
+        <button
+          class="icon-btn"
+          title="打开设置"
+          @click="openSettings"
+        >
+          <SettingsIcon :size="18" />
         </button>
       </div>
     </div>
@@ -145,7 +152,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { BookmarkPlus, Pin as PinIcon } from "lucide-vue-next";
+import { BookmarkPlus, Pin as PinIcon, Settings as SettingsIcon } from "lucide-vue-next";
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { DynamicScroller, DynamicScrollerItem } from "vue-virtual-scroller";
 import { useClipboard } from "@/composables/useClipboard";
@@ -423,6 +430,14 @@ const handleWindowFocus = async () => {
   smartSearchRef.value?.focus();
 };
 
+const openSettings = async () => {
+  try {
+    await invoke("show_settings_window");
+  } catch (err) {
+    console.error("Failed to open settings:", err);
+  }
+};
+
 let cleanupClipboard: (() => void) | null = null;
 let unlistenPinMode: (() => void) | null = null;
 let unlistenOpacity: (() => void) | null = null;
@@ -601,61 +616,32 @@ watch(activeTab, () => {
   gap: 8px;
 }
 
-.pin-mode-btn {
-  width: 32px;
-  height: 32px;
+.icon-btn {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f5;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
   color: #8c8c8c;
   transition: all 0.2s;
   flex-shrink: 0;
-  position: relative;
+  padding: 0;
 }
 
-.pin-mode-btn:hover {
-  background: #e6f7ff;
-  border-color: #91d5ff;
+.icon-btn:hover {
+  color: #1890ff;
+  background: rgba(24, 144, 255, 0.08);
+}
+
+.icon-btn.is-active {
   color: #1890ff;
 }
 
-.pin-mode-btn.is-pinned {
-  background: #1890ff;
-  border-color: #1890ff;
-  color: #fff;
-}
-
-.pin-mode-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.pin-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f5f5f5;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  color: #8c8c8c;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.pin-btn:hover {
-  background: #e6f7ff;
-  border-color: #91d5ff;
-  color: #1890ff;
-}
-
-.pin-btn svg {
+.icon-btn svg {
   width: 18px;
   height: 18px;
 }

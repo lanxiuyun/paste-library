@@ -668,6 +668,16 @@ fn open_external_link(url: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn show_settings_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.unminimize();
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri_plugin_global_shortcut::ShortcutState;
@@ -767,35 +777,35 @@ pub fn run() {
                 }
             }
 
-            // 注册钉住模式快捷键
-            let pin_shortcut = settings.blocking_lock().pin_shortcut.clone();
-            let app_handle_for_pin_shortcut = app.handle().clone();
-            let app_state_for_pin_shortcut = app_state.clone();
-
-            if let Ok((modifiers, code)) = shortcut_manager::parse_shortcut(&pin_shortcut) {
-                let shortcut = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
-
-                let result = app.global_shortcut().on_shortcut(shortcut, move |app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        let app_handle = app.clone();
-                        let state = app_state_for_pin_shortcut.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let state = state.lock().await;
-                            let _ = state.window_manager.toggle_pin_mode(&app_handle).await;
-                        });
-                    }
-                });
-
-                if let Err(e) = result {
-                    eprintln!("警告: 钉住模式快捷键 '{}' 注册失败: {}", pin_shortcut, e);
-                    let pin_shortcut_clone = pin_shortcut.clone();
-                    tauri::async_runtime::spawn(async move {
-                        let _ = app_handle_for_pin_shortcut.emit("pin-shortcut-registration-failed", pin_shortcut_clone);
-                    });
-                } else {
-                    println!("钉住模式快捷键 '{}' 注册成功", pin_shortcut);
-                }
-            }
+            // TODO: 钉住模式快捷键暂时禁用，待功能完善后恢复
+            // let pin_shortcut = settings.blocking_lock().pin_shortcut.clone();
+            // let app_handle_for_pin_shortcut = app.handle().clone();
+            // let app_state_for_pin_shortcut = app_state.clone();
+            //
+            // if let Ok((modifiers, code)) = shortcut_manager::parse_shortcut(&pin_shortcut) {
+            //     let shortcut = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
+            //
+            //     let result = app.global_shortcut().on_shortcut(shortcut, move |app, _shortcut, event| {
+            //         if event.state == ShortcutState::Pressed {
+            //             let app_handle = app.clone();
+            //             let state = app_state_for_pin_shortcut.clone();
+            //             tauri::async_runtime::spawn(async move {
+            //                 let state = state.lock().await;
+            //                 let _ = state.window_manager.toggle_pin_mode(&app_handle).await;
+            //             });
+            //         }
+            //     });
+            //
+            //     if let Err(e) = result {
+            //         eprintln!("警告: 钉住模式快捷键 '{}' 注册失败: {}", pin_shortcut, e);
+            //         let pin_shortcut_clone = pin_shortcut.clone();
+            //         tauri::async_runtime::spawn(async move {
+            //             let _ = app_handle_for_pin_shortcut.emit("pin-shortcut-registration-failed", pin_shortcut_clone);
+            //         });
+            //     } else {
+            //         println!("钉住模式快捷键 '{}' 注册成功", pin_shortcut);
+            //     }
+            // }
 
             // 获取主窗口并设置事件监听
             if let Some(main_window) = app.get_webview_window("main") {
@@ -880,6 +890,7 @@ pub fn run() {
             set_pin_mode,
             toggle_pin_mode,
             update_pin_shortcut,
+            show_settings_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
