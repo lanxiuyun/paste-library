@@ -24,8 +24,7 @@ export interface UIState {
   deleteConfirmVisible: Ref<boolean>;
   itemToDelete: Ref<ClipboardItem | null>;
 
-  // Visual Feedback
-  highlightedItemId: Ref<number | null>;
+  // Selection
   selectedIndex: Ref<number>;
 }
 
@@ -74,7 +73,6 @@ export function useClipboardList(options: UseClipboardListOptions) {
   const deleteConfirmVisible = ref(false);
   const itemToDelete = ref<ClipboardItem | null>(null);
 
-  const highlightedItemId = ref<number | null>(null);
   const selectedIndex = ref(-1);
 
   // UI 状态导出
@@ -88,18 +86,7 @@ export function useClipboardList(options: UseClipboardListOptions) {
     tagManagerItem,
     deleteConfirmVisible,
     itemToDelete,
-    highlightedItemId,
     selectedIndex,
-  };
-
-  // 显示粘贴成功反馈
-  const showPasteFeedback = (itemId: number) => {
-    highlightedItemId.value = itemId;
-    setTimeout(() => {
-      if (highlightedItemId.value === itemId) {
-        highlightedItemId.value = null;
-      }
-    }, 500);
   };
 
   // 模拟粘贴
@@ -119,31 +106,24 @@ export function useClipboardList(options: UseClipboardListOptions) {
     action: ClipboardAction,
     opts: {
       copyAsPlainText?: boolean;
-      showFeedback?: boolean;
       hideWindow?: boolean;
     } = {},
   ) => {
     const {
       copyAsPlainText = settings.value.copy_as_plain_text,
-      showFeedback = true,
       hideWindow = settings.value.hide_window_after_copy,
     } = opts;
 
     // 1. 恢复到剪贴板
     await restoreToClipboard(item, { copyAsPlainText });
 
-    // 2. 显示视觉反馈（可选）
-    if (showFeedback) {
-      showPasteFeedback(item.id);
-    }
-
-    // 3. 默认模式下，复制/粘贴后按现有语义关闭窗口并重置状态
+    // 2. 默认模式下，复制/粘贴后按现有语义关闭窗口并重置状态
     if (!isPinned.value && (action === "paste" || hideWindow)) {
       await invoke("hide_clipboard_window");
       resetPanelState?.();
     }
 
-    // 4. 粘贴必须最后执行，确保焦点已回到目标输入框
+    // 3. 粘贴必须最后执行，确保焦点已回到目标输入框
     if (action === "paste") {
       await simulatePaste();
     }
@@ -365,7 +345,6 @@ export function useClipboardList(options: UseClipboardListOptions) {
     // Actions
     executeClipboardAction,
     simulatePaste,
-    showPasteFeedback,
 
     // Item handlers
     handleItemClick,

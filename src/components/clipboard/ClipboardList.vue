@@ -93,7 +93,6 @@
             :item="item"
             :index="index"
             :is-selected="selectedIndex === index"
-            :is-highlighted="highlightedItemId === item.id"
             :show-tags="true"
             :highlight-keywords="parsedQuery.keywords"
             @click="handleItemClick"
@@ -326,7 +325,6 @@ const {
   tagManagerVisible,
   tagManagerItem,
   deleteConfirmVisible,
-  highlightedItemId,
   selectedIndex,
 } = uiState;
 

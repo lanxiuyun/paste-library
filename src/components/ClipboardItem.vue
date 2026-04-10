@@ -1,7 +1,7 @@
 <template>
   <div
     class="clipboard-item"
-    :class="{ 'is-hovered': isHovered, 'is-selected': isSelected, 'is-highlighted': isHighlighted }"
+    :class="{ 'is-hovered': isHovered, 'is-selected': isSelected }"
     @click="handleClick"
     @dblclick="handleDoubleClick"
     @contextmenu.prevent="handleContextMenu"
@@ -179,7 +179,6 @@ interface Props {
   item: ClipboardItem;
   index?: number;
   isSelected?: boolean;
-  isHighlighted?: boolean;
   showTags?: boolean;
   highlightKeywords?: string[];
 }
@@ -514,20 +513,6 @@ const handleTagClick = (tag: string) => {
   box-shadow: inset 3px 0 0 0 var(--primary, #1890ff);
 }
 
-.clipboard-item.is-highlighted {
-  background-color: #f6ffed;
-  box-shadow: inset 3px 0 0 0 #52c41a;
-  animation: highlight-pulse 500ms ease-out;
-}
-
-@keyframes highlight-pulse {
-  0% {
-    background-color: #52c41a;
-  }
-  100% {
-    background-color: #f6ffed;
-  }
-}
 
 .item-row {
   display: flex;
