@@ -187,8 +187,24 @@ const createScrollerAdapter = (
   scroller: InstanceType<typeof DynamicScroller>,
 ): DynamicScrollerAdapter => ({
   scrollToItem: (index: number, position: string) => {
-    const normalizedPosition = position === "center" ? "center" : "start";
-    scroller.scrollToItem(index, normalizedPosition);
+    scroller.scrollToItem(index);
+    if (position === "center") {
+      nextTick(() => {
+        const el = scroller.$el as HTMLElement | undefined;
+        if (!el) return;
+        const containerHeight = el.clientHeight;
+        const selectedEl = el.querySelector(
+          ".clipboard-item.is-selected",
+        ) as HTMLElement | null;
+        if (!selectedEl) return;
+        const itemRect = selectedEl.getBoundingClientRect();
+        const containerRect = el.getBoundingClientRect();
+        const relativeTop = itemRect.top - containerRect.top;
+        const offset =
+          relativeTop - (containerHeight - itemRect.height) / 2;
+        el.scrollTop += offset;
+      });
+    }
   },
 });
 
