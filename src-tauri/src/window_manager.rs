@@ -10,7 +10,8 @@ use crate::storage::Database;
 /// 窗口配置常量
 const WINDOW_WIDTH: f64 = 800.0;
 const WINDOW_HEIGHT: f64 = 600.0;
-const BLUR_DELAY_MS: u64 = 150;
+// 保留一个很短的缓冲，避免瞬时焦点抖动导致误隐藏，同时让失焦隐藏更跟手。
+const BLUR_DELAY_MS: u64 = 20;
 const FOCUS_DELAY_MS: u64 = 50;
 const WINDOW_MARGIN: i32 = 100;
 
