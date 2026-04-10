@@ -323,51 +323,60 @@ const decodeHtmlEntities = (html: string): string => {
 
 const contentPreview = computed(() => {
   let text = props.item.content;
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n');
   text = text.replace(/<[^>]*>/g, '');
-  // 解码 HTML 实体（如 &#35843;&#25972; -> 调整）
   text = decodeHtmlEntities(text);
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  text = text.replace(/\n{2,}/g, '\n');
   text = text.trim();
   return text || '(空内容)';
 });
 
-// 高亮匹配的关键词
+// 高亮匹配的关键词，搜索时定位到第一个匹配行
 const highlightedContent = computed(() => {
   let text = contentPreview.value;
   
   if (!props.highlightKeywords || props.highlightKeywords.length === 0) {
-    // 转义HTML特殊字符
     return text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
   }
   
-  // 先转义HTML特殊字符
+  const keywords = props.highlightKeywords.filter(k => k.trim());
+  
+  if (keywords.length > 0) {
+    const lines = text.split('\n');
+    const firstMatchLineIdx = lines.findIndex(line =>
+      keywords.some(kw => line.toLowerCase().includes(kw.toLowerCase()))
+    );
+    if (firstMatchLineIdx > 0) {
+      text = '… ' + lines.slice(firstMatchLineIdx).join('\n');
+    }
+  }
+  
   let escaped = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
   
-  // 按长度降序排序，优先匹配长词
-  const sortedKeywords = [...props.highlightKeywords]
-    .filter(k => k.trim())
+  const sortedKeywords = [...keywords]
     .sort((a, b) => b.length - a.length);
   
   for (const keyword of sortedKeywords) {
     if (!keyword.trim()) continue;
     
-    // 转义正则特殊字符
     const escapedKeyword = keyword
       .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     
-    // 创建正则表达式（忽略大小写）
     const regex = new RegExp(`(${escapedKeyword})`, 'gi');
     
-    // 替换为高亮标记
     escaped = escaped.replace(regex, '<mark class="search-highlight">$1</mark>');
   }
   
-  return escaped;
+  return escaped.replace(/\n/g, '<br>');
 });
 
 // 处理图片路径 - 使用 convertFileSrc 转换
