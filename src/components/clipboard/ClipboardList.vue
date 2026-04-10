@@ -458,7 +458,23 @@ onMounted(async () => {
   }
 
   const appWindow = getCurrentWindow();
+
+  let blurDeactivateTimer: number | null = null;
+  unlistenBlur = await appWindow.listen("tauri://blur", () => {
+    savedSearchQuery.value = searchQuery.value;
+    savedScrollPosition.value = scrollerRef.value?.$el?.scrollTop || 0;
+    selectedIndex.value = -1;
+    if (blurDeactivateTimer) clearTimeout(blurDeactivateTimer);
+    blurDeactivateTimer = window.setTimeout(() => {
+      hasActivated.value = false;
+    }, 200);
+  });
+
   unlistenFocus = await appWindow.listen("tauri://focus", () => {
+    if (blurDeactivateTimer) {
+      clearTimeout(blurDeactivateTimer);
+      blurDeactivateTimer = null;
+    }
     if (!hasActivated.value) {
       hasActivated.value = true;
       handleWindowFocus();
@@ -486,13 +502,6 @@ onMounted(async () => {
         }
       });
     }
-  });
-
-  unlistenBlur = await appWindow.listen("tauri://blur", () => {
-    hasActivated.value = false;
-    savedSearchQuery.value = searchQuery.value;
-    savedScrollPosition.value = scrollerRef.value?.$el?.scrollTop || 0;
-    selectedIndex.value = -1;
   });
 
   unlistenPinMode = await listen<{ pinned: boolean }>(
