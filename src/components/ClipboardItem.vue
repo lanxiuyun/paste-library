@@ -541,7 +541,6 @@ const handleTagClick = (tag: string) => {
   gap: 10px;
   min-width: 0;
   position: relative;
-  padding-right: 80px; /* 为按钮预留空间 */
 }
 
 /* 类型标签 */
