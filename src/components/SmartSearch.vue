@@ -1,6 +1,6 @@
 <template>
   <div class="smart-search" ref="searchContainerRef">
-    <div class="search-input-wrapper" :class="{ focused: isFocused }" @click="focusInput">
+    <div class="search-input-wrapper" @click="focusInput">
       <!-- 搜索图标 -->
       <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"/>
@@ -124,7 +124,6 @@ const editorRef = ref<HTMLDivElement>();        // contenteditable 编辑器引�
 const searchContainerRef = ref<HTMLElement>();  // 搜索容器引用
 const mentionListRef = ref<HTMLDivElement>();   // 补全面板列表引用（用于滚动定位）
 
-const isFocused = ref(false);      // 是否聚焦
 const isComposing = ref(false);    // 是否正在输入法组合（中文输入时需要）
 
 // 补全面板状态
@@ -593,7 +592,6 @@ const focusInput = () => {
 /** 处理聚焦事件 */
 const handleFocus = () => {
   clearBlurTimer();
-  isFocused.value = true;
   checkMention();
 };
 
@@ -618,7 +616,6 @@ const handleBlur = () => {
 
   // 延迟关闭面板，给点击面板留出时间
   blurTimer = window.setTimeout(() => {
-    isFocused.value = false;
     showMentionPanel.value = false;
   }, 150);
 };
@@ -858,8 +855,8 @@ defineExpose({ focus: focusInput });
   cursor: text;
 }
 
-/* 聚焦状态 */
-.search-input-wrapper.focused {
+/* 聚焦状态 - 容器内任意子元素获得焦点时自动生效 */
+.search-input-wrapper:focus-within {
   background: #fff;
   border-color: #262626;
 }
