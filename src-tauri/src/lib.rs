@@ -336,6 +336,61 @@ fn validate_shortcut(hotkey: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn update_hotkey(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app: tauri::AppHandle,
+    old_hotkey: String,
+    new_hotkey: String,
+) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::ShortcutState;
+
+    shortcut_manager::validate_hotkey(&new_hotkey)?;
+
+    let app_state = state.inner().clone();
+
+    if let Ok((modifiers, code)) = shortcut_manager::parse_shortcut(&old_hotkey) {
+        let old = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
+        let _ = app.global_shortcut().unregister(old);
+    }
+
+    let (modifiers, code) = shortcut_manager::parse_shortcut(&new_hotkey)?;
+    let new_shortcut = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
+
+    let handler_state = app_state.clone();
+    let result = app.global_shortcut().on_shortcut(new_shortcut, move |app, _shortcut, event| {
+        if event.state == ShortcutState::Pressed {
+            let app_handle = app.clone();
+            let s = handler_state.clone();
+            tauri::async_runtime::spawn(async move {
+                let s = s.lock().await;
+                let _ = s.window_manager.toggle_clipboard_window(&app_handle).await;
+            });
+        }
+    });
+
+    if let Err(_) = result {
+        if let Ok((modifiers, code)) = shortcut_manager::parse_shortcut(&old_hotkey) {
+            let old = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
+            let restore_state = app_state.clone();
+            let _ = app.global_shortcut().on_shortcut(old, move |app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    let app_handle = app.clone();
+                    let s = restore_state.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let s = s.lock().await;
+                        let _ = s.window_manager.toggle_clipboard_window(&app_handle).await;
+                    });
+                }
+            });
+        }
+        return Err(format!("快捷键 \"{}\" 注册失败，可能已被其他程序占用", new_hotkey));
+    }
+
+    println!("唤醒快捷键已动态更新为 '{}'", new_hotkey);
+    Ok(())
+}
+
+#[tauri::command]
 fn export_clipboard_data(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<String, String> {
@@ -388,27 +443,57 @@ async fn toggle_pin_mode(
 }
 
 #[tauri::command]
-async fn update_pin_shortcut(
+fn update_pin_shortcut(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     app: tauri::AppHandle,
-    shortcut: String,
+    old_shortcut: String,
+    new_shortcut: String,
 ) -> Result<(), String> {
-    // 验证快捷键格式
-    shortcut_manager::validate_hotkey(&shortcut)?;
-    
-    let state = state.lock().await;
-    
-    // 获取当前设置
-    let mut settings = state.clipboard_manager.get_settings()?;
-    settings.pin_shortcut = shortcut.clone();
-    
-    // 保存设置
-    state.clipboard_manager.save_settings(&settings).await?;
-    
-    // 重新注册快捷键（需要重启应用生效，或者动态更新）
-    // 这里发送事件通知前端快捷键已更新
-    let _ = app.emit("pin-shortcut-updated", serde_json::json!({ "shortcut": shortcut }));
-    
+    use tauri_plugin_global_shortcut::ShortcutState;
+
+    shortcut_manager::validate_hotkey(&new_shortcut)?;
+
+    let app_state = state.inner().clone();
+
+    if let Ok((modifiers, code)) = shortcut_manager::parse_shortcut(&old_shortcut) {
+        let old = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
+        let _ = app.global_shortcut().unregister(old);
+    }
+
+    let (modifiers, code) = shortcut_manager::parse_shortcut(&new_shortcut)?;
+    let shortcut = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
+
+    let handler_state = app_state.clone();
+    let result = app.global_shortcut().on_shortcut(shortcut, move |app, _shortcut, event| {
+        if event.state == ShortcutState::Pressed {
+            let app_handle = app.clone();
+            let s = handler_state.clone();
+            tauri::async_runtime::spawn(async move {
+                let s = s.lock().await;
+                let _ = s.window_manager.toggle_pin_mode(&app_handle).await;
+            });
+        }
+    });
+
+    if let Err(_) = result {
+        if let Ok((modifiers, code)) = shortcut_manager::parse_shortcut(&old_shortcut) {
+            let old = tauri_plugin_global_shortcut::Shortcut::new(Some(modifiers), code);
+            let restore_state = app_state.clone();
+            let _ = app.global_shortcut().on_shortcut(old, move |app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    let app_handle = app.clone();
+                    let s = restore_state.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let s = s.lock().await;
+                        let _ = s.window_manager.toggle_pin_mode(&app_handle).await;
+                    });
+                }
+            });
+        }
+        return Err(format!("快捷键 \"{}\" 注册失败，可能已被其他程序占用", new_shortcut));
+    }
+
+    println!("钉住模式快捷键已动态更新为 '{}'", new_shortcut);
     Ok(())
 }
 
@@ -783,6 +868,7 @@ pub fn run() {
             update_tags,
             get_all_tags,
             validate_shortcut,
+            update_hotkey,
             export_clipboard_data,
             import_clipboard_data,
             get_storage_paths,

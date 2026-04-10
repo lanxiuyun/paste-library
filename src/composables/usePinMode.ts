@@ -36,9 +36,9 @@ export function usePinMode() {
     }
   };
 
-  const updatePinShortcut = async (shortcut: string): Promise<void> => {
+  const updatePinShortcut = async (oldShortcut: string, newShortcut: string): Promise<void> => {
     try {
-      await invoke('update_pin_shortcut', { shortcut });
+      await invoke('update_pin_shortcut', { oldShortcut, newShortcut });
     } catch (error) {
       console.error('Failed to update pin shortcut:', error);
     }
