@@ -592,6 +592,7 @@ const focusInput = () => {
 
 /** 处理聚焦事件 */
 const handleFocus = () => {
+  clearBlurTimer();
   isFocused.value = true;
   checkMention();
 };
