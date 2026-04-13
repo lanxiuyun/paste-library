@@ -1,4 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension, Result};
+use std::collections::HashSet;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -13,6 +15,24 @@ pub struct Database {
 }
 
 impl Database {
+    fn normalize_image_path(thumbnail_path: Option<String>, content: String) -> Option<String> {
+        let path = thumbnail_path.unwrap_or(content);
+        if path.trim().is_empty() {
+            return None;
+        }
+        Some(path)
+    }
+
+    fn delete_local_image_files(paths: HashSet<String>) {
+        for path in paths {
+            if let Err(error) = std::fs::remove_file(&path) {
+                if error.kind() != ErrorKind::NotFound {
+                    eprintln!("自动清理删除图片本地文件失败 ({}): {}", path, error);
+                }
+            }
+        }
+    }
+
     /// 初始化数据库连接
     pub fn new(app_dir: PathBuf) -> Result<Self> {
         let db_path = app_dir.join("clipboard.db");
@@ -480,6 +500,28 @@ impl Database {
         Ok(())
     }
 
+    /// 获取图片记录对应的本地文件路径
+    pub fn get_image_path_by_id(&self, id: i64) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let row: Option<(String, Option<String>, String)> = conn
+            .query_row(
+                "SELECT content_type, thumbnail_path, content FROM clipboard_history WHERE id = ?1",
+                params![id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+
+        let Some((content_type, thumbnail_path, content)) = row else {
+            return Ok(None);
+        };
+
+        if content_type != "image" {
+            return Ok(None);
+        }
+
+        Ok(Self::normalize_image_path(thumbnail_path, content))
+    }
+
     /// 更新标签
     pub fn update_tags(&self, id: i64, tags: &Option<Vec<String>>) -> Result<()> {
         let conn = self.conn.lock().unwrap();
@@ -524,8 +566,29 @@ impl Database {
     /// 清空历史
     pub fn clear_history(&self, request: &ClearHistoryRequest) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
+        let mut image_paths_to_delete: HashSet<String> = HashSet::new();
 
         let rows_affected = if let Some(keep_count) = request.keep_count {
+            let mut stmt = conn.prepare(
+                "SELECT thumbnail_path, content
+                 FROM clipboard_history
+                 WHERE content_type = 'image'
+                   AND id NOT IN (
+                       SELECT id FROM clipboard_history
+                       ORDER BY created_at DESC
+                       LIMIT ?1
+                   )",
+            )?;
+            let rows = stmt.query_map(params![keep_count], |row| {
+                Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?))
+            })?;
+            for row in rows {
+                let (thumbnail_path, content) = row?;
+                if let Some(path) = Self::normalize_image_path(thumbnail_path, content) {
+                    image_paths_to_delete.insert(path);
+                }
+            }
+
             conn.execute(
                 "DELETE FROM clipboard_history
                  WHERE id NOT IN (
@@ -537,13 +600,49 @@ impl Database {
             )?
         } else if let Some(keep_days) = request.keep_days {
             let cutoff_date = chrono::Utc::now() - chrono::Duration::days(keep_days);
+            let cutoff_date_str = cutoff_date.to_rfc3339();
+
+            let mut stmt = conn.prepare(
+                "SELECT thumbnail_path, content
+                 FROM clipboard_history
+                 WHERE content_type = 'image'
+                   AND created_at < ?1",
+            )?;
+            let rows = stmt.query_map(params![&cutoff_date_str], |row| {
+                Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?))
+            })?;
+            for row in rows {
+                let (thumbnail_path, content) = row?;
+                if let Some(path) = Self::normalize_image_path(thumbnail_path, content) {
+                    image_paths_to_delete.insert(path);
+                }
+            }
+
             conn.execute(
                 "DELETE FROM clipboard_history WHERE created_at < ?1",
-                params![cutoff_date.to_rfc3339()],
+                params![&cutoff_date_str],
             )?
         } else {
+            let mut stmt = conn.prepare(
+                "SELECT thumbnail_path, content
+                 FROM clipboard_history
+                 WHERE content_type = 'image'",
+            )?;
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?))
+            })?;
+            for row in rows {
+                let (thumbnail_path, content) = row?;
+                if let Some(path) = Self::normalize_image_path(thumbnail_path, content) {
+                    image_paths_to_delete.insert(path);
+                }
+            }
+
             conn.execute("DELETE FROM clipboard_history", [])?
         };
+
+        drop(conn);
+        Self::delete_local_image_files(image_paths_to_delete);
 
         Ok(rows_affected as i64)
     }
@@ -552,6 +651,7 @@ impl Database {
     pub fn startup_cleanup(&self, max_history_count: i64, auto_cleanup_days: i64) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
         let mut total_deleted = 0i64;
+        let mut image_paths_to_delete: HashSet<String> = HashSet::new();
 
         let count_without_tags: i64 = conn.query_row(
             "SELECT COUNT(*) FROM clipboard_history WHERE tags IS NULL OR tags = '' OR tags = 'null'",
@@ -561,6 +661,27 @@ impl Database {
 
         if count_without_tags > max_history_count {
             let to_delete_count = count_without_tags - max_history_count;
+
+            let mut stmt = conn.prepare(
+                "SELECT thumbnail_path, content
+                 FROM clipboard_history
+                 WHERE content_type = 'image'
+                   AND id IN (
+                       SELECT id FROM clipboard_history
+                       WHERE tags IS NULL OR tags = '' OR tags = 'null'
+                       ORDER BY created_at ASC
+                       LIMIT ?1
+                   )",
+            )?;
+            let rows = stmt.query_map(params![to_delete_count], |row| {
+                Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?))
+            })?;
+            for row in rows {
+                let (thumbnail_path, content) = row?;
+                if let Some(path) = Self::normalize_image_path(thumbnail_path, content) {
+                    image_paths_to_delete.insert(path);
+                }
+            }
 
             let rows_affected = conn.execute(
                 "DELETE FROM clipboard_history
@@ -577,15 +698,36 @@ impl Database {
 
         if auto_cleanup_days > 0 {
             let cutoff_date = chrono::Utc::now() - chrono::Duration::days(auto_cleanup_days);
+            let cutoff_date_str = cutoff_date.to_rfc3339();
+
+            let mut stmt = conn.prepare(
+                "SELECT thumbnail_path, content
+                 FROM clipboard_history
+                 WHERE content_type = 'image'
+                   AND (tags IS NULL OR tags = '' OR tags = 'null')
+                   AND created_at < ?1",
+            )?;
+            let rows = stmt.query_map(params![&cutoff_date_str], |row| {
+                Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?))
+            })?;
+            for row in rows {
+                let (thumbnail_path, content) = row?;
+                if let Some(path) = Self::normalize_image_path(thumbnail_path, content) {
+                    image_paths_to_delete.insert(path);
+                }
+            }
 
             let rows_affected = conn.execute(
                 "DELETE FROM clipboard_history
                  WHERE (tags IS NULL OR tags = '' OR tags = 'null')
                    AND created_at < ?1",
-                params![cutoff_date.to_rfc3339()],
+                params![&cutoff_date_str],
             )?;
             total_deleted += rows_affected as i64;
         }
+
+        drop(conn);
+        Self::delete_local_image_files(image_paths_to_delete);
 
         Ok(total_deleted)
     }

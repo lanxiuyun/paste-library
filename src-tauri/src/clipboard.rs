@@ -1,4 +1,5 @@
 use sha2::{Digest, Sha256};
+use std::io::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -175,6 +176,18 @@ impl ClipboardManager {
     }
 
     pub fn delete_item(&self, id: i64) -> Result<(), String> {
+        if let Some(image_path) = self
+            .database
+            .get_image_path_by_id(id)
+            .map_err(|e| e.to_string())?
+        {
+            if let Err(error) = std::fs::remove_file(&image_path) {
+                if error.kind() != ErrorKind::NotFound {
+                    eprintln!("删除图片本地文件失败 ({}): {}", image_path, error);
+                }
+            }
+        }
+
         self.database.delete_item(id).map_err(|e| e.to_string())
     }
 
