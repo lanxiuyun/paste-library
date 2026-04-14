@@ -587,6 +587,7 @@ const openSettings = async () => {
 };
 
 let cleanupClipboard: (() => void) | null = null;
+let unlistenLanSyncUpdated: (() => void) | null = null;
 let unlistenPinMode: (() => void) | null = null;
 let unlistenOpacity: (() => void) | null = null;
 let unlistenFocus: (() => void) | null = null;
@@ -659,6 +660,17 @@ onMounted(async () => {
     },
   );
 
+  unlistenLanSyncUpdated = await listen<string>(
+    "lan-sync-updated",
+    async () => {
+      await loadHistory(settings.value.max_history_count, 0);
+
+      if (searchQuery.value.trim()) {
+        await handleSmartSearch(searchQuery.value, false);
+      }
+    },
+  );
+
   unlistenOpacity = await listen<{ opacity: number }>(
     "window-opacity-change",
     (event) => {
@@ -673,6 +685,7 @@ onUnmounted(() => {
   cleanupScroll();
   unlistenFocus?.();
   unlistenBlur?.();
+  unlistenLanSyncUpdated?.();
   unlistenPinMode?.();
   unlistenOpacity?.();
   cleanupClipboard?.();

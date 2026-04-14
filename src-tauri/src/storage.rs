@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use crate::models::{
     AdvancedSearchRequest, AppSettings, ClearHistoryRequest, ClipboardContentType, ClipboardItem,
-    ClipboardMetadata,
+    ClipboardMetadata, ClipboardSource,
 };
 
 /// 数据库管理器
@@ -137,6 +137,11 @@ impl Database {
             ("auto_sort", "false"),
             ("hotkey", "Alt+V"),
             ("auto_start", "false"),
+            ("lan_sync_enabled", "false"),
+            ("lan_sync_device_name", "我的设备"),
+            ("lan_sync_discovery_enabled", "true"),
+            ("lan_sync_tcp_port", "48571"),
+            ("lan_sync_discovery_port", "48572"),
             ("number_key_shortcut", "ctrl"),
             ("pin_shortcut", "Ctrl+Shift+P"),
             ("app_initialized", "false"),
@@ -184,7 +189,7 @@ impl Database {
         &self,
         item: &ClipboardItem,
         auto_sort: bool,
-        is_internal_copy: bool,
+        source: ClipboardSource,
     ) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
 
@@ -204,7 +209,7 @@ impl Database {
             .map(|t| serde_json::to_string(t).ok())
             .flatten();
 
-        let should_update_timestamp = auto_sort || !is_internal_copy;
+        let should_update_timestamp = source.should_update_timestamp(auto_sort);
 
         let conflict_sql = if should_update_timestamp {
             "ON CONFLICT(content_hash) DO UPDATE SET
@@ -837,6 +842,27 @@ impl Database {
                         settings.auto_start = v;
                     }
                 }
+                "lan_sync_enabled" => {
+                    if let Ok(v) = value.parse() {
+                        settings.lan_sync_enabled = v;
+                    }
+                }
+                "lan_sync_device_name" => settings.lan_sync_device_name = value,
+                "lan_sync_discovery_enabled" => {
+                    if let Ok(v) = value.parse() {
+                        settings.lan_sync_discovery_enabled = v;
+                    }
+                }
+                "lan_sync_tcp_port" => {
+                    if let Ok(v) = value.parse() {
+                        settings.lan_sync_tcp_port = v;
+                    }
+                }
+                "lan_sync_discovery_port" => {
+                    if let Ok(v) = value.parse() {
+                        settings.lan_sync_discovery_port = v;
+                    }
+                }
                 "number_key_shortcut" => settings.number_key_shortcut = value,
                 "pin_shortcut" => settings.pin_shortcut = value,
                 _ => {}
@@ -870,6 +896,17 @@ impl Database {
             ("auto_sort", settings.auto_sort.to_string()),
             ("hotkey", settings.hotkey.clone()),
             ("auto_start", settings.auto_start.to_string()),
+            ("lan_sync_enabled", settings.lan_sync_enabled.to_string()),
+            ("lan_sync_device_name", settings.lan_sync_device_name.clone()),
+            (
+                "lan_sync_discovery_enabled",
+                settings.lan_sync_discovery_enabled.to_string(),
+            ),
+            ("lan_sync_tcp_port", settings.lan_sync_tcp_port.to_string()),
+            (
+                "lan_sync_discovery_port",
+                settings.lan_sync_discovery_port.to_string(),
+            ),
             ("number_key_shortcut", settings.number_key_shortcut.clone()),
             ("pin_shortcut", settings.pin_shortcut.clone()),
         ];

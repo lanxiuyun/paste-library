@@ -10,6 +10,11 @@ export type ClipboardContentType =
   | 'folder'
   | 'files';
 
+export type ClipboardSource =
+  | 'local_system'
+  | 'internal_copy'
+  | 'lan_sync';
+
 /**
  * 剪贴板元数据
  */
@@ -133,6 +138,11 @@ export interface AppSettings {
   // 通用设置
   hotkey: string;
   auto_start: boolean;
+  lan_sync_enabled: boolean;
+  lan_sync_device_name: string;
+  lan_sync_discovery_enabled: boolean;
+  lan_sync_tcp_port: number;
+  lan_sync_discovery_port: number;
 
   // 快捷键设置
   /** 数字键 1-9 快速粘贴修饰键组合，如 "ctrl", "ctrl+shift", "alt", "none" 等 */
@@ -141,6 +151,36 @@ export interface AppSettings {
   // 钉住模式设置
   /** 切换钉住模式的快捷键 */
   pin_shortcut: string;
+}
+
+export interface LanDiscoveredDevice {
+  device_id: string;
+  device_name: string;
+  address: string;
+  tcp_port: number;
+  trusted: boolean;
+  last_seen: string;
+}
+
+export interface LanPairingRequest {
+  device_id: string;
+  device_name: string;
+  address: string;
+  tcp_port: number;
+  requested_at: string;
+}
+
+export interface LanSyncStatus {
+  running: boolean;
+  device_id: string;
+  device_name: string;
+  discovery_enabled: boolean;
+  tcp_port: number;
+  discovery_port: number;
+  discovered_devices: LanDiscoveredDevice[];
+  trusted_devices: LanDiscoveredDevice[];
+  pending_requests: LanPairingRequest[];
+  last_error?: string;
 }
 
 /**

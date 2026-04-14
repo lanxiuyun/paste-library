@@ -15,6 +15,7 @@
               <path v-if="item.key === 'clipboard'" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
               <path v-else-if="item.key === 'history'" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               <path v-else-if="item.key === 'general'" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path v-else-if="item.key === 'sync'" d="M7 8h10M7 16h10M5 12h14M4 8l2-2m-2 2l2 2m12-2l-2-2m2 2l-2 2"/>
               <path v-else-if="item.key === 'hotkey'" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
               <path v-else-if="item.key === 'backup'" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
               <path v-else-if="item.key === 'about'" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -40,6 +41,11 @@
 
       <GeneralSection
         v-else-if="activeMenu === 'general'"
+        :form="form"
+      />
+
+      <SyncSection
+        v-else-if="activeMenu === 'sync'"
         :form="form"
       />
 
@@ -92,6 +98,7 @@ import type { AppSettings } from '@/types';
 import ClipboardSection from './sections/ClipboardSection.vue';
 import HistorySection from './sections/HistorySection.vue';
 import GeneralSection from './sections/GeneralSection.vue';
+import SyncSection from './sections/SyncSection.vue';
 import HotkeySection from './sections/HotkeySection.vue';
 import BackupSection from './sections/BackupSection.vue';
 import AboutSection from './sections/AboutSection.vue';
@@ -105,6 +112,7 @@ const menuItems = [
   { key: 'clipboard', label: '剪贴板' },
   { key: 'history', label: '历史记录' },
   { key: 'general', label: '通用设置' },
+  { key: 'sync', label: '局域网同步' },
   { key: 'hotkey', label: '快捷键' },
   { key: 'backup', label: '数据备份' },
   { key: 'about', label: '关于' },
@@ -128,11 +136,16 @@ const form = reactive<AppSettings>({
   auto_sort: false,
   hotkey: 'Alt+V',
   auto_start: false,
+  lan_sync_enabled: false,
+  lan_sync_device_name: '我的设备',
+  lan_sync_discovery_enabled: true,
+  lan_sync_tcp_port: 48571,
+  lan_sync_discovery_port: 48572,
   number_key_shortcut: 'ctrl',
   pin_shortcut: 'Ctrl+Shift+P',
 });
 
-const storagePaths = ref<Record<string, string>>({
+const storagePaths = ref<{ data_dir: string; log_dir: string }>({
   data_dir: '',
   log_dir: '',
 });
@@ -155,7 +168,7 @@ onMounted(async () => {
 
   // 加载存储路径
   try {
-    const paths = await invoke<Record<string, string>>('get_storage_paths');
+    const paths = await invoke<{ data_dir: string; log_dir: string }>('get_storage_paths');
     storagePaths.value = paths;
   } catch (error) {
     console.error('Failed to load storage paths:', error);
@@ -206,6 +219,11 @@ const resetSettings = async () => {
       confirm_delete: true,
       auto_sort: false,
       auto_start: false,
+      lan_sync_enabled: false,
+      lan_sync_device_name: '我的设备',
+      lan_sync_discovery_enabled: true,
+      lan_sync_tcp_port: 48571,
+      lan_sync_discovery_port: 48572,
       number_key_shortcut: 'ctrl',
       pin_shortcut: 'Ctrl+Shift+P',
     });

@@ -2,6 +2,7 @@ mod clipboard;
 mod models;
 mod platform;
 mod storage;
+mod sync_service;
 mod window_manager;
 mod shortcut_manager;
 mod tray_manager;
@@ -13,10 +14,12 @@ use tokio::sync::Mutex;
 
 use clipboard::ClipboardManager;
 use models::{
-    AdvancedSearchRequest, AppSettings, ClipboardItem, ClipboardContentType, ClipboardMetadata, ClearHistoryRequest,
-    GetHistoryRequest, SearchRequest,
+    AdvancedSearchRequest, AppSettings, ClipboardContentType, ClipboardItem, ClipboardMetadata,
+    ClipboardSource, ClearHistoryRequest, GetHistoryRequest, LanDiscoveredDevice, LanSyncStatus,
+    SearchRequest,
 };
 use storage::Database;
+use sync_service::LanSyncService;
 use tauri::Manager;
 use tauri::Emitter;
 use window_manager::WindowManager;
@@ -26,6 +29,7 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 pub struct AppState {
     clipboard_manager: ClipboardManager,
     window_manager: WindowManager,
+    lan_sync_service: LanSyncService,
 }
 
 /// 粘贴队列管理器（用于串行化处理快速连续粘贴）
@@ -58,10 +62,15 @@ impl PasteQueue {
 }
 
 impl AppState {
-    pub fn new(database: Arc<Database>, settings: Arc<Mutex<AppSettings>>) -> Self {
+    pub fn new(
+        clipboard_manager: ClipboardManager,
+        window_manager: WindowManager,
+        lan_sync_service: LanSyncService,
+    ) -> Self {
         Self {
-            clipboard_manager: ClipboardManager::new(database.clone(), settings.clone()),
-            window_manager: WindowManager::new(settings, database),
+            clipboard_manager,
+            window_manager,
+            lan_sync_service,
         }
     }
 }
@@ -71,12 +80,37 @@ async fn add_clipboard_item(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     text: String,
     html: Option<String>,
+    source: Option<ClipboardSource>,
     is_internal_copy: Option<bool>,
 ) -> Result<Option<ClipboardItem>, String> {
-    let state = state.lock().await;
-    // 默认认为是外部复制（来自系统剪贴板）
-    let is_internal = is_internal_copy.unwrap_or(false);
-    state.clipboard_manager.handle_clipboard_change(text, html, is_internal).await
+    let source = source.unwrap_or_else(|| {
+        if is_internal_copy.unwrap_or(false) {
+            ClipboardSource::InternalCopy
+        } else {
+            ClipboardSource::LocalSystem
+        }
+    });
+    let (clipboard_manager, lan_sync_service) = {
+        let state = state.lock().await;
+        (
+            state.clipboard_manager.clone(),
+            state.lan_sync_service.clone(),
+        )
+    };
+
+    let item = clipboard_manager
+        .handle_clipboard_change(text, html, source)
+        .await?;
+
+    if source.should_broadcast() {
+        if let Some(ref synced_item) = item {
+            if synced_item.content_type == ClipboardContentType::Text {
+                lan_sync_service.broadcast_text(synced_item.content.clone());
+            }
+        }
+    }
+
+    Ok(item)
 }
 
 #[tauri::command]
@@ -87,18 +121,28 @@ async fn add_clipboard_item_extended(
     file_paths: Option<Vec<String>>,
     thumbnail_path: Option<String>,
     metadata: Option<ClipboardMetadata>,
+    source: Option<ClipboardSource>,
     is_internal_copy: Option<bool>,
 ) -> Result<Option<ClipboardItem>, String> {
-    let state = state.lock().await;
-    // 默认认为是外部复制（来自系统剪贴板）
-    let is_internal = is_internal_copy.unwrap_or(false);
-    state.clipboard_manager.handle_clipboard_change_extended(
+    let source = source.unwrap_or_else(|| {
+        if is_internal_copy.unwrap_or(false) {
+            ClipboardSource::InternalCopy
+        } else {
+            ClipboardSource::LocalSystem
+        }
+    });
+    let clipboard_manager = {
+        let state = state.lock().await;
+        state.clipboard_manager.clone()
+    };
+
+    clipboard_manager.handle_clipboard_change_extended(
         content_type,
         content,
         file_paths,
         thumbnail_path,
         metadata,
-        is_internal,
+        source,
     ).await
 }
 
@@ -164,6 +208,7 @@ async fn save_settings(
     
     // 更新设置
     state.clipboard_manager.save_settings(&settings).await?;
+    state.lan_sync_service.apply_settings(&settings);
     
     // 更新开机自启状态
     if let Err(e) = update_autostart(&app, settings.auto_start).await {
@@ -180,6 +225,58 @@ async fn save_settings(
     }
     
     Ok(())
+}
+
+#[tauri::command]
+fn get_lan_sync_status(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<LanSyncStatus, String> {
+    let state = state.blocking_lock();
+    Ok(state.lan_sync_service.get_status())
+}
+
+#[tauri::command]
+fn list_discovered_devices(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<Vec<LanDiscoveredDevice>, String> {
+    let state = state.blocking_lock();
+    Ok(state.lan_sync_service.get_status().discovered_devices)
+}
+
+#[tauri::command]
+fn request_lan_pairing(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    device_id: String,
+) -> Result<(), String> {
+    let state = state.blocking_lock();
+    state.lan_sync_service.request_pairing(&device_id)
+}
+
+#[tauri::command]
+fn approve_lan_device(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    device_id: String,
+) -> Result<(), String> {
+    let state = state.blocking_lock();
+    state.lan_sync_service.approve_device(&device_id)
+}
+
+#[tauri::command]
+fn reject_lan_device(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    device_id: String,
+) -> Result<(), String> {
+    let state = state.blocking_lock();
+    state.lan_sync_service.reject_device(&device_id)
+}
+
+#[tauri::command]
+fn remove_trusted_lan_device(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    device_id: String,
+) -> Result<(), String> {
+    let state = state.blocking_lock();
+    state.lan_sync_service.remove_trusted_device(&device_id)
 }
 
 /// 更新开机自启状态
@@ -703,21 +800,36 @@ pub fn run() {
                 .unwrap_or_else(|_| PathBuf::from("."));
 
             let database = Arc::new(
-                Database::new(app_dir).expect("Failed to initialize database"),
+                Database::new(app_dir.clone()).expect("Failed to initialize database"),
             );
 
             let settings = database
                 .get_settings()
                 .unwrap_or_else(|_| AppSettings::default());
             let settings = Arc::new(Mutex::new(settings));
+            let initial_settings = settings.blocking_lock().clone();
+
+            let clipboard_manager = ClipboardManager::new(database.clone(), settings.clone());
+            let window_manager = WindowManager::new(settings.clone(), database.clone());
+            let lan_sync_service = LanSyncService::new(
+                app.handle().clone(),
+                clipboard_manager.clone(),
+                app_dir.clone(),
+                &initial_settings,
+            );
 
             // 在移动 database 之前先检查是否是首次运行
             let is_first_run = database
                 .is_first_run()
                 .unwrap_or(true);
 
-            let app_state = Arc::new(Mutex::new(AppState::new(database.clone(), settings.clone())));
+            let app_state = Arc::new(Mutex::new(AppState::new(
+                clipboard_manager.clone(),
+                window_manager,
+                lan_sync_service.clone(),
+            )));
             app.manage(app_state.clone());
+            lan_sync_service.apply_settings(&initial_settings);
 
             // 启动时自动清理（保留有标签的记录）
             let app_state_for_cleanup = app_state.clone();
@@ -738,9 +850,6 @@ pub fn run() {
                     }
                 }
             });
-
-            // 尝试注册主快捷键
-            app.manage(app_state.clone());
 
             // 尝试注册主快捷键
             let hotkey = settings.blocking_lock().hotkey.clone();
@@ -870,6 +979,12 @@ pub fn run() {
             clear_clipboard_history,
             get_settings,
             save_settings,
+            get_lan_sync_status,
+            list_discovered_devices,
+            request_lan_pairing,
+            approve_lan_device,
+            reject_lan_device,
+            remove_trusted_lan_device,
             toggle_clipboard_window,
             hide_clipboard_window,
             open_file,

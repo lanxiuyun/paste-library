@@ -35,6 +35,11 @@ const settings = ref<AppSettings>({
   // 通用设置
   hotkey: 'Alt+V',
   auto_start: false,
+  lan_sync_enabled: false,
+  lan_sync_device_name: '我的设备',
+  lan_sync_discovery_enabled: true,
+  lan_sync_tcp_port: 48571,
+  lan_sync_discovery_port: 48572,
 
   // 快捷键设置
   number_key_shortcut: 'ctrl',

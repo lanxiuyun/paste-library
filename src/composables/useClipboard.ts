@@ -10,14 +10,23 @@ import {
   writeFiles,
   type ReadClipboard,
 } from 'tauri-plugin-clipboard-x-api';
-import type { ClipboardItem, ClipboardContentType, ClipboardMetadata, GetHistoryRequest, SearchRequest, ClearHistoryRequest } from '@/types';
+import type {
+  ClipboardContentType,
+  ClipboardItem,
+  ClipboardMetadata,
+  ClipboardSource,
+  ClearHistoryRequest,
+  GetHistoryRequest,
+  SearchRequest,
+} from '@/types';
 import { decodeHtmlEntities, stripHtmlAndDecode } from '@/utils/htmlUtils';
+import { consumePendingRemoteClipboardText } from '@/composables/useLanSyncClipboardBridge';
 
 const history = ref<ClipboardItem[]>([]);
 const isListening = ref(false);
 const lastCopyTime = ref<number>(Date.now());
-// 标记是否是应用内复制（用于区分系统剪贴板变化和应用内复制）
-const isInternalCopy = ref(false);
+// 标记当前剪贴板写入来源，避免应用内 restore 行为被当成系统复制再次处理
+const clipboardSource = ref<ClipboardSource>('local_system');
 
 export function useClipboard() {
   const loadHistory = async (limit?: number, offset = 0): Promise<void> => {
@@ -69,9 +78,13 @@ export function useClipboard() {
   };
 
   const handleClipboardChange = async (result: ReadClipboard): Promise<void> => {
+    const source = clipboardSource.value;
+    const isInternalCopy = source === 'internal_copy';
+
     try {
-      // 检查是否是应用内复制（如果是，跳过智能激活的时间记录）
-      const wasInternalCopy = isInternalCopy.value;
+      if (result.text && consumePendingRemoteClipboardText(result.text.value)) {
+        return;
+      }
 
       // 优先级: files > image > html > rtf > text
       if (result.files) {
@@ -90,7 +103,7 @@ export function useClipboard() {
           content: paths.join('\n'),
           filePaths: paths,
           metadata,
-          isInternalCopy: wasInternalCopy,
+          source,
         });
       } else if (result.image) {
         // 图片类型
@@ -105,7 +118,7 @@ export function useClipboard() {
           content: result.image.value,
           thumbnailPath: result.image.value,
           metadata,
-          isInternalCopy: wasInternalCopy,
+          source,
         });
       } else if (result.html) {
         // HTML 类型：存储原始 HTML 内容
@@ -120,28 +133,28 @@ export function useClipboard() {
         await invoke('add_clipboard_item', {
           text: plainText,  // 解码后的纯文本用于预览和纯文本粘贴
           html: htmlContent,  // 原始 HTML
-          isInternalCopy: wasInternalCopy,
+          source,
         });
       } else if (result.text) {
         // 纯文本类型
         await invoke('add_clipboard_item', {
           text: result.text.value,
           html: null,
-          isInternalCopy: wasInternalCopy,
+          source,
         });
       }
 
       // 只有在不是应用内复制的情况下，才更新 lastCopyTime（用于智能激活）
-      if (!wasInternalCopy) {
+      if (!isInternalCopy) {
         lastCopyTime.value = Date.now();
       }
-
-      // 重置内部复制标志（在 restoreToClipboard 中也有延迟重置，这里是保险措施）
-      isInternalCopy.value = false;
 
       await loadHistory();
     } catch (error) {
       console.error('Failed to handle clipboard change:', error);
+    } finally {
+      // 恢复默认来源，后续真正的系统剪贴板变化会被视为本地复制。
+      clipboardSource.value = 'local_system';
     }
   };
 
@@ -219,7 +232,7 @@ export function useClipboard() {
 
   const restoreToClipboard = async (item: ClipboardItem, options?: { copyAsPlainText?: boolean }): Promise<void> => {
     // 标记为应用内复制（这样 handleClipboardChange 就不会更新 lastCopyTime）
-    isInternalCopy.value = true;
+    clipboardSource.value = 'internal_copy';
 
     // 辅助函数：获取纯文本内容（优先使用 text_content，否则从 content 提取）
     const getPlainText = (): string => {
@@ -272,7 +285,7 @@ export function useClipboard() {
       // 延迟重置标志，确保剪贴板事件已处理
       // 延长到 500ms 以确保剪贴板变化事件被正确处理
       setTimeout(() => {
-        isInternalCopy.value = false;
+        clipboardSource.value = 'local_system';
       }, 500);
     }
   };

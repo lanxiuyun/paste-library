@@ -21,6 +21,31 @@ pub enum ClipboardContentType {
     Files,
 }
 
+/// 剪贴板来源
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClipboardSource {
+    /// 来自本地系统剪贴板变化
+    LocalSystem,
+    /// 来自应用内 restoreToClipboard 等内部写入
+    InternalCopy,
+    /// 来自局域网同步入站
+    LanSync,
+}
+
+impl ClipboardSource {
+    pub fn should_broadcast(self) -> bool {
+        matches!(self, Self::LocalSystem)
+    }
+
+    pub fn should_update_timestamp(self, auto_sort: bool) -> bool {
+        match self {
+            Self::LocalSystem | Self::LanSync => true,
+            Self::InternalCopy => auto_sort,
+        }
+    }
+}
+
 /// 剪贴板元数据
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ClipboardMetadata {
@@ -174,6 +199,16 @@ pub struct AppSettings {
     pub hotkey: String,
     /// 是否开机自启
     pub auto_start: bool,
+    /// 是否启用局域网同步
+    pub lan_sync_enabled: bool,
+    /// 当前设备显示名称
+    pub lan_sync_device_name: String,
+    /// 是否启用局域网设备发现
+    pub lan_sync_discovery_enabled: bool,
+    /// 文本同步 TCP 端口
+    pub lan_sync_tcp_port: i64,
+    /// 自动发现 UDP 端口
+    pub lan_sync_discovery_port: i64,
 
     // 快捷键设置
     /// 数字键 1-9 快速粘贴修饰键组合，如 "ctrl", "ctrl+shift", "alt", "none" 等，默认 "ctrl"
@@ -217,6 +252,11 @@ impl Default for AppSettings {
             // 通用
             hotkey: "Alt+V".to_string(),
             auto_start: false,
+            lan_sync_enabled: false,
+            lan_sync_device_name: "我的设备".to_string(),
+            lan_sync_discovery_enabled: true,
+            lan_sync_tcp_port: 48571,
+            lan_sync_discovery_port: 48572,
 
             // 快捷键设置
             number_key_shortcut: "ctrl".to_string(),
@@ -225,4 +265,38 @@ impl Default for AppSettings {
             pin_shortcut: "Ctrl+Shift+P".to_string(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LanDiscoveredDevice {
+    pub device_id: String,
+    pub device_name: String,
+    pub address: String,
+    pub tcp_port: u16,
+    pub trusted: bool,
+    pub last_seen: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LanPairingRequest {
+    pub device_id: String,
+    pub device_name: String,
+    pub address: String,
+    pub tcp_port: u16,
+    pub requested_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LanSyncStatus {
+    pub running: bool,
+    pub device_id: String,
+    pub device_name: String,
+    pub discovery_enabled: bool,
+    pub tcp_port: u16,
+    pub discovery_port: u16,
+    pub discovered_devices: Vec<LanDiscoveredDevice>,
+    pub trusted_devices: Vec<LanDiscoveredDevice>,
+    pub pending_requests: Vec<LanPairingRequest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
 }
