@@ -10,125 +10,168 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <EditText
-      android:id="@+id/targetHostInput"
+    <TextView
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:hint="目标主机（PC IP）"
-      android:inputType="text"
-      android:text="192.168.1.100" />
-
-    <EditText
-      android:id="@+id/targetTcpPortInput"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:hint="目标 TCP 端口"
-      android:inputType="number"
-      android:text="48571" />
-
-    <EditText
-      android:id="@+id/discoveryPortInput"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:hint="发现 UDP 端口"
-      android:inputType="number"
-      android:text="48572" />
-
-    <EditText
-      android:id="@+id/listenPortInput"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:hint="本机监听端口（用于收 PairResponse）"
-      android:inputType="number"
-      android:text="48581" />
-
-    <EditText
-      android:id="@+id/deviceNameInput"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:hint="设备名称"
-      android:inputType="text"
-      android:text="Android LAN Peer" />
-
-    <EditText
-      android:id="@+id/textInput"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:hint="同步文本内容"
-      android:inputType="textMultiLine"
-      android:minLines="3"
-      android:text="Hello from Android LAN peer" />
+      android:text="局域网同步"
+      android:textColor="#262626"
+      android:textSize="20sp"
+      android:textStyle="bold" />
 
     <LinearLayout
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
       android:layout_marginTop="12dp"
-      android:orientation="horizontal">
+      android:background="#FFFFFFFF"
+      android:orientation="vertical"
+      android:padding="14dp">
 
-      <Button
-        android:id="@+id/startListenButton"
-        android:layout_width="0dp"
+      <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:text="开始监听" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-      <Button
-        android:id="@+id/stopListenButton"
-        android:layout_width="0dp"
+        <TextView
+          android:layout_width="0dp"
+          android:layout_height="wrap_content"
+          android:layout_weight="1"
+          android:text="启用局域网同步"
+          android:textColor="#262626"
+          android:textSize="16sp" />
+
+        <Switch
+          android:id="@+id/lanSyncSwitch"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:checked="true" />
+      </LinearLayout>
+
+      <TextView
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_weight="1"
-        android:text="停止监听" />
+        android:layout_marginTop="8dp"
+        android:text="设备名称"
+        android:textColor="#8C8C8C"
+        android:textSize="12sp" />
+
+      <EditText
+        android:id="@+id/deviceNameInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:hint="我的设备"
+        android:inputType="text"
+        android:maxLength="32"
+        android:text="Android 设备" />
+
+      <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+          android:layout_width="0dp"
+          android:layout_height="wrap_content"
+          android:layout_weight="1"
+          android:text="自动发现设备"
+          android:textColor="#262626"
+          android:textSize="15sp" />
+
+        <Switch
+          android:id="@+id/discoverySwitch"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:checked="true" />
+      </LinearLayout>
+
+      <TextView
+        android:id="@+id/statusView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="#FFF7F7F7"
+        android:padding="10dp"
+        android:text="服务状态: 已停止"
+        android:textColor="#595959"
+        android:textSize="13sp" />
     </LinearLayout>
-
-    <Button
-      android:id="@+id/heartbeatButton"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:text="发送 Heartbeat" />
-
-    <Button
-      android:id="@+id/pairRequestButton"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:text="发送 PairRequest" />
-
-    <Button
-      android:id="@+id/syncTextButton"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:text="发送 SyncText" />
-
-    <Button
-      android:id="@+id/runAllButton"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:text="一键跑全流程" />
 
     <TextView
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:layout_marginTop="12dp"
-      android:text="日志"
+      android:layout_marginTop="16dp"
+      android:text="已发现设备"
+      android:textColor="#262626"
+      android:textSize="16sp"
+      android:textStyle="bold" />
+
+    <LinearLayout
+      android:id="@+id/discoveredDevicesContainer"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:background="#FFFFFFFF"
+      android:orientation="vertical"
+      android:padding="8dp" />
+
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="16dp"
+      android:text="待确认请求"
+      android:textColor="#262626"
+      android:textSize="16sp"
+      android:textStyle="bold" />
+
+    <LinearLayout
+      android:id="@+id/pendingRequestsContainer"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:background="#FFFFFFFF"
+      android:orientation="vertical"
+      android:padding="8dp" />
+
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="16dp"
+      android:text="已信任设备"
+      android:textColor="#262626"
+      android:textSize="16sp"
+      android:textStyle="bold" />
+
+    <LinearLayout
+      android:id="@+id/trustedDevicesContainer"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:background="#FFFFFFFF"
+      android:orientation="vertical"
+      android:padding="8dp" />
+
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="16dp"
+      android:text="事件日志"
+      android:textColor="#262626"
+      android:textSize="16sp"
       android:textStyle="bold" />
 
     <TextView
       android:id="@+id/logView"
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:layout_marginTop="6dp"
+      android:layout_marginTop="8dp"
       android:background="#11000000"
-      android:minHeight="180dp"
-      android:padding="8dp"
-      android:textIsSelectable="true" />
+      android:minHeight="160dp"
+      android:padding="10dp"
+      android:textColor="#333333"
+      android:textIsSelectable="true"
+      android:textSize="12sp" />
   </LinearLayout>
 </ScrollView>
