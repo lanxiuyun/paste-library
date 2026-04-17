@@ -13,6 +13,7 @@
   - tauri-plugin-tray (system tray integration)
   - tauri-plugin-autostart (auto start on boot)
 - **Status**: In development — P0/P1 features complete (~98%), P3 optimization complete, tag system fully implemented
+- **Android**: `android-lan-sync/` is the current Android app in this repository and should be treated as the Android codebase for mobile work.
 
 ---
 
@@ -567,6 +568,7 @@ Then commit and push to `release` branch to trigger the release workflow.
 - `src/components/AGENTS.md` - 组件开发指南
 - `src/composables/AGENTS.md` - Composables 开发指南
 - `src-tauri/src/AGENTS.md` - Rust 后端开发指南
+- 涉及局域网同步或 Android 局域网同步客户端时，先查看 `LAN_SYNC.md`
 
 ### 🎯 协作原则
 
