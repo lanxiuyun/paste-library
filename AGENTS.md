@@ -568,7 +568,10 @@ Then commit and push to `release` branch to trigger the release workflow.
 - `src/components/AGENTS.md` - 组件开发指南
 - `src/composables/AGENTS.md` - Composables 开发指南
 - `src-tauri/src/AGENTS.md` - Rust 后端开发指南
-- 涉及局域网同步或 Android 局域网同步客户端时，先查看 `LAN_SYNC.md`
+- 涉及局域网同步时，先看 `LAN_SYNC.md`
+- 涉及桌面端 LAN sync 现状或协议时，再看 `LAN_SYNC_DESKTOP.md`
+- 涉及 Android 长期规格时，再看 `ANDROID_LAN_SYNC_SPEC.md`
+- 涉及 Android 当前最小文本双向同步目标时，再看 `ANDROID_LAN_SYNC_MVP.md`
 
 ### 🎯 协作原则
 
