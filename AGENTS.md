@@ -14,6 +14,11 @@
   - tauri-plugin-autostart (auto start on boot)
 - **Status**: In development — P0/P1 features complete (~98%), P3 optimization complete, tag system fully implemented
 - **Android**: `android-lan-sync/` is the current Android app in this repository and should be treated as the Android codebase for mobile work.
+- **Android LAN sync boundary**:
+  - Use a foreground service for background LAN receive.
+  - Do not assume Android can reliably read the system clipboard while the app is backgrounded.
+  - Do not assume Android can reliably write remote text directly into the system clipboard while the app is backgrounded.
+  - Prefer caching received text in service state and exposing an explicit notification action such as `Copy Now`.
 
 ---
 
@@ -527,6 +532,11 @@ const imageSrc = computed(() => {
  - `tauri-plugin-clipboard-x` uses `clipboard-rs` underneath; on Windows 11, writing PNG/image content can intermittently fail with `OSError(1418): 线程没有打开的剪贴板`
  - When restoring an image item to the system clipboard, prefer short retry/backoff instead of assuming the first `writeImage()` call will succeed
  - Treat this as a clipboard handle timing/competition issue, not as a bad image path by default
+- **Android LAN sync runtime rules**:
+ - Keep background receive in a `ForegroundService`, not in `Activity`.
+ - Treat Android local clipboard auto-send as foreground-only unless the target device/OS proves otherwise.
+ - Treat background remote clipboard write-back as compatibility-sensitive; do not promise it as a stable behavior.
+ - Preferred fallback for background receive is: cache the received text, update the persistent notification, and expose an explicit copy action such as `Copy Now`.
 - **Greenfield project**: Modern best practices take priority over legacy patterns
 - **Desktop-first UX**: Consider Windows/macOS/Linux platform differences in UI
 - **Global shortcut**: Configurable via key recording in settings (restart required to apply changes)

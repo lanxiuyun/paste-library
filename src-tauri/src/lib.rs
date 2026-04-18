@@ -105,7 +105,11 @@ async fn add_clipboard_item(
     if source.should_broadcast() {
         if let Some(ref synced_item) = item {
             if synced_item.content_type == ClipboardContentType::Text {
-                lan_sync_service.broadcast_text(synced_item.content.clone());
+                lan_sync_service.broadcast_text(
+                    synced_item.content.clone(),
+                    synced_item.content_hash.clone(),
+                    synced_item.created_at.to_rfc3339(),
+                );
             }
         }
     }

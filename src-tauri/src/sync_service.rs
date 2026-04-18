@@ -49,6 +49,7 @@ enum LanWireMessage {
         device_name: String,
         tcp_port: u16,
         message_id: String,
+        hash: String,
         created_at: String,
         text: String,
     },
@@ -310,7 +311,7 @@ impl LanSyncService {
         Ok(())
     }
 
-    pub fn broadcast_text(&self, text: String) {
+    pub fn broadcast_text(&self, text: String, hash: String, created_at: String) {
         let message = {
             let mut state = self.state.lock().unwrap();
             if !state.running {
@@ -326,7 +327,8 @@ impl LanSyncService {
                 device_name: state.device_name.clone(),
                 tcp_port: state.tcp_port,
                 message_id,
-                created_at: Utc::now().to_rfc3339(),
+                hash,
+                created_at,
                 text,
             }
         };
@@ -653,6 +655,7 @@ impl LanSyncService {
                 device_name,
                 tcp_port,
                 message_id,
+                hash: _,
                 text,
                 ..
             } => {

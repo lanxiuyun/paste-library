@@ -13,7 +13,7 @@
     <TextView
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:text="局域网同步"
+      android:text="LAN Sync"
       android:textColor="#262626"
       android:textSize="20sp"
       android:textStyle="bold" />
@@ -36,7 +36,7 @@
           android:layout_width="0dp"
           android:layout_height="wrap_content"
           android:layout_weight="1"
-          android:text="启用局域网同步"
+          android:text="Enable LAN Sync"
           android:textColor="#262626"
           android:textSize="16sp" />
 
@@ -51,7 +51,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="设备名称"
+        android:text="Device name"
         android:textColor="#8C8C8C"
         android:textSize="12sp" />
 
@@ -60,10 +60,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:hint="我的设备"
+        android:hint="My device"
         android:inputType="text"
         android:maxLength="32"
-        android:text="Android 设备" />
+        android:text="Android device" />
 
       <LinearLayout
         android:layout_width="match_parent"
@@ -76,7 +76,7 @@
           android:layout_width="0dp"
           android:layout_height="wrap_content"
           android:layout_weight="1"
-          android:text="自动发现设备"
+          android:text="Enable discovery"
           android:textColor="#262626"
           android:textSize="15sp" />
 
@@ -94,7 +94,6 @@
         android:layout_marginTop="10dp"
         android:background="#FFF7F7F7"
         android:padding="10dp"
-        android:text="服务状态: 已停止"
         android:textColor="#595959"
         android:textSize="13sp" />
     </LinearLayout>
@@ -103,7 +102,25 @@
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
       android:layout_marginTop="16dp"
-      android:text="已发现设备"
+      android:text="Synced text"
+      android:textColor="#262626"
+      android:textSize="16sp"
+      android:textStyle="bold" />
+
+    <LinearLayout
+      android:id="@+id/syncedRecordsContainer"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:background="#FFFFFFFF"
+      android:orientation="vertical"
+      android:padding="8dp" />
+
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="16dp"
+      android:text="Discovered devices"
       android:textColor="#262626"
       android:textSize="16sp"
       android:textStyle="bold" />
@@ -121,7 +138,7 @@
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
       android:layout_marginTop="16dp"
-      android:text="待确认请求"
+      android:text="Pending requests"
       android:textColor="#262626"
       android:textSize="16sp"
       android:textStyle="bold" />
@@ -139,7 +156,7 @@
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
       android:layout_marginTop="16dp"
-      android:text="已信任设备"
+      android:text="Trusted devices"
       android:textColor="#262626"
       android:textSize="16sp"
       android:textStyle="bold" />
@@ -157,7 +174,7 @@
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
       android:layout_marginTop="16dp"
-      android:text="事件日志"
+      android:text="Event log"
       android:textColor="#262626"
       android:textSize="16sp"
       android:textStyle="bold" />
