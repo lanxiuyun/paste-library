@@ -14,6 +14,8 @@ It should:
 - broadcast tag changes to trusted devices on the same LAN
 - ignore data created while devices were offline or outside the same LAN
 
+For Android cross-app paste behavior, prefer explicit user-triggered injection into the focused input field over assuming background clipboard restore is available.
+
 ## Scope
 
 Included in v1:
@@ -25,6 +27,7 @@ Included in v1:
 - tag add/remove
 - LAN device discovery and pairing
 - online LAN broadcast sync
+- accessibility-driven focused-input paste entry for remote text
 
 Not included in v1:
 
@@ -195,6 +198,28 @@ Settings should include:
 - pending pairing requests
 - trusted devices
 
+## Android Input Injection Model
+
+Android should support a focused-input paste flow for remote text:
+
+- keep the latest synced text records available in memory or local storage
+- use `AccessibilityService` to detect when an editable node gains focus in another app
+- show a lightweight accessibility overlay entry near the focused input context
+- when the user taps the overlay, show recent synced records
+- when the user selects one record, inject it into the focused node
+
+Injection priority:
+
+1. `AccessibilityNodeInfo.ACTION_SET_TEXT`
+2. `AccessibilityNodeInfo.ACTION_PASTE`
+3. clipboard-based fallback if the device/OS allows it
+
+Rules:
+
+- do not assume clipboard fallback is stable while the app is backgrounded
+- do not claim background clipboard restore as the primary Android contract
+- keep explicit user intent in the loop for cross-app text insertion
+
 ## Image Support
 
 Image support is included in v1, but only at a basic level:
@@ -213,6 +238,8 @@ Image support is included in v1, but only at a basic level:
 - offline devices do not receive replays
 - duplicate broadcasts must be idempotent via `hash`
 - internal clipboard restore must not create sync loops
+- if focused-node injection fails, keep the synced text available for a later explicit retry
+- if clipboard fallback appears to succeed but the device blocks background clipboard access, do not treat that as a reliable success signal
 
 ## Loop Prevention
 

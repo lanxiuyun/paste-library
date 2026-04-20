@@ -2,9 +2,12 @@ package com.pastelibrary.lansync
 
 import android.Manifest
 import android.content.ClipboardManager
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CompoundButton
@@ -25,6 +28,8 @@ class MainActivity : AppCompatActivity() {
   private lateinit var discoverySwitch: Switch
   private lateinit var deviceNameInput: EditText
   private lateinit var statusView: TextView
+  private lateinit var accessibilityStatusView: TextView
+  private lateinit var openAccessibilitySettingsButton: Button
   private lateinit var syncedRecordsContainer: LinearLayout
   private lateinit var discoveredDevicesContainer: LinearLayout
   private lateinit var pendingRequestsContainer: LinearLayout
@@ -70,12 +75,15 @@ class MainActivity : AppCompatActivity() {
 
   override fun onStart() {
     super.onStart()
+    Log.d("LanSync", "MainActivity onStart")
     LanSyncController.setForegroundUiAttached(true)
     LanSyncController.addObserver(snapshotObserver)
     clipboardManager.addPrimaryClipChangedListener(clipboardListener)
+    refreshAccessibilityUi()
   }
 
   override fun onStop() {
+    Log.d("LanSync", "MainActivity onStop")
     clipboardManager.removePrimaryClipChangedListener(clipboardListener)
     LanSyncController.removeObserver(snapshotObserver)
     LanSyncController.setForegroundUiAttached(false)
@@ -87,6 +95,8 @@ class MainActivity : AppCompatActivity() {
     discoverySwitch = findViewById(R.id.discoverySwitch)
     deviceNameInput = findViewById(R.id.deviceNameInput)
     statusView = findViewById(R.id.statusView)
+    accessibilityStatusView = findViewById(R.id.accessibilityStatusView)
+    openAccessibilitySettingsButton = findViewById(R.id.openAccessibilitySettingsButton)
     syncedRecordsContainer = findViewById(R.id.syncedRecordsContainer)
     discoveredDevicesContainer = findViewById(R.id.discoveredDevicesContainer)
     pendingRequestsContainer = findViewById(R.id.pendingRequestsContainer)
@@ -135,10 +145,15 @@ class MainActivity : AppCompatActivity() {
         )
       }
     }
+
+    openAccessibilitySettingsButton.setOnClickListener {
+      startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
   }
 
   private fun handlePrimaryClipChanged() {
     if (!lanSyncSwitch.isChecked) {
+      Log.d("LanSync", "MainActivity clipboard listener ignored change because LAN sync is disabled")
       return
     }
 
@@ -149,18 +164,17 @@ class MainActivity : AppCompatActivity() {
 
     val text = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
     if (text.isBlank()) {
+      Log.d("LanSync", "MainActivity clipboard listener ignored blank clipboard text")
       return
     }
 
-    if (LanSyncController.consumePendingRemoteClipboardText(text)) {
-      return
-    }
-
+    Log.d("LanSync", "MainActivity clipboard listener accepted text: preview=${text.take(32)}")
     LanSyncController.setDeviceName(normalizedDeviceName())
-    LanSyncController.sendLocalText(text)
+    LanSyncController.submitObservedClipboardText(text)
   }
 
   private fun renderSnapshot(snapshot: LanSyncSnapshot) {
+    val accessibilityEnabled = ClipboardMonitorAccessibilityService.isEnabled(this)
     statusView.text = buildString {
       append("Service: ")
       append(if (snapshot.running) "running" else "stopped")
@@ -171,9 +185,13 @@ class MainActivity : AppCompatActivity() {
       append("Discovery port: 48572\n")
       append("Trusted devices: ${snapshot.trustedDevices.size}\n")
       append("Synced records: ${snapshot.syncedRecords.size}\n")
+      append("Input overlay paste: ")
+      append(if (accessibilityEnabled) "enabled" else "requires accessibility service")
+      append('\n')
       append("Device ID: ${snapshot.deviceId}")
     }
 
+    refreshAccessibilityUi()
     renderSyncedRecords(snapshot.syncedRecords)
     renderDiscoveredDevices(snapshot.discoveredDevices)
     renderPendingRequests(snapshot.pendingRequests)
@@ -347,6 +365,18 @@ class MainActivity : AppCompatActivity() {
   private fun defaultDeviceName(): String {
     val modelName = Build.MODEL?.trim().orEmpty()
     return if (modelName.isNotBlank()) modelName else "Android device"
+  }
+
+  private fun refreshAccessibilityUi() {
+    val enabled = ClipboardMonitorAccessibilityService.isEnabled(this)
+    accessibilityStatusView.text =
+      if (enabled) {
+        "Floating paste entry will appear when an input box gains focus."
+      } else {
+        "Enable accessibility service to show the floating paste entry on focused input boxes."
+      }
+    openAccessibilitySettingsButton.text =
+      if (enabled) "Open accessibility settings" else "Enable floating paste entry"
   }
 
   private fun ensureNotificationPermission() {

@@ -71,6 +71,7 @@ Desktop to Android:
 3. Android receives payload
 4. Android dedupes by `hash`
 5. Android inserts the item into the visible list
+6. Android keeps the received text ready for explicit paste into the currently focused input field
 
 Android to Desktop:
 
@@ -79,6 +80,19 @@ Android to Desktop:
 3. Android generates or reuses `hash`
 4. Android broadcasts `sync_text`
 5. desktop receives payload
+
+## Android Interaction Constraint
+
+For this repository, do not assume Android can stably restore remote text into the system clipboard while the app is backgrounded.
+
+Preferred Android interaction model:
+
+1. receive and cache remote text in the foreground service/controller
+2. show synced records in the app list
+3. when the user focuses an input field in another app, expose an accessibility overlay entry
+4. when the user taps a record from that overlay, inject it into the focused field
+
+Clipboard write-back can still be attempted as a fallback, but it is not the primary UX contract.
 
 ## Deduping Rule
 
@@ -160,6 +174,13 @@ Android-side work:
 - suppress rebroadcast after remote write-back
 - dedupe repeated `hash` on both sides
 
+### Step 5: Focused Input Injection
+
+- track the currently focused editable node via `AccessibilityService`
+- show an overlay entry when an editable field is focused
+- on user tap, inject the selected synced text with `ACTION_SET_TEXT`
+- if `ACTION_SET_TEXT` fails, fall back to `ACTION_PASTE`
+
 ## Fastest Safe First Cut
 
 Implement exactly this:
@@ -170,3 +191,4 @@ Implement exactly this:
 4. Android clipboard listener for local text
 5. Android outbound `sync_text`
 6. loop suppression
+7. accessibility overlay entry for explicit paste into the focused input

@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -29,10 +30,6 @@ class LanSyncForegroundService : Service() {
         LanSyncController.stop()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
-      }
-
-      ACTION_COPY_LATEST -> {
-        LanSyncController.copyLatestReceivedTextToClipboard()
       }
 
       else -> {
@@ -58,6 +55,7 @@ class LanSyncForegroundService : Service() {
 
   private fun buildNotification(snapshot: LanSyncSnapshot): Notification {
     ensureNotificationChannel()
+    val accessibilityEnabled = ClipboardMonitorAccessibilityService.isEnabled(this)
 
     val contentIntent = PendingIntent.getActivity(
       this,
@@ -72,33 +70,33 @@ class LanSyncForegroundService : Service() {
       .setSmallIcon(android.R.drawable.ic_menu_share)
       .setContentTitle("LAN Sync is running")
       .setContentText(
-        snapshot.latestPendingReceivedText?.let { "New text received. Tap Copy Now." }
-          ?: "Background receiving is active",
+        if (accessibilityEnabled) "Background receive and local clipboard monitor are active"
+        else "Background receive is active. Enable accessibility for background send",
       )
       .setStyle(
         NotificationCompat.BigTextStyle().bigText(
-          snapshot.latestPendingReceivedText?.let { "Received: $it" }
-            ?: "Background receiving is active",
+          if (accessibilityEnabled) {
+            "Background receiving is active and remote text will be written into the system clipboard automatically."
+          } else {
+            "Background receiving is active and remote text will be written into the system clipboard automatically. Enable the accessibility monitor if you also want local clipboard copies to sync while the app is backgrounded."
+          },
         ),
       )
       .setOngoing(true)
       .setContentIntent(contentIntent)
 
-    if (!snapshot.latestPendingReceivedText.isNullOrBlank()) {
-      val copyIntent = PendingIntent.getService(
+    if (!accessibilityEnabled) {
+      val settingsIntent = PendingIntent.getActivity(
         this,
-        1,
-        Intent(this, LanSyncForegroundService::class.java).apply {
-          action = ACTION_COPY_LATEST
-        },
+        2,
+        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
       )
       builder.addAction(
-        android.R.drawable.ic_menu_save,
-        "Copy Now",
-        copyIntent,
+        android.R.drawable.ic_menu_manage,
+        "Enable monitor",
+        settingsIntent,
       )
-      builder.setAutoCancel(false)
     }
 
     return builder.build()
@@ -131,7 +129,6 @@ class LanSyncForegroundService : Service() {
   companion object {
     private const val ACTION_START_OR_UPDATE = "com.pastelibrary.lansync.action.START_OR_UPDATE"
     private const val ACTION_STOP = "com.pastelibrary.lansync.action.STOP"
-    private const val ACTION_COPY_LATEST = "com.pastelibrary.lansync.action.COPY_LATEST"
     private const val EXTRA_DEVICE_NAME = "device_name"
     private const val EXTRA_DISCOVERY_ENABLED = "discovery_enabled"
 

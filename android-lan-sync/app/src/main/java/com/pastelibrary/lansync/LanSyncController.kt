@@ -4,6 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,7 +34,11 @@ private const val SOCKET_TIMEOUT_MS = 1000
 private const val DEFAULT_TCP_PORT = 48571
 private const val DEFAULT_DISCOVERY_PORT = 48572
 private const val REMOTE_CLIPBOARD_TTL_MS = 4000L
+private const val LOCAL_CLIPBOARD_DEDUPE_WINDOW_MS = 1500L
+private const val REMOTE_CLIPBOARD_WRITE_RETRY_COUNT = 5
+private const val REMOTE_CLIPBOARD_WRITE_RETRY_DELAY_MS = 120L
 private const val MAX_LOG_LINES = 200
+private const val LOG_TAG = "LanSync"
 private const val KIND_HEARTBEAT = "heartbeat"
 private const val KIND_PAIR_REQUEST = "pair_request"
 private const val KIND_PAIR_RESPONSE = "pair_response"
@@ -80,6 +87,7 @@ data class LanSyncSnapshot(
 
 object LanSyncController {
   private val stateLock = Any()
+  private val mainHandler = Handler(Looper.getMainLooper())
   private val deviceId = "android-peer-${UUID.randomUUID().toString().take(8)}"
   private val discoveredDevices = mutableMapOf<String, DeviceEntry>()
   private val trustedDevices = mutableMapOf<String, DeviceEntry>()
@@ -100,6 +108,8 @@ object LanSyncController {
   private var heartbeatJob: Job? = null
   private var pendingRemoteClipboardText: String? = null
   private var pendingRemoteClipboardExpiresAt = 0L
+  private var lastObservedLocalClipboardHash: String? = null
+  private var lastObservedLocalClipboardAt = 0L
 
   fun start(context: Context) {
     synchronized(stateLock) {
@@ -146,6 +156,7 @@ object LanSyncController {
   fun setForegroundUiAttached(attached: Boolean) {
     synchronized(stateLock) {
       foregroundUiAttached = attached
+      appendLogLocked("Foreground UI attached = $attached")
       notifyObserversLocked()
     }
   }
@@ -177,18 +188,41 @@ object LanSyncController {
   }
 
   fun consumePendingRemoteClipboardText(text: String): Boolean = synchronized(stateLock) {
-    val pending = pendingRemoteClipboardText ?: return@synchronized false
-    if (pendingRemoteClipboardExpiresAt <= System.currentTimeMillis()) {
-      pendingRemoteClipboardText = null
-      pendingRemoteClipboardExpiresAt = 0L
-      return@synchronized false
+    consumePendingRemoteClipboardTextLocked(text)
+  }
+
+  fun submitObservedClipboardText(text: String): Boolean {
+    val normalizedText = text.trim()
+    if (normalizedText.isBlank()) {
+      appendLog("Ignored observed clipboard text because it is blank")
+      return false
     }
-    if (pending != text) {
-      return@synchronized false
+
+    synchronized(stateLock) {
+      if (!running) {
+        appendLogLocked("Ignored observed clipboard text because LAN sync is not running")
+        return false
+      }
+
+      if (consumePendingRemoteClipboardTextLocked(normalizedText)) {
+        appendLogLocked("Ignored observed clipboard text because it matches pending remote clipboard content")
+        return false
+      }
+
+      val hash = computeTextHash(normalizedText)
+      val now = System.currentTimeMillis()
+      if (lastObservedLocalClipboardHash == hash && now - lastObservedLocalClipboardAt <= LOCAL_CLIPBOARD_DEDUPE_WINDOW_MS) {
+        appendLogLocked("Ignored observed clipboard text because it is a local duplicate within debounce window")
+        return false
+      }
+
+      lastObservedLocalClipboardHash = hash
+      lastObservedLocalClipboardAt = now
+      appendLogLocked("Accepted observed clipboard text for outbound sync: hash=${hash.take(12)} preview=${previewText(normalizedText)}")
     }
-    pendingRemoteClipboardText = null
-    pendingRemoteClipboardExpiresAt = 0L
-    true
+
+    sendLocalText(normalizedText)
+    return true
   }
 
   fun sendLocalText(text: String) {
@@ -467,7 +501,7 @@ object LanSyncController {
       return
     }
 
-    val shouldWriteImmediately = synchronized(stateLock) {
+    val launchScope = synchronized(stateLock) {
       if (!trustedDevices.containsKey(remoteDeviceId)) {
         appendLogLocked("Ignored sync_text from untrusted device $remoteDeviceName")
         notifyObserversLocked()
@@ -484,26 +518,34 @@ object LanSyncController {
           direction = DIRECTION_RECEIVED,
         ),
       )
-      latestPendingReceivedText = text
+      latestPendingReceivedText = null
       appendLogLocked(
-        if (foregroundUiAttached) {
-          "Received text from $remoteDeviceName and copied immediately: ${previewText(text)}"
-        } else {
-          "Received text from $remoteDeviceName, ready to copy from notification: ${previewText(text)}"
-        },
+        "Accepted sync_text from $remoteDeviceName: hash=${json.optString("hash").ifBlank { computeTextHash(text) }.take(12)} preview=${previewText(text)}",
       )
+      appendLogLocked(
+        "Received text from $remoteDeviceName, writing to clipboard: ${previewText(text)}",
+      )
+      pendingRemoteClipboardText = text
+      pendingRemoteClipboardExpiresAt = System.currentTimeMillis() + REMOTE_CLIPBOARD_TTL_MS
       notifyObserversLocked()
-      foregroundUiAttached
+      scope
     }
 
-    if (shouldWriteImmediately) {
+    launchScope?.launch {
+      val copied = writeRemoteTextToClipboardWithRetry(text)
       synchronized(stateLock) {
-        pendingRemoteClipboardText = text
-        pendingRemoteClipboardExpiresAt = System.currentTimeMillis() + REMOTE_CLIPBOARD_TTL_MS
-        latestPendingReceivedText = null
+        appendLogLocked(
+          if (copied) {
+            "Remote text copied to clipboard from $remoteDeviceName"
+          } else {
+            "Failed to copy remote text to clipboard from $remoteDeviceName"
+          },
+        )
+        if (!copied) {
+          latestPendingReceivedText = text
+        }
         notifyObserversLocked()
       }
-      writeTextToClipboard(text)
     }
   }
 
@@ -590,6 +632,41 @@ object LanSyncController {
     clipboardManager.setPrimaryClip(ClipData.newPlainText("LAN Sync", text))
   }
 
+  private suspend fun writeRemoteTextToClipboardWithRetry(text: String): Boolean {
+    repeat(REMOTE_CLIPBOARD_WRITE_RETRY_COUNT) { attempt ->
+      appendLog("Clipboard write attempt ${attempt + 1}/$REMOTE_CLIPBOARD_WRITE_RETRY_COUNT for remote text: ${previewText(text)}")
+      val success = runCatching {
+        kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
+          writeTextToClipboard(text)
+        }
+      }.isSuccess
+      if (success) {
+        appendLog("Clipboard write attempt ${attempt + 1} succeeded")
+        return true
+      }
+      appendLog("Clipboard write attempt ${attempt + 1} failed")
+      if (attempt < REMOTE_CLIPBOARD_WRITE_RETRY_COUNT - 1) {
+        delay(REMOTE_CLIPBOARD_WRITE_RETRY_DELAY_MS)
+      }
+    }
+    return false
+  }
+
+  private fun consumePendingRemoteClipboardTextLocked(text: String): Boolean {
+    val pending = pendingRemoteClipboardText ?: return false
+    if (pendingRemoteClipboardExpiresAt <= System.currentTimeMillis()) {
+      pendingRemoteClipboardText = null
+      pendingRemoteClipboardExpiresAt = 0L
+      return false
+    }
+    if (pending != text) {
+      return false
+    }
+    pendingRemoteClipboardText = null
+    pendingRemoteClipboardExpiresAt = 0L
+    return true
+  }
+
   private fun upsertDiscoveredDevice(deviceId: String, deviceName: String, address: String, tcpPort: Int) {
     synchronized(stateLock) {
       val trusted = trustedDevices.containsKey(deviceId)
@@ -649,6 +726,7 @@ object LanSyncController {
   }
 
   private fun appendLogLocked(message: String) {
+    Log.d(LOG_TAG, message)
     logs.add(message)
     while (logs.size > MAX_LOG_LINES) {
       logs.removeAt(0)
@@ -657,8 +735,11 @@ object LanSyncController {
 
   private fun notifyObserversLocked() {
     val snapshot = snapshotLocked()
-    observers.forEach { observer ->
-      observer(snapshot)
+    val currentObservers = observers.toList()
+    currentObservers.forEach { observer ->
+      mainHandler.post {
+        observer(snapshot)
+      }
     }
   }
 

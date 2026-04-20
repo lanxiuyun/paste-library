@@ -18,7 +18,9 @@
   - Use a foreground service for background LAN receive.
   - Do not assume Android can reliably read the system clipboard while the app is backgrounded.
   - Do not assume Android can reliably write remote text directly into the system clipboard while the app is backgrounded.
-  - Prefer caching received text in service state and exposing an explicit notification action such as `Copy Now`.
+  - Prefer treating remote text as pending state that can be surfaced through an accessibility overlay or other explicit user-triggered paste flow.
+  - For Android text injection, prefer `AccessibilityService` + focused input node actions (`ACTION_SET_TEXT` first, `ACTION_PASTE` fallback) over assuming background clipboard restore will work.
+  - If the product goal is stable cross-app clipboard access on Android, treat IME integration as the long-term path, not background `ClipboardManager` access.
 
 ---
 
@@ -536,7 +538,9 @@ const imageSrc = computed(() => {
  - Keep background receive in a `ForegroundService`, not in `Activity`.
  - Treat Android local clipboard auto-send as foreground-only unless the target device/OS proves otherwise.
  - Treat background remote clipboard write-back as compatibility-sensitive; do not promise it as a stable behavior.
- - Preferred fallback for background receive is: cache the received text, update the persistent notification, and expose an explicit copy action such as `Copy Now`.
+ - Preferred Android fallback is: cache the received text, keep the synced record in app state, and expose an accessibility-driven paste entry when an editable field gains focus.
+ - When Android needs to place remote text into another app, prefer focused-node injection via `AccessibilityNodeInfo.ACTION_SET_TEXT`; fall back to `ACTION_PASTE`, and only then attempt clipboard-based behavior.
+ - Do not treat a successful `setPrimaryClip()` call as proof that background clipboard restore actually worked on Android; verify behavior through UX flow or explicit follow-up signals.
 - **Greenfield project**: Modern best practices take priority over legacy patterns
 - **Desktop-first UX**: Consider Windows/macOS/Linux platform differences in UI
 - **Global shortcut**: Configurable via key recording in settings (restart required to apply changes)

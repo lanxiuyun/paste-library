@@ -1,3 +1,5 @@
 <resources>
   <string name="app_name">LAN Sync Peer</string>
+  <string name="accessibility_service_label">LAN Sync Clipboard Monitor</string>
+  <string name="accessibility_service_description">Monitors clipboard changes so local text copies can be forwarded while the app UI is not visible.</string>
 </resources>
