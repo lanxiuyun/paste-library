@@ -43,6 +43,7 @@ private const val KIND_HEARTBEAT = "heartbeat"
 private const val KIND_PAIR_REQUEST = "pair_request"
 private const val KIND_PAIR_RESPONSE = "pair_response"
 private const val KIND_SYNC_TEXT = "sync_text"
+private const val INTERNAL_CLIPBOARD_TTL_MS = 4000L
 const val DIRECTION_RECEIVED = "received"
 const val DIRECTION_SENT = "sent"
 
@@ -108,6 +109,8 @@ object LanSyncController {
   private var heartbeatJob: Job? = null
   private var pendingRemoteClipboardText: String? = null
   private var pendingRemoteClipboardExpiresAt = 0L
+  private var pendingInternalClipboardText: String? = null
+  private var pendingInternalClipboardExpiresAt = 0L
   private var lastObservedLocalClipboardHash: String? = null
   private var lastObservedLocalClipboardAt = 0L
 
@@ -191,6 +194,20 @@ object LanSyncController {
     consumePendingRemoteClipboardTextLocked(text)
   }
 
+  fun markInternalClipboardWrite(text: String) {
+    val normalizedText = text.trim()
+    if (normalizedText.isBlank()) {
+      return
+    }
+
+    synchronized(stateLock) {
+      pendingInternalClipboardText = normalizedText
+      pendingInternalClipboardExpiresAt = System.currentTimeMillis() + INTERNAL_CLIPBOARD_TTL_MS
+      appendLogLocked("Marked internal clipboard write for loop suppression: ${previewText(normalizedText)}")
+      notifyObserversLocked()
+    }
+  }
+
   fun submitObservedClipboardText(text: String): Boolean {
     val normalizedText = text.trim()
     if (normalizedText.isBlank()) {
@@ -206,6 +223,11 @@ object LanSyncController {
 
       if (consumePendingRemoteClipboardTextLocked(normalizedText)) {
         appendLogLocked("Ignored observed clipboard text because it matches pending remote clipboard content")
+        return false
+      }
+
+      if (consumePendingInternalClipboardTextLocked(normalizedText)) {
+        appendLogLocked("Ignored observed clipboard text because it matches an internal clipboard write")
         return false
       }
 
@@ -501,7 +523,7 @@ object LanSyncController {
       return
     }
 
-    val launchScope = synchronized(stateLock) {
+    synchronized(stateLock) {
       if (!trustedDevices.containsKey(remoteDeviceId)) {
         appendLogLocked("Ignored sync_text from untrusted device $remoteDeviceName")
         notifyObserversLocked()
@@ -518,34 +540,14 @@ object LanSyncController {
           direction = DIRECTION_RECEIVED,
         ),
       )
-      latestPendingReceivedText = null
+      latestPendingReceivedText = text
       appendLogLocked(
         "Accepted sync_text from $remoteDeviceName: hash=${json.optString("hash").ifBlank { computeTextHash(text) }.take(12)} preview=${previewText(text)}",
       )
       appendLogLocked(
-        "Received text from $remoteDeviceName, writing to clipboard: ${previewText(text)}",
+        "Received text from $remoteDeviceName and stored it for explicit paste: ${previewText(text)}",
       )
-      pendingRemoteClipboardText = text
-      pendingRemoteClipboardExpiresAt = System.currentTimeMillis() + REMOTE_CLIPBOARD_TTL_MS
       notifyObserversLocked()
-      scope
-    }
-
-    launchScope?.launch {
-      val copied = writeRemoteTextToClipboardWithRetry(text)
-      synchronized(stateLock) {
-        appendLogLocked(
-          if (copied) {
-            "Remote text copied to clipboard from $remoteDeviceName"
-          } else {
-            "Failed to copy remote text to clipboard from $remoteDeviceName"
-          },
-        )
-        if (!copied) {
-          latestPendingReceivedText = text
-        }
-        notifyObserversLocked()
-      }
     }
   }
 
@@ -664,6 +666,21 @@ object LanSyncController {
     }
     pendingRemoteClipboardText = null
     pendingRemoteClipboardExpiresAt = 0L
+    return true
+  }
+
+  private fun consumePendingInternalClipboardTextLocked(text: String): Boolean {
+    val pending = pendingInternalClipboardText ?: return false
+    if (pendingInternalClipboardExpiresAt <= System.currentTimeMillis()) {
+      pendingInternalClipboardText = null
+      pendingInternalClipboardExpiresAt = 0L
+      return false
+    }
+    if (pending != text) {
+      return false
+    }
+    pendingInternalClipboardText = null
+    pendingInternalClipboardExpiresAt = 0L
     return true
   }
 

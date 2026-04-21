@@ -29,6 +29,7 @@ class ClipboardMonitorAccessibilityService : AccessibilityService() {
   private var overlayPanel: View? = null
   private var currentFocusedNode: AccessibilityNodeInfo? = null
   private var currentFocusedPackage: String? = null
+  private var lastOverlayRefreshAt = 0L
 
   private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
     val clip = clipboardManager.primaryClip ?: return@OnPrimaryClipChangedListener
@@ -66,12 +67,15 @@ class ClipboardMonitorAccessibilityService : AccessibilityService() {
       return
     }
 
+    val eventPackageName = event.packageName?.toString()
+    if (eventPackageName == packageName) {
+      return
+    }
+
     when (event.eventType) {
       AccessibilityEvent.TYPE_VIEW_FOCUSED,
-      AccessibilityEvent.TYPE_VIEW_CLICKED,
       AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED,
-      AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-      AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+      AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
         updateFocusedInputTarget(event)
       }
     }
@@ -81,17 +85,35 @@ class ClipboardMonitorAccessibilityService : AccessibilityService() {
 
   private fun updateFocusedInputTarget(event: AccessibilityEvent) {
     val eventPackageName = event.packageName?.toString()
+    if (eventPackageName.isNullOrBlank()) {
+      return
+    }
+
+    val now = System.currentTimeMillis()
+    if (now - lastOverlayRefreshAt < 250L && currentFocusedPackage == eventPackageName) {
+      return
+    }
+
     val node = findEditableFocusedNode(event)
-    val shouldShowOverlay = node != null && eventPackageName != packageName
-
-    currentFocusedNode?.recycle()
-    currentFocusedNode = node
-    currentFocusedPackage = eventPackageName
-
-    if (shouldShowOverlay) {
+    if (node != null) {
+      currentFocusedNode?.recycle()
+      currentFocusedNode = node
+      currentFocusedPackage = eventPackageName
+      lastOverlayRefreshAt = now
       showOverlayButton()
       Log.d("LanSync", "Editable node focused in package=$eventPackageName")
     } else {
+      val stillFocusedNode = resolveFocusedNode()
+      if (stillFocusedNode != null && currentFocusedPackage == eventPackageName) {
+        lastOverlayRefreshAt = now
+        showOverlayButton()
+        return
+      }
+
+      currentFocusedNode?.recycle()
+      currentFocusedNode = null
+      currentFocusedPackage = eventPackageName
+      lastOverlayRefreshAt = now
       removeOverlayPanel()
       removeOverlayButton()
     }
@@ -143,7 +165,9 @@ class ClipboardMonitorAccessibilityService : AccessibilityService() {
 
   private fun removeOverlayButton() {
     overlayButton?.let { view ->
-      windowManager.removeView(view)
+      runCatching {
+        windowManager.removeView(view)
+      }
     }
     overlayButton = null
   }
@@ -214,7 +238,9 @@ class ClipboardMonitorAccessibilityService : AccessibilityService() {
 
   private fun removeOverlayPanel() {
     overlayPanel?.let { view ->
-      windowManager.removeView(view)
+      runCatching {
+        windowManager.removeView(view)
+      }
     }
     overlayPanel = null
   }
@@ -228,11 +254,10 @@ class ClipboardMonitorAccessibilityService : AccessibilityService() {
     gravity = Gravity.START or Gravity.CENTER_VERTICAL
     isAllCaps = false
     setOnClickListener {
-      val clipboardWritten = writeTextToClipboard(record.text)
       val inserted = insertTextIntoFocusedNode(record.text)
       Log.d(
         "LanSync",
-        "Overlay record click hash=${record.hash.take(12)} inserted=$inserted clipboardWritten=$clipboardWritten package=$currentFocusedPackage",
+        "Overlay record click hash=${record.hash.take(12)} inserted=$inserted package=$currentFocusedPackage",
       )
       if (inserted) {
         removeOverlayPanel()
@@ -259,6 +284,7 @@ class ClipboardMonitorAccessibilityService : AccessibilityService() {
 
   private fun writeTextToClipboard(text: String): Boolean {
     return runCatching {
+      LanSyncController.markInternalClipboardWrite(text)
       clipboardManager.setPrimaryClip(ClipData.newPlainText("LAN Sync Overlay", text))
       true
     }.getOrElse { error ->

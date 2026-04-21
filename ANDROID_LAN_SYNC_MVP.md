@@ -2,11 +2,35 @@
 
 ## Immediate Goal
 
-Before search, tags, history cleanup, or image support, the first working milestone should be:
+Android MVP is a text-only LAN sync client with explicit user-triggered paste.
+
+Before search, tags, history cleanup, image support, or Room persistence, the first working milestone should be:
 
 1. desktop copies text and broadcasts it, Android receives it
 2. Android copies text and broadcasts it, desktop receives it
 3. Android shows received and sent text in a list
+4. when the user focuses an input field in another app, Android shows a floating paste entry
+5. when the user taps the floating entry, Android shows recent synced text records
+6. when the user taps one record, Android injects it into the focused input field
+
+## Current Repository Status
+
+The repository already contains a partial Android MVP implementation:
+
+- device discovery and pairing exist
+- trusted-device-only text sync exists
+- Android has an in-memory synced text list
+- Android already has an `AccessibilityService` overlay entry and record picker
+- remote receive now keeps text for explicit paste instead of treating background clipboard restore as the primary path
+- overlay injection now tries direct focused-node insertion first and only uses clipboard fallback when needed
+
+But the implementation is not fully aligned with the intended Android contract yet:
+
+- synced records are still in-memory only
+- device identity is not yet stable across app restarts
+- overlay behavior still needs real-device validation across different apps and Android ROMs
+
+The next development work should align the implementation to the explicit paste contract first, then stabilize persistence.
 
 ## Explicitly Out Of Scope
 
@@ -39,7 +63,7 @@ Suggested direction values:
 - `received`
 - `sent`
 
-This can be in-memory first.
+This can be in-memory first, but persistence is the first follow-up after the explicit paste flow is aligned.
 
 ## Minimum Sync Payload
 
@@ -71,7 +95,8 @@ Desktop to Android:
 3. Android receives payload
 4. Android dedupes by `hash`
 5. Android inserts the item into the visible list
-6. Android keeps the received text ready for explicit paste into the currently focused input field
+6. Android keeps the received text available for explicit paste into the currently focused input field
+7. Android does not rely on automatic background clipboard restore as the primary UX
 
 Android to Desktop:
 
@@ -80,6 +105,18 @@ Android to Desktop:
 3. Android generates or reuses `hash`
 4. Android broadcasts `sync_text`
 5. desktop receives payload
+
+Focused input paste flow:
+
+1. user focuses an editable field in another app
+2. `AccessibilityService` detects the focused editable node
+3. Android shows a lightweight floating paste entry
+4. user taps the floating entry
+5. Android shows recent synced text records
+6. user taps one record
+7. Android injects the text into the focused field with `ACTION_SET_TEXT`
+8. if `ACTION_SET_TEXT` fails, Android falls back to `ACTION_PASTE`
+9. clipboard-based fallback must not rebroadcast the injected text
 
 ## Android Interaction Constraint
 
@@ -92,7 +129,7 @@ Preferred Android interaction model:
 3. when the user focuses an input field in another app, expose an accessibility overlay entry
 4. when the user taps a record from that overlay, inject it into the focused field
 
-Clipboard write-back can still be attempted as a fallback, but it is not the primary UX contract.
+Clipboard write-back can still be used as a fallback inside the explicit accessibility paste flow, but it is not the primary UX contract.
 
 ## Deduping Rule
 
@@ -106,11 +143,13 @@ Mandatory rule:
 
 - only real local clipboard copies can trigger outbound broadcast
 - remote LAN clipboard write-back must not trigger broadcast
+- overlay-triggered clipboard fallback must not trigger broadcast
 
 Record source must distinguish:
 
 - real local clipboard copy
 - remote LAN write-back
+- internal overlay fallback write
 
 ## Desktop Side Changes Needed
 
@@ -135,60 +174,83 @@ Desktop-side work:
 Primary current files:
 
 - `android-lan-sync/app/src/main/java/com/pastelibrary/lansync/MainActivity.kt`
+- `android-lan-sync/app/src/main/java/com/pastelibrary/lansync/LanSyncController.kt`
+- `android-lan-sync/app/src/main/java/com/pastelibrary/lansync/LanSyncForegroundService.kt`
+- `android-lan-sync/app/src/main/java/com/pastelibrary/lansync/ClipboardMonitorAccessibilityService.kt`
 - `android-lan-sync/app/src/main/res/layout/activity_main.xml`
 - `android-lan-sync/app/src/main/AndroidManifest.xml`
 
 Android-side work:
 
-1. extend protocol parsing to accept `hash` and `sync_text`
-2. add a simple in-memory list for synced records
-3. render the list in the current UI
-4. listen to Android clipboard text changes
-5. when a real local copy occurs, broadcast `sync_text`
-6. when remote text is received, mark it so clipboard write-back does not rebroadcast
+1. keep protocol parsing aligned to `sync_text` with `hash`
+2. keep the simple synced text list and dedupe behavior
+3. make the accessibility overlay flow the primary remote paste path
+4. remove automatic remote clipboard restore as the primary behavior
+5. make clipboard fallback suppression explicit inside the overlay paste flow
+6. keep local clipboard send working for real local copies only
+7. stabilize identity and basic persistence after the explicit paste flow is aligned
 
 ## Suggested Implementation Order
 
 ### Step 1: Protocol Alignment
 
 - add `hash` to the desktop outbound payload if missing
-- update Android parsing and serialization to the same fields
+- keep Android parsing and serialization aligned to the same fields
 
-### Step 2: Android Receive List
+### Step 2: Explicit Paste Contract Alignment
 
-- add a text message list in Android UI
+- stop automatically writing remote text into the Android clipboard on receive
+- keep received text in the synced record list for explicit user-triggered paste
+- when the user taps a record in the overlay, try `ACTION_SET_TEXT` first
+- only use clipboard fallback when direct injection fails
+- suppress rebroadcast for overlay-triggered clipboard fallback writes
+
+### Step 3: Android Receive List
+
+- keep the visible text list in the Android UI
 - insert a row on each new inbound `sync_text`
 - dedupe repeated `hash`
 - if the same `hash` arrives again, move the existing item to the top
 
-### Step 3: Android Local Clipboard Send
+### Step 4: Android Local Clipboard Send
 
-- add Android clipboard listener
+- keep the Android clipboard listener
 - detect actual local text copy
 - broadcast `sync_text`
 - add local sent item into the same list
 
-### Step 4: Loop Prevention
+### Step 5: Persistence and Stable Identity
 
-- mark remote clipboard writes
-- suppress rebroadcast after remote write-back
-- dedupe repeated `hash` on both sides
+- persist a stable Android `device_id`
+- persist trusted devices
+- persist the recent synced text list
 
-### Step 5: Focused Input Injection
+### Step 6: Hardening
 
-- track the currently focused editable node via `AccessibilityService`
-- show an overlay entry when an editable field is focused
-- on user tap, inject the selected synced text with `ACTION_SET_TEXT`
-- if `ACTION_SET_TEXT` fails, fall back to `ACTION_PASTE`
+- verify loop prevention across remote receive, overlay fallback, and local clipboard send
+- reduce duplicate clipboard listener responsibility between foreground activity and accessibility service if needed
+- continue tightening accessibility-event filtering if device-specific overlay flicker appears during testing
+
+## Testing Notes
+
+For Android manual testing, prefer filtering logs down to the app's own LAN sync tag:
+
+- Android Studio Logcat: `package:com.pastelibrary.lansync tag:LanSync`
+- adb: `adb logcat LanSync:D *:S`
+
+If the floating `Paste` entry flickers, first check whether the service is processing repeated accessibility events with `package=null` or other overlay-generated noise.
 
 ## Fastest Safe First Cut
 
-Implement exactly this:
+Implement exactly this first:
 
 1. desktop outbound `hash` in `sync_text`
 2. Android inbound text parsing
 3. Android visible text list
 4. Android clipboard listener for local text
 5. Android outbound `sync_text`
-6. loop suppression
-7. accessibility overlay entry for explicit paste into the focused input
+6. explicit accessibility overlay entry for focused input
+7. record picker overlay
+8. direct focused-node injection
+9. clipboard fallback only when injection fails
+10. loop suppression for fallback clipboard writes

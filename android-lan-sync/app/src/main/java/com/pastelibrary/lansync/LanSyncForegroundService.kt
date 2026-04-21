@@ -70,15 +70,15 @@ class LanSyncForegroundService : Service() {
       .setSmallIcon(android.R.drawable.ic_menu_share)
       .setContentTitle("LAN Sync is running")
       .setContentText(
-        if (accessibilityEnabled) "Background receive and local clipboard monitor are active"
-        else "Background receive is active. Enable accessibility for background send",
+        if (accessibilityEnabled) "Background receive is active and the floating paste entry is available"
+        else "Background receive is active. Enable accessibility for explicit paste and background send",
       )
       .setStyle(
         NotificationCompat.BigTextStyle().bigText(
           if (accessibilityEnabled) {
-            "Background receiving is active and remote text will be written into the system clipboard automatically."
+            "Background receiving is active. Focus an input field in another app, open the floating paste entry, and choose a synced record to insert."
           } else {
-            "Background receiving is active and remote text will be written into the system clipboard automatically. Enable the accessibility monitor if you also want local clipboard copies to sync while the app is backgrounded."
+            "Background receiving is active. Enable the accessibility monitor if you want the floating paste entry and background local clipboard sync."
           },
         ),
       )
